@@ -1,0 +1,189 @@
+{% if analises %}
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>
+                    <input type="checkbox" class="form-check-input" id="select-all-analises" onchange="toggleSelectAllAnalises()">
+                </th>
+                <th class="col-data">Data</th>
+                <th class="col-intimacao">Intimação</th>
+                <th class="col-prompt">Prompt</th>
+                <th class="col-classificacao-manual">Classificação Manual</th>
+                <th class="col-informacao-adicional">Informação Adicional</th>
+                <th class="col-resultado-ia">Resultado IA</th>
+                <th class="col-status">Status</th>
+                <th class="col-configuracoes">Configurações</th>
+                <th class="col-tempo">Tempo</th>
+                <th class="col-custo">Custo</th>
+                <th class="col-prompt-completo">Prompt Completo</th>
+                <th class="col-resposta-ia">Resposta IA</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for analise in analises %}
+            <tr>
+                <td>
+                    <input type="checkbox" class="form-check-input analise-checkbox" 
+                           value="{{ analise.intimacao_id }}_{{ analise.id }}" 
+                           onchange="updateAnalisesSelection()">
+                </td>
+                <td class="col-data">
+                    <small class="text-muted">
+                        {% if analise.data_analise %}
+                            {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
+                            {% set hora = analise.data_analise.split('T')[1][:8] if 'T' in analise.data_analise else '' %}
+                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </small>
+                </td>
+                <td class="col-intimacao">
+                    <small>#{{ analise.intimacao_id[:8] }}...</small>
+                    <br>
+                    <small class="text-muted">{{ analise.contexto[:50] }}{% if analise.contexto | length > 50 %}...{% endif %}</small>
+                </td>
+                <td class="col-prompt">
+                    <span class="badge bg-info" style="cursor: pointer;" 
+                          data-intimacao-id="{{ analise.intimacao_id }}"
+                          data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                          onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                          title="Clique para ver o prompt completo">
+                        {{ analise.prompt_nome }}
+                    </span>
+                </td>
+                <td class="col-classificacao-manual">
+                    {% set badge_class = {
+                        'URGÊNCIA': 'danger',
+                        'ELABORAR PEÇA': 'success',
+                        'ANALISAR PROCESSO': 'info',
+                        'CONTATAR ASSISTIDO': 'warning',
+                        'RENUNCIAR PRAZO': 'secondary',
+                        'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                    } %}
+                    <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
+                        {{ analise.classificacao_manual or 'N/A' }}
+                    </span>
+                </td>
+                <td class="col-informacao-adicional">
+                    <small class="text-muted">
+                        {{ analise.informacao_adicional[:50] if analise.informacao_adicional else 'N/A' }}{% if analise.informacao_adicional and analise.informacao_adicional | length > 50 %}...{% endif %}
+                    </small>
+                </td>
+                <td class="col-resultado-ia">
+                    <span class="badge bg-primary">{{ analise.resultado_ia or 'N/A' }}</span>
+                </td>
+                <td class="col-status">
+                    {% if analise.acertou %}
+                        <i class="bi bi-check-circle text-success"></i> Acertou
+                    {% else %}
+                        <i class="bi bi-x-circle text-danger"></i> Errou
+                    {% endif %}
+                </td>
+                <td class="col-configuracoes">
+                    <small>
+                        <div><strong>Modelo:</strong> {{ analise.modelo or 'N/A' }}</div>
+                        <div><strong>Temp:</strong> 
+                            {% if analise.temperatura is not none %}
+                                {{ "%.1f"|format(analise.temperatura) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </small>
+                </td>
+                <td class="col-tempo">
+                    <small>{{ analise.tempo_processamento or 0 }}s</small>
+                </td>
+                <td class="col-custo">
+                    <small>${{ analise.custo_estimado or 0 }}</small>
+                </td>
+                <td class="col-prompt-completo">
+                    <button type="button" class="btn btn-sm btn-outline-info" 
+                            data-intimacao-id="{{ analise.intimacao_id }}"
+                            data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                            onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                            title="Ver prompt completo">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+                <td class="col-resposta-ia">
+                    <button type="button" class="btn btn-sm btn-outline-success" 
+                            data-intimacao-id="{{ analise.intimacao_id }}"
+                            data-resposta-completa="{{ analise.resposta_completa or 'N/A' }}"
+                            onclick="mostrarRespostaCompletaRelatorios(this.dataset.intimacaoId, this.dataset.respostaCompleta)"
+                            title="Ver resposta da IA">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            onclick="excluirAnalise('{{ analise.intimacao_id }}', '{{ analise.id }}')"
+                            title="Excluir análise">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Paginação -->
+{% if paginacao.total_paginas > 1 %}
+<nav aria-label="Paginação das análises">
+    <ul class="pagination justify-content-center" id="paginacao-container">
+        <!-- Primeira página -->
+        <li class="page-item {% if paginacao.pagina_atual == 1 %}disabled{% endif %}">
+            <button class="page-link" onclick="carregarPagina(1)" {% if paginacao.pagina_atual == 1 %}disabled{% endif %}>Primeira</button>
+        </li>
+        
+        <!-- Página anterior -->
+        <li class="page-item {% if paginacao.pagina_atual == 1 %}disabled{% endif %}">
+            <button class="page-link" onclick="carregarPagina({{ paginacao.pagina_atual-1 }})" {% if paginacao.pagina_atual == 1 %}disabled{% endif %}>Anterior</button>
+        </li>
+        
+        <!-- Páginas numeradas -->
+        {% set inicio_paginas = [1, paginacao.pagina_atual-2] | max %}
+        {% set fim_paginas = [paginacao.total_paginas+1, paginacao.pagina_atual+3] | min %}
+        {% for p in range(inicio_paginas, fim_paginas) %}
+        <li class="page-item {% if p == paginacao.pagina_atual %}active{% endif %}">
+            <button class="page-link" onclick="carregarPagina({{ p }})" {% if p == paginacao.pagina_atual %}disabled{% endif %}>{{ p }}</button>
+        </li>
+        {% endfor %}
+        
+        <!-- Próxima página -->
+        <li class="page-item {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}">
+            <button class="page-link" onclick="carregarPagina({{ paginacao.pagina_atual+1 }})" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Próxima</button>
+        </li>
+        
+        <!-- Última página -->
+        <li class="page-item {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}">
+            <button class="page-link" onclick="carregarPagina({{ paginacao.total_paginas }})" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Última</button>
+        </li>
+    </ul>
+</nav>
+
+<!-- Informações da paginação -->
+<div class="text-center text-muted" id="info-paginacao">
+    <small>
+        Mostrando {{ paginacao.inicio }} a {{ paginacao.fim }} de {{ paginacao.total_itens }} análises
+        {% if paginacao.total_paginas > 1 %}
+        (Página {{ paginacao.pagina_atual }} de {{ paginacao.total_paginas }})
+        {% endif %}
+    </small>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center py-4">
+    <i class="bi bi-inbox fa-3x text-muted mb-3"></i>
+    <h5 class="text-muted">Nenhuma análise encontrada</h5>
+    <p class="text-muted">Execute algumas análises para ver os resultados aqui.</p>
+    <a href="{{ url_for('analise') }}" class="btn btn-primary">
+        <i class="bi bi-play-circle"></i>
+        Executar Análise
+    </a>
+</div>
+{% endif %}

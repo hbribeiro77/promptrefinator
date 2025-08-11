@@ -1,0 +1,578 @@
+{% extends "base.html" %}
+
+{% block title %}Intimação #{{ intimacao.id }} - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-file-text"></i>
+        Intimação #{{ intimacao.id }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('listar_intimacoes') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Voltar para Lista
+            </a>
+            <a href="{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-cpu"></i>
+                Analisar com IA
+            </a>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmarExclusao()">
+                <i class="bi bi-trash"></i>
+                Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Dados da Intimação -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Dados da Intimação
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>ID:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <code>{{ intimacao.id }}</code>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Data de Criação:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span class="text-muted">
+                            {% if intimacao.data_criacao %}
+                                {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
+                                {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
+                                {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Classificação Manual:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {% set badge_class = {
+                            'URGÊNCIA': 'danger',
+                            'ELABORAR PEÇA': 'success',
+                            'ANALISAR PROCESSO': 'info',
+                            'CONTATAR ASSISTIDO': 'warning',
+                            'RENUNCIAR PRAZO': 'secondary',
+                            'OCULTAR': 'dark',
+                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                        } %}
+                        <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }} fs-6">
+                            {{ intimacao.classificacao_manual }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contexto da Intimação -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-file-text"></i>
+                    Contexto da Intimação
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTexto('contexto')">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWrap('contexto')">
+                        <i class="bi bi-text-wrap"></i>
+                        Quebra de Linha
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="position-relative">
+                    <pre id="contexto" class="bg-light p-3 rounded" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">{{ intimacao.contexto }}</pre>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Caracteres: <span id="char-count">{{ intimacao.contexto | length }}</span> | 
+                        Palavras: <span id="word-count">{{ intimacao.contexto.split() | length }}</span> | 
+                        Linhas: <span id="line-count">{{ intimacao.contexto.split('\n') | length }}</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Adicionais -->
+        {% if intimacao.informacao_adicional %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-square"></i>
+                    Informações Adicionais
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTexto('info-adicional')">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="position-relative">
+                    <pre id="info-adicional" class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ intimacao.informacao_adicional }}</pre>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Histórico de Análises -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history"></i>
+                    Histórico de Análises
+                </h5>
+                <a href="{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Nova Análise
+                </a>
+            </div>
+            <div class="card-body">
+                {% if analises %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Prompt</th>
+                                    <th>Resultado IA</th>
+                                    <th>Acurácia</th>
+                                    <th>Tempo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for analise in analises %}
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if analise.data_analise %}
+                                {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
+                                {% set hora = analise.data_analise.split('T')[1][:8] if 'T' in analise.data_analise else '' %}
+                                {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 150px;" title="{{ analise.prompt_nome or 'N/A' }}">
+                                            {{ analise.prompt_nome or 'N/A' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if analise.resultado_ia %}
+                                            {% set badge_class = {
+                                                'URGÊNCIA': 'danger',
+                                                'ELABORAR PEÇA': 'success',
+                                                'ANALISAR PROCESSO': 'info',
+                                                'CONTATAR ASSISTIDO': 'warning',
+                                                'RENUNCIAR PRAZO': 'secondary',
+                                                'OCULTAR': 'dark',
+                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                            } %}
+                                            <span class="badge bg-{{ badge_class.get(analise.resultado_ia, 'secondary') }}">
+                                                {{ analise.resultado_ia }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if analise.acertou is not none %}
+                                            {% if analise.acertou %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i>
+                                                    Acertou
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-x-circle"></i>
+                                                    Errou
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-question-circle"></i>
+                                                N/A
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ '%.2f'|format(analise.tempo_processamento) }}s
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('visualizar_analise', analise_id=analise.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-cpu fa-2x text-muted mb-3"></i>
+                        <h6 class="text-muted">Nenhuma análise realizada</h6>
+                        <p class="text-muted">Esta intimação ainda não foi analisada pela IA.</p>
+                        <a href="{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}" class="btn btn-primary">
+                            <i class="bi bi-cpu"></i>
+                            Realizar Primeira Análise
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Estatísticas da Intimação -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i>
+                    Estatísticas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h5 class="text-primary mb-0">{{ analises | length }}</h5>
+                            <small class="text-muted">Análises</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-success mb-0">
+                            {% set acertos = analises | selectattr('acertou', 'equalto', true) | list | length %}
+                            {% if analises | length > 0 %}
+                                {{ '%.1f'|format((acertos / (analises | length)) * 100) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </h5>
+                        <small class="text-muted">Acurácia</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="d-grid gap-2">
+                    <small class="text-muted mb-2">
+                        <i class="bi bi-info-circle"></i>
+                        Análises por Resultado:
+                    </small>
+                    
+                    {% set resultados_count = {} %}
+                    {% for analise in analises %}
+                        {% if analise.resultado_ia %}
+                            {% set _ = resultados_count.update({analise.resultado_ia: resultados_count.get(analise.resultado_ia, 0) + 1}) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if resultados_count %}
+                        {% for resultado, count in resultados_count.items() %}
+                            {% set badge_class = {
+                                'URGÊNCIA': 'danger',
+                                'ELABORAR PEÇA': 'success',
+                                'ANALISAR PROCESSO': 'info',
+                                'CONTATAR ASSISTIDO': 'warning',
+                                'RENUNCIAR PRAZO': 'secondary',
+                                'OCULTAR': 'dark',
+                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                            } %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-{{ badge_class.get(resultado, 'secondary') }}">{{ resultado }}</span>
+                                <small class="text-muted">{{ count }}x</small>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <small class="text-muted">Nenhuma análise disponível</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações Rápidas -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Ações Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-cpu"></i>
+                        Analisar com IA
+                    </a>
+                    
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copiarTexto('contexto')">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar Contexto
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="exportarIntimacao()">
+                        <i class="bi bi-download"></i>
+                        Exportar Dados
+                    </button>
+                    
+                    <hr>
+                    
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="confirmarExclusao()">
+                        <i class="bi bi-trash"></i>
+                        Excluir Intimação
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Técnicas -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-gear"></i>
+                    Informações Técnicas
+                </h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    <div class="mb-2">
+                        <strong>ID:</strong> <code>{{ intimacao.id }}</code>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Criado em:</strong> {% if intimacao.data_criacao %}
+                            {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
+                            {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
+                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Tamanho do contexto:</strong> {{ intimacao.contexto | length }} caracteres
+                    </div>
+                    <div class="mb-2">
+                        <strong>Total de análises:</strong> {{ analises | length }}
+                    </div>
+                    {% if analises %}
+                        <div class="mb-2">
+                            <strong>Última análise:</strong> {% if analises and analises|length > 0 and analises[0].data_analise %}
+                            {% set data = analises[0].data_analise.split('T')[0] if 'T' in analises[0].data_analise else analises[0].data_analise %}
+                            {% set hora = analises[0].data_analise.split('T')[1][:8] if 'T' in analises[0].data_analise else '' %}
+                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                        </div>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir esta intimação?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Esta ação também excluirá todas as {{ analises | length }} análises relacionadas a esta intimação.
+                </div>
+                <p class="text-muted"><small>Esta ação não pode ser desfeita.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-exclusao">
+                    <i class="bi bi-trash"></i>
+                    Excluir Intimação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Função para copiar texto
+function copiarTexto(elementId) {
+    const elemento = document.getElementById(elementId);
+    const texto = elemento.textContent || elemento.innerText;
+    
+    navigator.clipboard.writeText(texto).then(function() {
+        showToast('Texto copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar texto: ', err);
+        showToast('Erro ao copiar texto.', 'error');
+    });
+}
+
+// Função para alternar quebra de linha
+function toggleWrap(elementId) {
+    const elemento = document.getElementById(elementId);
+    const currentWrap = elemento.style.whiteSpace;
+    
+    if (currentWrap === 'nowrap') {
+        elemento.style.whiteSpace = 'pre-wrap';
+        showToast('Quebra de linha ativada', 'info');
+    } else {
+        elemento.style.whiteSpace = 'nowrap';
+        showToast('Quebra de linha desativada', 'info');
+    }
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao() {
+    const modal = new bootstrap.Modal(document.getElementById('modalExclusao'));
+    modal.show();
+}
+
+// Função para exportar intimação
+function exportarIntimacao() {
+    const dados = {
+        id: '{{ intimacao.id }}',
+        contexto: {{ intimacao.contexto | tojson | safe }},
+        classificacao_manual: {{ intimacao.classificacao_manual | tojson | safe }},
+        informacao_adicional: {{ (intimacao.informacao_adicional or "") | tojson | safe }},
+        data_criacao: {{ intimacao.data_criacao | tojson | safe }},
+        total_analises: {{ analises | length }},
+        analises: [
+            {% for analise in analises %}
+            {
+                id: {{ analise.id | tojson | safe }},
+                data_analise: {{ analise.data_analise | tojson | safe }},
+                resultado_ia: {{ (analise.resultado_ia or "") | tojson | safe }},
+                acertou: {{ 'true' if analise.acertou else 'false' if analise.acertou is not none else 'null' }},
+                tempo_processamento: {{ analise.tempo_processamento or 0 }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+    
+    const dataStr = JSON.stringify(dados, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `intimacao_${dados.id}_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    
+    showToast('Dados da intimação exportados!', 'success');
+}
+
+// Event listener para confirmação de exclusão
+document.getElementById('btn-confirmar-exclusao').addEventListener('click', function() {
+    console.log('=== DEBUG: CONFIRMANDO EXCLUSÃO DE INTIMAÇÃO ===');
+    console.log('ID da intimação:', '{{ intimacao.id }}');
+    
+    const intimacaoId = '{{ intimacao.id }}';
+    const btnConfirmar = this;
+    const originalText = btnConfirmar.innerHTML;
+    
+    // Mostrar loading
+    btnConfirmar.innerHTML = '<i class="bi bi-hourglass-split"></i> Excluindo...';
+    btnConfirmar.disabled = true;
+    
+    // Fazer requisição para excluir
+    fetch(`/api/intimacoes/${intimacaoId}/excluir`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        console.log('Resposta da exclusão:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dados da resposta:', data);
+        
+        if (data.success) {
+            showToast('Intimação excluída com sucesso!', 'success');
+            
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalExclusao'));
+            modal.hide();
+            
+            // Redirecionar para lista após 1 segundo
+            setTimeout(() => {
+                window.location.href = '{{ url_for("listar_intimacoes") }}';
+            }, 1000);
+        } else {
+            showToast(`Erro ao excluir: ${data.message}`, 'error');
+            btnConfirmar.innerHTML = originalText;
+            btnConfirmar.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Erro na exclusão:', error);
+        showToast('Erro ao excluir intimação!', 'error');
+        btnConfirmar.innerHTML = originalText;
+        btnConfirmar.disabled = false;
+    });
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+C para copiar contexto
+    if (e.ctrlKey && e.key === 'c' && !window.getSelection().toString()) {
+        e.preventDefault();
+        copiarTexto('contexto');
+    }
+    
+    // Ctrl+A para analisar
+    if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        window.location.href = `{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}`;
+    }
+    
+    // Escape para voltar
+    if (e.key === 'Escape') {
+        window.location.href = '{{ url_for("listar_intimacoes") }}';
+    }
+});
+</script>
+{% endblock %}

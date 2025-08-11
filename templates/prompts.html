@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+
+{% block title %}Prompts - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-code-square"></i>
+        Prompts
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selecionarTodos()">
+                <i class="bi bi-check-all"></i>
+                Selecionar Todos
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecao()">
+                <i class="bi bi-x-circle"></i>
+                Limpar Seleção
+            </button>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('novo_prompt') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus-circle"></i>
+                Novo Prompt
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label for="busca" class="form-label">Buscar</label>
+                <input type="text" class="form-control" id="busca" name="busca" 
+                       value="{{ request.args.get('busca', '') }}" 
+                       placeholder="Nome, descrição ou conteúdo...">
+            </div>
+            <div class="col-md-3">
+                <label for="ordenacao" class="form-label">Ordenar por</label>
+                <select class="form-select" id="ordenacao" name="ordenacao">
+                    <option value="data_desc" {% if request.args.get('ordenacao', 'data_desc') == 'data_desc' %}selected{% endif %}>Data (mais recente)</option>
+                    <option value="data_asc" {% if request.args.get('ordenacao') == 'data_asc' %}selected{% endif %}>Data (mais antiga)</option>
+                    <option value="nome" {% if request.args.get('ordenacao') == 'nome' %}selected{% endif %}>Nome (A-Z)</option>
+                    <option value="uso" {% if request.args.get('ordenacao') == 'uso' %}selected{% endif %}>Mais usado</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="tamanho" class="form-label">Tamanho</label>
+                <select class="form-select" id="tamanho" name="tamanho">
+                    <option value="">Todos os tamanhos</option>
+                    <option value="pequeno" {% if request.args.get('tamanho') == 'pequeno' %}selected{% endif %}>Pequeno (&lt; 500 chars)</option>
+                    <option value="medio" {% if request.args.get('tamanho') == 'medio' %}selected{% endif %}>Médio (500-2000 chars)</option>
+                    <option value="grande" {% if request.args.get('tamanho') == 'grande' %}selected{% endif %}>Grande (&gt; 2000 chars)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-search"></i>
+                        Filtrar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Estatísticas rápidas -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">{{ stats.total }}</h5>
+                <p class="card-text">Total de Prompts</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">
+                    {{ stats.pequenos }}
+                </h5>
+                <p class="card-text">Prompts Pequenos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">
+                    {{ stats.medios }}
+                </h5>
+                <p class="card-text">Prompts Médios</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">
+                    {{ stats.grandes }}
+                </h5>
+                <p class="card-text">Prompts Grandes</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Prompts -->
+{% if prompts %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-list"></i>
+            Lista de Prompts ({{ prompts | length }} encontrados)
+        </span>
+        <div>
+            <span id="contador-selecionados" class="badge bg-primary">0 selecionados</span>
+            <button type="button" class="btn btn-sm btn-success" onclick="testarSelecionados()" id="btn-testar" disabled>
+                <i class="bi bi-play-circle"></i>
+                Testar Selecionados
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="50">
+                            <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                        </th>
+                        <th>Nome</th>
+                        <th>Descrição</th>
+                        <th width="120">Tamanho</th>
+                        <th width="100">Uso</th>
+                        <th width="150">Data de Criação</th>
+                        <th width="120">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prompt in prompts %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="prompt-checkbox" 
+                                   value="{{ prompt.id }}" 
+                                   onchange="updateSelectionCounter()">
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div>
+                                    <strong>{{ prompt.nome }}</strong>
+                                    <div class="text-truncate-custom" style="max-width: 200px;" title="{{ prompt.conteudo[:100] + '...' if prompt.conteudo | length > 100 else prompt.conteudo }}">
+                                        <small class="text-muted">{{ prompt.conteudo[:100] + '...' if prompt.conteudo | length > 100 else prompt.conteudo }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="text-truncate-custom" style="max-width: 250px;" title="{{ prompt.descricao or 'Sem descrição' }}">
+                                {{ prompt.descricao or 'Sem descrição' }}
+                            </div>
+                        </td>
+                        <td>
+                            {% set tamanho = prompt.conteudo | length %}
+                            {% if tamanho < 500 %}
+                                <span class="badge bg-success">{{ tamanho }} chars</span>
+                                <br><small class="text-muted">Pequeno</small>
+                            {% elif tamanho <= 2000 %}
+                                <span class="badge bg-warning">{{ tamanho }} chars</span>
+                                <br><small class="text-muted">Médio</small>
+                            {% else %}
+                                <span class="badge bg-danger">{{ tamanho }} chars</span>
+                                <br><small class="text-muted">Grande</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ prompt.total_usos or 0 }}x</span>
+                            <br><small class="text-muted">análises</small>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {% if prompt.data_criacao %}
+                                    {% set data = prompt.data_criacao.split('T')[0] if 'T' in prompt.data_criacao else prompt.data_criacao %}
+                                    {% set hora = prompt.data_criacao.split('T')[1][:5] if 'T' in prompt.data_criacao else '' %}
+                                    {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('visualizar_prompt', id=prompt.id) }}" 
+                                   class="btn btn-outline-primary" title="Visualizar">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-success" 
+                                        onclick="testarPrompt('{{ prompt.id }}')" title="Testar">
+                                    <i class="bi bi-play-circle"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" 
+                                        onclick="confirmarExclusao('{{ prompt.id }}')" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-code-square fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">Nenhum prompt encontrado</h5>
+        <p class="text-muted">Comece criando seu primeiro prompt para análise de intimações.</p>
+        <a href="{{ url_for('novo_prompt') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i>
+            Criar Primeiro Prompt
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir este prompt?</p>
+                <p class="text-muted"><small>Esta ação não pode ser desfeita.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-exclusao">
+                    <i class="bi bi-trash"></i>
+                    Excluir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de teste de prompt -->
+<div class="modal fade" id="modalTeste" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-play-circle text-success"></i>
+                    Testar Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Selecione algumas intimações para testar este prompt:</p>
+                
+                <div class="mb-3">
+                    <label for="select-intimacoes" class="form-label">Intimações disponíveis:</label>
+                    <select class="form-select" id="select-intimacoes" multiple size="5">
+                        <!-- Será preenchido via JavaScript -->
+                    </select>
+                    <div class="form-text">
+                        <i class="bi bi-info-circle"></i>
+                        Segure Ctrl para selecionar múltiplas intimações.
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-lightbulb"></i>
+                    <strong>Dica:</strong> Teste com intimações de diferentes classificações para avaliar a eficácia do prompt.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btn-executar-teste">
+                    <i class="bi bi-cpu"></i>
+                    Executar Teste
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let promptParaExcluir = null;
+let promptParaTestar = null;
+
+// Função para selecionar/deselecionar todos
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.prompt-checkbox');
+    
+    if (selectAll) {
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selectAll.checked;
+        });
+    }
+    
+    updateSelectionCounter();
+}
+
+// Função para selecionar todos
+function selecionarTodos() {
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.checked = true;
+        toggleSelectAll();
+    }
+}
+
+// Função para limpar seleção
+function limparSelecao() {
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.checked = false;
+        toggleSelectAll();
+    }
+}
+
+// Função para atualizar contador de selecionados
+function updateSelectionCounter() {
+    const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
+    const counter = document.getElementById('contador-selecionados');
+    const btnTestar = document.getElementById('btn-testar');
+    
+    if (counter) {
+        counter.textContent = `${checkboxes.length} selecionados`;
+    }
+    if (btnTestar) {
+        btnTestar.disabled = checkboxes.length === 0;
+    }
+    
+    // Atualizar estado do checkbox "selecionar todos"
+    const allCheckboxes = document.querySelectorAll('.prompt-checkbox');
+    const selectAll = document.getElementById('select-all');
+    
+    if (selectAll) {
+        if (checkboxes.length === 0) {
+            selectAll.indeterminate = false;
+            selectAll.checked = false;
+        } else if (checkboxes.length === allCheckboxes.length) {
+            selectAll.indeterminate = false;
+            selectAll.checked = true;
+        } else {
+            selectAll.indeterminate = true;
+        }
+    }
+}
+
+// Função para testar prompts selecionados
+function testarSelecionados() {
+    const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
+    const promptIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (promptIds.length === 0) {
+        showToast('Selecione pelo menos um prompt para testar.', 'warning');
+        return;
+    }
+    
+    // Redirecionar para página de análise com prompts pré-selecionados
+    const params = new URLSearchParams();
+    promptIds.forEach(id => params.append('prompt_ids', id));
+    
+    window.location.href = `{{ url_for('analise') }}?${params.toString()}`;
+}
+
+// Função para testar um prompt específico
+function testarPrompt(promptId) {
+    promptParaTestar = promptId;
+    
+    // Carregar intimações disponíveis
+    carregarIntimacoes();
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalTeste'));
+    modal.show();
+}
+
+// Função para carregar intimações
+function carregarIntimacoes() {
+    const select = document.getElementById('select-intimacoes');
+    select.innerHTML = '<option disabled>Carregando intimações...</option>';
+    
+    // Simular carregamento de intimações
+    setTimeout(function() {
+        select.innerHTML = `
+            <option value="intimacao_1">Intimação #1 - ELABORAR PEÇA</option>
+            <option value="intimacao_2">Intimação #2 - URGÊNCIA</option>
+            <option value="intimacao_3">Intimação #3 - ANALISAR PROCESSO</option>
+            <option value="intimacao_4">Intimação #4 - CONTATAR ASSISTIDO</option>
+            <option value="intimacao_5">Intimação #5 - RENUNCIAR PRAZO</option>
+        `;
+    }, 500);
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao(promptId) {
+    promptParaExcluir = promptId;
+    const modal = new bootstrap.Modal(document.getElementById('modalExclusao'));
+    modal.show();
+}
+
+// Event listener para confirmação de exclusão
+document.getElementById('btn-confirmar-exclusao').addEventListener('click', function() {
+    if (promptParaExcluir) {
+        console.log('=== DEBUG: CONFIRMANDO EXCLUSÃO DE PROMPT (LISTA) ===');
+        console.log('ID do prompt:', promptParaExcluir);
+        
+        const btnConfirmar = this;
+        const originalText = btnConfirmar.innerHTML;
+        
+        // Mostrar loading
+        btnConfirmar.innerHTML = '<i class="bi bi-hourglass-split"></i> Excluindo...';
+        btnConfirmar.disabled = true;
+        
+        // Fazer requisição para excluir
+        fetch(`/api/prompts/${promptParaExcluir}/excluir`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('Resposta da exclusão:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Dados da resposta:', data);
+            
+            if (data.success) {
+                showToast('Prompt excluído com sucesso!', 'success');
+                
+                // Fechar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalExclusao'));
+                modal.hide();
+                
+                // Recarregar a página após 1 segundo
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(`Erro ao excluir: ${data.message}`, 'error');
+                btnConfirmar.innerHTML = originalText;
+                btnConfirmar.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Erro na exclusão:', error);
+            showToast('Erro ao excluir prompt!', 'error');
+            btnConfirmar.innerHTML = originalText;
+            btnConfirmar.disabled = false;
+        });
+        
+        promptParaExcluir = null;
+    }
+});
+
+// Event listener para executar teste
+document.getElementById('btn-executar-teste').addEventListener('click', function() {
+    const selectIntimacoes = document.getElementById('select-intimacoes');
+    const intimacoesSelecionadas = Array.from(selectIntimacoes.selectedOptions).map(option => option.value);
+    
+    if (intimacoesSelecionadas.length === 0) {
+        showToast('Selecione pelo menos uma intimação para testar.', 'warning');
+        return;
+    }
+    
+    if (promptParaTestar) {
+        // Redirecionar para página de análise
+        const params = new URLSearchParams();
+        params.append('prompt_ids', promptParaTestar);
+        intimacoesSelecionadas.forEach(id => params.append('intimacao_ids', id));
+        
+        window.location.href = `{{ url_for('analise') }}?${params.toString()}`;
+    }
+});
+
+// Função para formatar data usando JavaScript nativo
+function formatarData(dateString) {
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Data inválida';
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) {
+        return 'Data inválida';
+    }
+}
+
+// Aplicar formatação de data após carregamento da página
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        // Atualizar contador inicial
+        if (typeof updateSelectionCounter === 'function') {
+            updateSelectionCounter();
+        }
+        
+        // Formatar datas
+        const dateCells = document.querySelectorAll('td small.text-muted');
+        dateCells.forEach((cell, index) => {
+            const dateText = cell.textContent.trim();
+            if (dateText && dateText !== 'N/A') {
+                try {
+                    const formatted = formatarData(dateText);
+                    cell.textContent = formatted;
+                } catch (e) {
+                    // Manter texto original se não conseguir formatar
+                }
+            }
+        });
+    } catch (e) {
+        console.log('Erro geral no DOMContentLoaded:', e);
+    }
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+A para selecionar todos
+    if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        selecionarTodos();
+    }
+    
+    // Escape para limpar seleção
+    if (e.key === 'Escape') {
+        limparSelecao();
+    }
+    
+    // Enter para testar selecionados
+    if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        testarSelecionados();
+    }
+});
+</script>
+{% endblock %}

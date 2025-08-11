@@ -1,0 +1,1586 @@
+{% extends "base.html" %}
+
+{% block title %}Relatórios - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-graph-up"></i>
+        Relatórios e Estatísticas
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atualizarRelatorios()">
+                <i class="bi bi-arrow-clockwise"></i>
+                Atualizar
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-info" onclick="configurarFiltros()">
+                <i class="bi bi-funnel"></i>
+                Filtros
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-success" onclick="exportarRelatorio()">
+                <i class="bi bi-download"></i>
+                Exportar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4" id="card-filtros">
+    <div class="card-header">
+        <h6 class="card-title mb-0">
+            <i class="bi bi-sliders"></i>
+            Filtros de Período
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <label for="data-inicio" class="form-label">Data Início</label>
+                <input type="date" class="form-control" id="data-inicio" name="data_inicio">
+            </div>
+            <div class="col-md-3">
+                <label for="data-fim" class="form-label">Data Fim</label>
+                <input type="date" class="form-control" id="data-fim" name="data_fim">
+            </div>
+            <div class="col-md-3">
+                <label for="filtro-prompt" class="form-label">Prompt Específico</label>
+                <select class="form-select" id="filtro-prompt" name="prompt_id">
+                    <option value="">Todos os prompts</option>
+                    {% for prompt in prompts %}
+                    <option value="{{ prompt.id }}">{{ prompt.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filtro-classificacao" class="form-label">Classificação</label>
+                <select class="form-select" id="filtro-classificacao" name="classificacao">
+                    <option value="">Todas as classificações</option>
+                    {% for tipo in tipos_acao %}
+                    <option value="{{ tipo }}">{{ tipo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" onclick="aplicarFiltros()">
+                    <i class="bi bi-search"></i>
+                    Aplicar Filtros
+                </button>
+                <button type="button" class="btn btn-outline-secondary" onclick="limparFiltros()">
+                    <i class="bi bi-x-circle"></i>
+                    Limpar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Métricas Principais -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <i class="bi bi-file-text fa-2x mb-2"></i>
+                        <h4 id="total-intimacoes">{{ estatisticas.get('total_intimacoes', 0) }}</h4>
+                        <small>Total de Intimações</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cpu fa-2x mb-2"></i>
+                        <h4 id="total-analises">{{ estatisticas.get('total_analises', 0) }}</h4>
+                        <small>Total de Análises</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="bi bi-code-square fa-2x mb-2"></i>
+                        <h4 id="total-prompts">{{ estatisticas.get('total_prompts', 0) }}</h4>
+                        <small>Total de Prompts</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="bi bi-percent fa-2x mb-2"></i>
+                        <h4 id="acuracia-geral">{{ '%.1f'|format(estatisticas.get('acuracia_geral', 0)) }}%</h4>
+                        <small>Acurácia Geral</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico de Acurácia por Período -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    Acurácia por Período
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="grafico-acuracia" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- Gráfico de Distribuição de Classificações -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pie-chart"></i>
+                    Distribuição de Classificações
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-center mb-3">Classificações Manuais</h6>
+                        <canvas id="grafico-classificacoes-manuais" height="200"></canvas>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-center mb-3">Resultados da IA</h6>
+                        <canvas id="grafico-resultados-ia" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance por Prompt -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i>
+                    Performance por Prompt
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="grafico-performance-prompts" height="120"></canvas>
+            </div>
+        </div>
+
+        <!-- Matriz de Confusão -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-grid-3x3"></i>
+                    Matriz de Confusão
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="explicarMatriz()">
+                    <i class="bi bi-question-circle"></i>
+                    Como interpretar?
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="matriz-confusao-container">
+                    <!-- Matriz será gerada dinamicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Estatísticas Rápidas -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-speedometer2"></i>
+                    Estatísticas Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-success mb-0" id="acertos-total">{{ estatisticas.get('acertos', 0) }}</h6>
+                            <small class="text-muted">Acertos</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-danger mb-0" id="erros-total">{{ estatisticas.get('erros', 0) }}</h6>
+                        <small class="text-muted">Erros</small>
+                    </div>
+                </div>
+                
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-info mb-0" id="tempo-medio">{{ '%.2f'|format(estatisticas.get('tempo_medio', 0)) }}s</h6>
+                            <small class="text-muted">Tempo Médio</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-warning mb-0" id="custo-total">${{ '%.4f'|format(estatisticas.get('custo_total', 0)) }}</h6>
+                        <small class="text-muted">Custo Total</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="small text-muted">
+                    <div class="mb-2">
+                        <strong>Análises hoje:</strong> <span id="analises-hoje">{{ estatisticas.get('analises_hoje', 0) }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Análises esta semana:</strong> <span id="analises-semana">{{ estatisticas.get('analises_semana', 0) }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Análises este mês:</strong> <span id="analises-mes">{{ estatisticas.get('analises_mes', 0) }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Prompt mais usado:</strong> <span id="prompt-mais-usado">{{ estatisticas.get('prompt_mais_usado', 'N/A') }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Melhor acurácia:</strong> <span id="melhor-acuracia">{{ '%.1f'|format(estatisticas.get('melhor_acuracia', 0)) }}%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Prompts -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-trophy"></i>
+                    Top 5 Prompts por Acurácia
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="top-prompts-container">
+                    {% for prompt_stat in estatisticas.get('top_prompts', [])[:5] %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <small class="fw-bold">{{ prompt_stat.nome[:20] }}{% if prompt_stat.nome | length > 20 %}...{% endif %}</small>
+                            <br>
+                            <small class="text-muted">{{ prompt_stat.total_usos }} usos</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-{% if prompt_stat.acuracia >= 80 %}success{% elif prompt_stat.acuracia >= 60 %}warning{% else %}danger{% endif %}">
+                                {{ '%.1f'|format(prompt_stat.acuracia) }}%
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Tendências -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-trending-up"></i>
+                    Tendências
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="small">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Acurácia vs. mês anterior:</span>
+                                                    <span class="badge bg-{% if estatisticas.get('tendencia_acuracia', 0) > 0 %}success{% elif estatisticas.get('tendencia_acuracia', 0) < 0 %}danger{% else %}secondary{% endif %}">
+                            {% if estatisticas.get('tendencia_acuracia', 0) > 0 %}+{% endif %}{{ '%.1f'|format(estatisticas.get('tendencia_acuracia', 0)) }}%
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Volume de análises:</span>
+                                                    <span class="badge bg-{% if estatisticas.get('tendencia_volume', 0) > 0 %}success{% elif estatisticas.get('tendencia_volume', 0) < 0 %}danger{% else %}secondary{% endif %}">
+                            {% if estatisticas.get('tendencia_volume', 0) > 0 %}+{% endif %}{{ '%.1f'|format(estatisticas.get('tendencia_volume', 0)) }}%
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Tempo médio de resposta:</span>
+                                                    <span class="badge bg-{% if estatisticas.get('tendencia_tempo', 0) < 0 %}success{% elif estatisticas.get('tendencia_tempo', 0) > 0 %}danger{% else %}secondary{% endif %}">
+                            {% if estatisticas.get('tendencia_tempo', 0) > 0 %}+{% endif %}{{ '%.1f'|format(estatisticas.get('tendencia_tempo', 0)) }}%
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span>Custo por análise:</span>
+                                                    <span class="badge bg-{% if estatisticas.get('tendencia_custo', 0) < 0 %}success{% elif estatisticas.get('tendencia_custo', 0) > 0 %}danger{% else %}secondary{% endif %}">
+                            {% if estatisticas.get('tendencia_custo', 0) > 0 %}+{% endif %}{{ '%.1f'|format(estatisticas.get('tendencia_custo', 0)) }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações Rápidas -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Ações Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="gerarRelatorioDetalhado()">
+                        <i class="bi bi-file-earmark-text"></i>
+                        Relatório Detalhado
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="exportarCSV()">
+                        <i class="bi bi-file-earmark-spreadsheet"></i>
+                        Exportar CSV
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="compartilharRelatorio()">
+                        <i class="bi bi-share"></i>
+                        Compartilhar
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="agendarRelatorio()">
+                        <i class="bi bi-calendar-event"></i>
+                        Agendar Relatório
+                    </button>
+                    
+                    <hr>
+                    
+                    <a href="{{ url_for('analise') }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-play-circle"></i>
+                        Nova Análise
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Análises Individuais -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="card-title mb-0">
+                        <i class="bi bi-list-ul"></i>
+                        Análises Individuais
+                        <span class="badge bg-primary ms-2" id="contador-analises">{{ paginacao.total_itens }}</span>
+                    </h6>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirAnalisesSelecionadas()" id="btn-excluir-selecionadas" style="display: none;">
+                            <i class="bi bi-trash"></i>
+                            Excluir Selecionadas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleConfiguracoesColunas()">
+                            <i class="bi bi-gear"></i>
+                            Colunas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="exportarAnalises()">
+                            <i class="bi bi-download"></i>
+                            Exportar
+                        </button>
+                    </div>
+    </div>
+                    <div class="card-body">
+                        <!-- Configuração de Colunas -->
+                        <div id="config-colunas" class="mb-4" style="display: none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-columns"></i>
+                                        Configurar Colunas Visíveis
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-data" checked>
+                                                <label class="form-check-label" for="col-data">
+                                                    Data
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-intimacao" checked>
+                                                <label class="form-check-label" for="col-intimacao">
+                                                    Intimação
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-prompt" checked>
+                                                <label class="form-check-label" for="col-prompt">
+                                                    Prompt
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-classificacao-manual" checked>
+                                                <label class="form-check-label" for="col-classificacao-manual">
+                                                    Classificação Manual
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-informacao-adicional" checked>
+                                                <label class="form-check-label" for="col-informacao-adicional">
+                                                    Informação Adicional
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-resultado-ia" checked>
+                                                <label class="form-check-label" for="col-resultado-ia">
+                                                    Resultado IA
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-status" checked>
+                                                <label class="form-check-label" for="col-status">
+                                                    Status
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-configuracoes" checked>
+                                                <label class="form-check-label" for="col-configuracoes">
+                                                    Configurações
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-tempo" checked>
+                                                <label class="form-check-label" for="col-tempo">
+                                                    Tempo
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-custo" checked>
+                                                <label class="form-check-label" for="col-custo">
+                                                    Custo
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-prompt-completo" checked>
+                                                <label class="form-check-label" for="col-prompt-completo">
+                                                    Prompt Completo
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-resposta-ia" checked>
+                                                <label class="form-check-label" for="col-resposta-ia">
+                                                    Resposta IA
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="d-grid gap-2">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="selecionarTodasColunas()">
+                                                    <i class="bi bi-check-all"></i>
+                                                    Selecionar Todas
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecaoColunas()">
+                                                    <i class="bi bi-x-circle"></i>
+                                                    Limpar Seleção
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-success" onclick="salvarConfiguracaoColunas()">
+                                                    <i class="bi bi-check-circle"></i>
+                                                    Salvar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="tabela-analises-container">
+                            {% include 'partials/tabela_analises.html' %}
+                        </div>
+                    </div>
+</div>
+
+{% include 'partials/modais_prompt_resposta.html' %}
+
+<!-- Modal de Explicação da Matriz de Confusão -->
+<div class="modal fade" id="modalExplicacaoMatriz" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle text-info"></i>
+                    Como Interpretar a Matriz de Confusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-lightbulb"></i> O que é uma Matriz de Confusão?</h6>
+                    <p>A matriz de confusão é uma tabela que mostra o desempenho de um modelo de classificação, comparando as classificações reais (manuais) com as predições da IA.</p>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Como Ler:</h6>
+                        <ul>
+                            <li><strong>Linhas:</strong> Classificação manual (real)</li>
+                            <li><strong>Colunas:</strong> Resultado da IA (predito)</li>
+                            <li><strong>Diagonal principal:</strong> Acertos (valores altos são bons)</li>
+                            <li><strong>Fora da diagonal:</strong> Erros (valores baixos são bons)</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Interpretação das Cores:</h6>
+                        <ul>
+                            <li><span class="badge bg-success">Verde</span>: Muitos acertos</li>
+                            <li><span class="badge bg-warning">Amarelo</span>: Acertos moderados</li>
+                            <li><span class="badge bg-danger">Vermelho</span>: Poucos acertos/muitos erros</li>
+                            <li><span class="badge bg-light text-dark">Cinza</span>: Nenhuma ocorrência</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Dicas de Análise:</h6>
+                    <ul class="mb-0">
+                        <li>Uma diagonal forte indica boa performance geral</li>
+                        <li>Valores altos fora da diagonal indicam confusões específicas</li>
+                        <li>Identifique padrões de erro para melhorar os prompts</li>
+                        <li>Compare matrizes de diferentes prompts para escolher o melhor</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendi</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Estilos para configuração de colunas */
+.col-data, .col-intimacao, .col-prompt, .col-classificacao-manual, 
+.col-informacao-adicional, .col-resultado-ia, .col-status, 
+.col-configuracoes, .col-tempo, .col-custo, .col-prompt-completo, .col-resposta-ia {
+    transition: all 0.3s ease;
+}
+
+/* Quando uma coluna está oculta */
+.col-data[style*="display: none"], 
+.col-intimacao[style*="display: none"], 
+.col-prompt[style*="display: none"], 
+.col-classificacao-manual[style*="display: none"], 
+.col-informacao-adicional[style*="display: none"], 
+.col-resultado-ia[style*="display: none"], 
+.col-status[style*="display: none"], 
+.col-configuracoes[style*="display: none"], 
+.col-tempo[style*="display: none"], 
+.col-custo[style*="display: none"],
+.col-prompt-completo[style*="display: none"],
+.col-resposta-ia[style*="display: none"] {
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+}
+
+/* Aplicar também para th e td ocultos */
+th[style*="display: none"], td[style*="display: none"] {
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Dados dos gráficos vindos do backend
+const dadosGraficos = {{ dados_graficos | tojson | safe }};
+console.log('=== DEBUG: Dados dos gráficos carregados ===');
+console.log('dadosGraficos:', dadosGraficos);
+
+// Configuração de cores
+const cores = {
+    primaria: '#0d6efd',
+    sucesso: '#198754',
+    info: '#0dcaf0',
+    aviso: '#ffc107',
+    perigo: '#dc3545',
+    secundaria: '#6c757d'
+};
+
+// Inicializar gráficos
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DEBUG: DOMContentLoaded executado ===');
+    
+    // Teste se Bootstrap está disponível
+    if (typeof bootstrap !== 'undefined') {
+        console.log('Bootstrap disponível:', bootstrap);
+    } else {
+        console.error('Bootstrap não está disponível!');
+    }
+    
+    // Teste se as modais existem
+    const modalPrompt = document.getElementById('modalPromptCompleto');
+    const modalResposta = document.getElementById('modalRespostaCompleta');
+    console.log('Modal Prompt encontrada:', modalPrompt);
+    console.log('Modal Resposta encontrada:', modalResposta);
+    
+    inicializarGraficos();
+    gerarMatrizConfusao();
+    configurarFiltrosDatas();
+    
+    // Carregar e aplicar configuração de colunas automaticamente
+    setTimeout(() => {
+        carregarConfiguracaoColunas();
+        aplicarConfiguracaoColunas();
+        
+        // Configurar checkboxes para aplicar mudanças em tempo real
+        configurarCheckboxesColunas();
+    }, 500);
+    // Só chamar se houver análises na página
+    if (document.querySelectorAll('.analise-checkbox').length > 0) {
+        updateAnalisesSelection();
+    }
+});
+
+// Funções para gerenciar seleção de análises
+function toggleSelectAllAnalises() {
+    const selectAll = document.getElementById('select-all-analises');
+    const checkboxes = document.querySelectorAll('.analise-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateAnalisesSelection();
+}
+
+function updateAnalisesSelection() {
+    const checkboxes = document.querySelectorAll('.analise-checkbox');
+    const selectAll = document.getElementById('select-all-analises');
+    const btnExcluir = document.getElementById('btn-excluir-selecionadas');
+    
+    // Verificar se os elementos existem antes de tentar acessá-los
+    if (!selectAll || !btnExcluir) {
+        console.warn('Elementos de seleção não encontrados');
+        return;
+    }
+    
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+    
+    // Atualizar checkbox "selecionar todos"
+    selectAll.checked = checkedCount === totalCount && totalCount > 0;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < totalCount;
+    
+    // Mostrar/ocultar botão de excluir
+    if (checkedCount > 0) {
+        btnExcluir.style.display = 'inline-block';
+        btnExcluir.innerHTML = `<i class="bi bi-trash"></i> Excluir (${checkedCount})`;
+    } else {
+        btnExcluir.style.display = 'none';
+    }
+}
+
+function excluirAnalise(intimacaoId, analiseId) {
+    if (!confirm('Tem certeza que deseja excluir esta análise?')) {
+        return;
+    }
+    
+    fetch('/api/analises/excluir', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            intimacao_id: intimacaoId,
+            analise_id: analiseId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Análise excluída com sucesso!', 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Erro ao excluir análise: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao excluir análise', 'error');
+    });
+}
+
+function excluirAnalisesSelecionadas() {
+    const checkboxes = document.querySelectorAll('.analise-checkbox:checked');
+    const total = checkboxes.length;
+    
+    if (total === 0) {
+        showToast('Nenhuma análise selecionada', 'warning');
+        return;
+    }
+    
+    if (!confirm(`Tem certeza que deseja excluir ${total} análise(s)?`)) {
+        return;
+    }
+    
+    const promises = Array.from(checkboxes).map(checkbox => {
+        const [intimacaoId, analiseId] = checkbox.value.split('_');
+        return fetch('/api/analises/excluir', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                intimacao_id: intimacaoId,
+                analise_id: analiseId
+            })
+        }).then(response => response.json());
+    });
+    
+    Promise.all(promises)
+    .then(results => {
+        const successCount = results.filter(r => r.success).length;
+        const errorCount = total - successCount;
+        
+        if (errorCount === 0) {
+            showToast(`${successCount} análise(s) excluída(s) com sucesso!`, 'success');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast(`${successCount} excluída(s), ${errorCount} erro(s)`, 'warning');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao excluir análises', 'error');
+    });
+}
+
+// Função para carregar página via AJAX
+function carregarPagina(pagina) {
+    // Mostrar loading
+    const tabelaContainer = document.getElementById('tabela-analises-container');
+    tabelaContainer.innerHTML = '<div class="text-center py-4"><i class="bi bi-arrow-clockwise fa-spin fa-2x text-primary"></i><p class="mt-2">Carregando...</p></div>';
+    
+    // Construir URL da API com parâmetros atuais
+    const url = new URL('/api/relatorios/pagina/' + pagina, window.location.origin);
+    
+    // Adicionar parâmetros de filtro atuais
+    const currentUrl = new URL(window.location);
+    const params = ['data_inicio', 'data_fim', 'prompt_id', 'classificacao', 'itens_por_pagina'];
+    params.forEach(param => {
+        const value = currentUrl.searchParams.get(param);
+        if (value) {
+            url.searchParams.set(param, value);
+        }
+    });
+    
+    // Fazer requisição AJAX
+    fetch(url.toString())
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar a tabela e paginação
+                tabelaContainer.innerHTML = data.html;
+                
+                // Atualizar contador
+                const contador = document.getElementById('contador-analises');
+                if (contador && data.paginacao) {
+                    contador.textContent = data.paginacao.total_itens;
+                }
+                
+                // Reinicializar seleção de análises
+                if (document.querySelectorAll('.analise-checkbox').length > 0) {
+                    updateAnalisesSelection();
+                }
+                
+                // Aplicar configuração de colunas após carregar novo conteúdo
+                setTimeout(() => {
+                    console.log('=== DEBUG: Aplicando configuração após carregar página AJAX ===');
+                    aplicarConfiguracaoColunas();
+                }, 200);
+                
+                showToast(`Página ${pagina} carregada!`, 'success');
+            } else {
+                throw new Error(data.error || 'Erro desconhecido');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar página:', error);
+            showToast('Erro ao carregar página: ' + error.message, 'error');
+            // Restaurar conteúdo original
+            window.location.reload();
+        });
+}
+
+// Função para exportar análises
+function exportarAnalises() {
+    // Obter parâmetros de filtro atuais
+    const currentUrl = new URL(window.location);
+    const dataInicio = currentUrl.searchParams.get('data_inicio') || '';
+    const dataFim = currentUrl.searchParams.get('data_fim') || '';
+    const promptId = currentUrl.searchParams.get('prompt_id') || '';
+    const classificacao = currentUrl.searchParams.get('classificacao') || '';
+    
+    // Construir URL de exportação
+    const url = new URL('/exportar', window.location.origin);
+    url.searchParams.set('tipo', 'analises');
+    url.searchParams.set('formato', 'csv');
+    
+    // Adicionar filtros se existirem
+    if (dataInicio) url.searchParams.set('data_inicio', dataInicio);
+    if (dataFim) url.searchParams.set('data_fim', dataFim);
+    if (promptId) url.searchParams.set('prompt_id', promptId);
+    if (classificacao) url.searchParams.set('classificacao', classificacao);
+    
+    // Mostrar loading
+    const btnExportar = document.querySelector('button[onclick="exportarAnalises()"]');
+    const originalText = btnExportar.innerHTML;
+    btnExportar.innerHTML = '<i class="bi bi-hourglass-split"></i> Exportando...';
+    btnExportar.disabled = true;
+    
+    // Fazer download
+    fetch(url.toString())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erro ao exportar dados');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            // Criar link de download
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `analises_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            showToast('Exportação concluída com sucesso!', 'success');
+        })
+        .catch(error => {
+            console.error('Erro na exportação:', error);
+            showToast('Erro ao exportar dados: ' + error.message, 'error');
+        })
+        .finally(() => {
+            // Restaurar botão
+            btnExportar.innerHTML = originalText;
+            btnExportar.disabled = false;
+        });
+}
+
+// Função para inicializar todos os gráficos
+function inicializarGraficos() {
+    criarGraficoAcuracia();
+    criarGraficoClassificacoesManuais();
+    criarGraficoResultadosIA();
+    criarGraficoPerformancePrompts();
+}
+
+// Gráfico de acurácia por período
+function criarGraficoAcuracia() {
+    const ctx = document.getElementById('grafico-acuracia').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dadosGraficos.acuracia_periodo.labels,
+            datasets: [{
+                label: 'Acurácia (%)',
+                data: dadosGraficos.acuracia_periodo.data,
+                borderColor: cores.primaria,
+                backgroundColor: cores.primaria + '20',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de classificações manuais
+function criarGraficoClassificacoesManuais() {
+    const ctx = document.getElementById('grafico-classificacoes-manuais').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: dadosGraficos.classificacoes_manuais.labels,
+            datasets: [{
+                data: dadosGraficos.classificacoes_manuais.data,
+                backgroundColor: [
+                    cores.perigo,
+                    cores.sucesso,
+                    cores.info,
+                    cores.aviso,
+                    cores.secundaria
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 10
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de resultados da IA
+function criarGraficoResultadosIA() {
+    const ctx = document.getElementById('grafico-resultados-ia').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: dadosGraficos.resultados_ia.labels,
+            datasets: [{
+                data: dadosGraficos.resultados_ia.data,
+                backgroundColor: [
+                    cores.perigo,
+                    cores.sucesso,
+                    cores.info,
+                    cores.aviso,
+                    cores.secundaria
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        font: {
+                            size: 10
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de performance por prompt
+function criarGraficoPerformancePrompts() {
+    const ctx = document.getElementById('grafico-performance-prompts').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dadosGraficos.performance_prompts.labels,
+            datasets: [
+                {
+                    label: 'Acurácia (%)',
+                    data: dadosGraficos.performance_prompts.acuracia,
+                    backgroundColor: cores.sucesso + '80',
+                    borderColor: cores.sucesso,
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Número de Usos',
+                    data: dadosGraficos.performance_prompts.usos,
+                    backgroundColor: cores.info + '80',
+                    borderColor: cores.info,
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false,
+                    },
+                }
+            }
+        }
+    });
+}
+
+// Função para gerar matriz de confusão
+function gerarMatrizConfusao() {
+    // Classificações padrão se não vierem do backend
+    const classificacoes = ['RENUNCIAR PRAZO', 'ELABORAR PEÇA', 'ANALISAR PROCESSO', 'CONTATAR ASSISTIDO', 'URGÊNCIA'];
+    
+    // Dados simulados da matriz (normalmente viriam do backend)
+    const matriz = [
+        [15, 2, 1, 0, 1],  // RENUNCIAR PRAZO
+        [1, 18, 2, 1, 0],  // ELABORAR PEÇA
+        [0, 1, 12, 1, 0],  // ANALISAR PROCESSO
+        [1, 0, 1, 8, 0],   // CONTATAR ASSISTIDO
+        [0, 1, 0, 0, 6]    // URGÊNCIA
+    ];
+    
+    let html = '<div class="table-responsive"><table class="table table-bordered text-center">';
+    
+    // Cabeçalho
+    html += '<thead><tr><th></th>';
+    html += '<th colspan="' + classificacoes.length + '" class="bg-light">Resultado da IA</th></tr>';
+    html += '<tr><th class="bg-light">Classificação Manual</th>';
+    classificacoes.forEach(cls => {
+        html += '<th class="small">' + cls.substring(0, 10) + (cls.length > 10 ? '...' : '') + '</th>';
+    });
+    html += '</tr></thead>';
+    
+    // Corpo da tabela
+    html += '<tbody>';
+    classificacoes.forEach((cls, i) => {
+        html += '<tr>';
+        html += '<th class="bg-light small">' + cls.substring(0, 15) + (cls.length > 15 ? '...' : '') + '</th>';
+        
+        matriz[i].forEach((valor, j) => {
+            let classe = 'table-light';
+            if (valor > 0) {
+                if (i === j) { // Diagonal (acertos)
+                    classe = valor > 10 ? 'table-success' : 'table-warning';
+                } else { // Fora da diagonal (erros)
+                    classe = valor > 5 ? 'table-danger' : 'table-warning';
+                }
+            }
+            
+            html += '<td class="' + classe + '">' + valor + '</td>';
+        });
+        
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    
+    // Adicionar legenda
+    html += '<div class="mt-3"><small class="text-muted">';
+    html += '<i class="bi bi-info-circle"></i> ';
+    html += 'Linhas: Classificação Manual | Colunas: Resultado da IA | ';
+    html += '<span class="badge bg-success">Verde</span>: Acertos | ';
+    html += '<span class="badge bg-warning">Amarelo</span>: Moderado | ';
+    html += '<span class="badge bg-danger">Vermelho</span>: Erros';
+    html += '</small></div>';
+    
+    document.getElementById('matriz-confusao-container').innerHTML = html;
+}
+
+// Função para configurar filtros de data
+function configurarFiltrosDatas() {
+    const hoje = new Date();
+    const umMesAtras = new Date(hoje.getFullYear(), hoje.getMonth() - 1, hoje.getDate());
+    
+    document.getElementById('data-inicio').value = umMesAtras.toISOString().split('T')[0];
+    document.getElementById('data-fim').value = hoje.toISOString().split('T')[0];
+}
+
+// Função para aplicar filtros
+function aplicarFiltros() {
+    const dataInicio = document.getElementById('data-inicio').value;
+    const dataFim = document.getElementById('data-fim').value;
+    const promptId = document.getElementById('filtro-prompt').value;
+    const classificacao = document.getElementById('filtro-classificacao').value;
+    
+    // Aqui você faria a chamada para o backend com os filtros
+    console.log('Aplicando filtros:', { dataInicio, dataFim, promptId, classificacao });
+    
+    showToast('Filtros aplicados! Atualizando relatórios...', 'info');
+    
+    // Simular atualização dos dados
+    setTimeout(() => {
+        atualizarRelatorios();
+        showToast('Relatórios atualizados com sucesso!', 'success');
+    }, 1000);
+}
+
+// Função para limpar filtros
+function limparFiltros() {
+    document.getElementById('data-inicio').value = '';
+    document.getElementById('data-fim').value = '';
+    document.getElementById('filtro-prompt').value = '';
+    document.getElementById('filtro-classificacao').value = '';
+    
+    configurarFiltrosDatas();
+    showToast('Filtros limpos!', 'info');
+}
+
+// Função para atualizar relatórios
+function atualizarRelatorios() {
+    showToast('Atualizando relatórios...', 'info');
+    
+    // Aqui você faria a chamada para o backend
+    // Por enquanto, apenas simular a atualização
+    setTimeout(() => {
+        showToast('Relatórios atualizados!', 'success');
+    }, 1000);
+}
+
+// Função para configurar filtros
+function configurarFiltros() {
+    const cardFiltros = document.getElementById('card-filtros');
+    if (cardFiltros.style.display === 'none') {
+        cardFiltros.style.display = 'block';
+    } else {
+        cardFiltros.style.display = 'none';
+    }
+}
+
+// Função para explicar matriz
+function explicarMatriz() {
+    const modal = new bootstrap.Modal(document.getElementById('modalExplicacaoMatriz'));
+    modal.show();
+}
+
+// Função para exportar relatório
+function exportarRelatorio() {
+    const dados = {
+        timestamp: new Date().toISOString(),
+        periodo: {
+            inicio: document.getElementById('data-inicio').value,
+            fim: document.getElementById('data-fim').value
+        },
+        estatisticas: {
+            total_intimacoes: document.getElementById('total-intimacoes').textContent,
+            total_analises: document.getElementById('total-analises').textContent,
+            total_prompts: document.getElementById('total-prompts').textContent,
+            acuracia_geral: document.getElementById('acuracia-geral').textContent
+        },
+        graficos: dadosGraficos
+    };
+    
+    const dataStr = JSON.stringify(dados, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `relatorio_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    
+    showToast('Relatório exportado!', 'success');
+}
+
+// Função para gerar relatório detalhado
+function gerarRelatorioDetalhado() {
+    showToast('Gerando relatório detalhado...', 'info');
+    
+    // Simular geração
+    setTimeout(() => {
+        showToast('Relatório detalhado gerado! Verifique a pasta de downloads.', 'success');
+    }, 2000);
+}
+
+// Função para exportar CSV
+function exportarCSV() {
+    showToast('Exportando dados para CSV...', 'info');
+    
+    // Simular exportação
+    setTimeout(() => {
+        showToast('Dados exportados para CSV!', 'success');
+    }, 1500);
+}
+
+// Função para compartilhar relatório
+function compartilharRelatorio() {
+    if (navigator.share) {
+        navigator.share({
+            title: 'Relatório de Análise de Prompts',
+            text: 'Confira o relatório de performance do sistema analisador de prompts.',
+            url: window.location.href
+        });
+    } else {
+        // Fallback: copiar link
+        navigator.clipboard.writeText(window.location.href);
+        showToast('Link do relatório copiado para a área de transferência!', 'success');
+    }
+}
+
+// Função para agendar relatório
+function agendarRelatorio() {
+    showToast('Funcionalidade de agendamento será implementada em breve!', 'info');
+}
+
+// Função para alternar configurações de colunas
+function toggleConfiguracoesColunas() {
+    const configDiv = document.getElementById('config-colunas');
+    if (configDiv.style.display === 'none') {
+        configDiv.style.display = 'block';
+        carregarConfiguracaoColunas();
+    } else {
+        configDiv.style.display = 'none';
+    }
+}
+
+// Função para carregar configuração de colunas
+function carregarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasRelatorios');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        // Configuração padrão
+        configuracaoColunas = {
+            data: true,
+            intimacao: true,
+            prompt: true,
+            classificacao_manual: true,
+            informacao_adicional: true,
+            resultado_ia: true,
+            status: true,
+            configuracoes: true,
+            tempo: true,
+            custo: true
+        };
+    }
+    
+    console.log('=== DEBUG: Carregando configuração de colunas ===');
+    console.log('Configuração carregada:', configuracaoColunas);
+    
+    // Aplicar configuração aos checkboxes
+    const checkboxes = [
+        { id: 'col-data', key: 'data' },
+        { id: 'col-intimacao', key: 'intimacao' },
+        { id: 'col-prompt', key: 'prompt' },
+        { id: 'col-classificacao-manual', key: 'classificacao_manual' },
+        { id: 'col-informacao-adicional', key: 'informacao_adicional' },
+        { id: 'col-resultado-ia', key: 'resultado_ia' },
+        { id: 'col-status', key: 'status' },
+        { id: 'col-configuracoes', key: 'configuracoes' },
+        { id: 'col-tempo', key: 'tempo' },
+        { id: 'col-custo', key: 'custo' },
+        { id: 'col-prompt-completo', key: 'prompt_completo' },
+        { id: 'col-resposta-ia', key: 'resposta_ia' }
+    ];
+    
+    checkboxes.forEach(({ id, key }) => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.checked = configuracaoColunas[key];
+            console.log(`Checkbox ${id} configurado para: ${configuracaoColunas[key]}`);
+        } else {
+            console.log(`Checkbox ${id} NÃO encontrado durante carregamento!`);
+        }
+    });
+    
+    console.log('=== DEBUG: Configuração carregada ===');
+}
+
+// Função para configurar checkboxes para aplicar mudanças em tempo real
+function configurarCheckboxesColunas() {
+    const checkboxes = [
+        { id: 'col-data', key: 'data' },
+        { id: 'col-intimacao', key: 'intimacao' },
+        { id: 'col-prompt', key: 'prompt' },
+        { id: 'col-classificacao-manual', key: 'classificacao_manual' },
+        { id: 'col-informacao-adicional', key: 'informacao_adicional' },
+        { id: 'col-resultado-ia', key: 'resultado_ia' },
+        { id: 'col-status', key: 'status' },
+        { id: 'col-configuracoes', key: 'configuracoes' },
+        { id: 'col-tempo', key: 'tempo' },
+        { id: 'col-custo', key: 'custo' },
+        { id: 'col-prompt-completo', key: 'prompt_completo' },
+        { id: 'col-resposta-ia', key: 'resposta_ia' }
+    ];
+    
+    console.log('=== DEBUG: Configurando checkboxes de colunas ===');
+    
+    checkboxes.forEach(({ id, key }) => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            console.log(`Checkbox ${id} encontrado, configurando evento...`);
+            checkbox.addEventListener('change', function() {
+                console.log(`Checkbox ${id} alterado para: ${this.checked}`);
+                configuracaoColunas[key] = this.checked;
+                localStorage.setItem('configuracaoColunasRelatorios', JSON.stringify(configuracaoColunas));
+                aplicarConfiguracaoColunas();
+                showToast(`Coluna "${this.nextElementSibling.textContent.trim()}" ${this.checked ? 'exibida' : 'oculta'}`, 'success');
+            });
+        } else {
+            console.log(`Checkbox ${id} NÃO encontrado!`);
+        }
+    });
+    
+    console.log('=== DEBUG: Checkboxes configurados ===');
+}
+
+// Função para selecionar todas as colunas
+function selecionarTodasColunas() {
+    const checkboxes = document.querySelectorAll('#config-colunas input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    
+    // Atualizar configuração
+    configuracaoColunas = {
+        data: true,
+        intimacao: true,
+        prompt: true,
+        classificacao_manual: true,
+        informacao_adicional: true,
+        resultado_ia: true,
+        status: true,
+        configuracoes: true,
+        tempo: true,
+        custo: true
+    };
+    
+    localStorage.setItem('configuracaoColunasRelatorios', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+    showToast('Todas as colunas selecionadas!', 'success');
+}
+
+// Função para limpar seleção de colunas
+function limparSelecaoColunas() {
+    const checkboxes = document.querySelectorAll('#config-colunas input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Atualizar configuração
+    configuracaoColunas = {
+        data: false,
+        intimacao: false,
+        prompt: false,
+        classificacao_manual: false,
+        informacao_adicional: false,
+        resultado_ia: false,
+        status: false,
+        configuracoes: false,
+        tempo: false,
+        custo: false
+    };
+    
+    localStorage.setItem('configuracaoColunasRelatorios', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+    showToast('Seleção de colunas limpa!', 'success');
+}
+
+// Função para salvar configuração de colunas (agora só fecha a seção)
+function salvarConfiguracaoColunas() {
+    // Fechar configuração
+    document.getElementById('config-colunas').style.display = 'none';
+    showToast('Configuração aplicada!', 'success');
+}
+
+// Variável global para configuração de colunas
+let configuracaoColunas = {};
+
+
+
+// Funções para mostrar prompt e resposta completos nos relatórios
+function mostrarPromptCompletoRelatorios(intimacaoId, promptCompleto) {
+    console.log('=== DEBUG: mostrarPromptCompletoRelatorios chamada ===');
+    console.log('Intimação ID:', intimacaoId);
+    console.log('Prompt completo:', promptCompleto);
+    
+    const elementoId = document.getElementById('prompt-intimacao-id');
+    const elementoConteudo = document.getElementById('prompt-completo-conteudo');
+    
+    console.log('Elemento ID encontrado:', elementoId);
+    console.log('Elemento conteúdo encontrado:', elementoConteudo);
+    
+    if (elementoId) elementoId.textContent = intimacaoId;
+    if (elementoConteudo) elementoConteudo.textContent = promptCompleto || 'N/A';
+    
+    const modalElement = document.getElementById('modalPromptCompleto');
+    console.log('Modal element encontrado:', modalElement);
+    
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } else {
+        console.error('Modal não encontrada!');
+    }
+}
+
+function mostrarRespostaCompletaRelatorios(intimacaoId, respostaCompleta) {
+    console.log('=== DEBUG: mostrarRespostaCompletaRelatorios chamada ===');
+    console.log('Intimação ID:', intimacaoId);
+    console.log('Resposta completa:', respostaCompleta);
+    
+    const elementoId = document.getElementById('resposta-intimacao-id');
+    const elementoConteudo = document.getElementById('resposta-completa-conteudo');
+    
+    if (elementoId) elementoId.textContent = intimacaoId;
+    if (elementoConteudo) elementoConteudo.textContent = respostaCompleta || 'N/A';
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalRespostaCompleta'));
+    modal.show();
+}
+
+// Funções de copiar (usando os IDs compartilhados)
+function copiarPrompt() {
+    const conteudo = document.getElementById('prompt-completo-conteudo').textContent;
+    navigator.clipboard.writeText(conteudo).then(() => {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    });
+}
+
+function copiarResposta() {
+    const conteudo = document.getElementById('resposta-completa-conteudo').textContent;
+    navigator.clipboard.writeText(conteudo).then(() => {
+        showToast('Resposta copiada para a área de transferência!', 'success');
+    });
+}
+
+// Função para aplicar configuração de colunas (versão simplificada)
+function aplicarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasRelatorios');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        // Configuração padrão
+        configuracaoColunas = {
+            data: true,
+            intimacao: true,
+            prompt: true,
+            classificacao_manual: true,
+            informacao_adicional: true,
+            resultado_ia: true,
+            status: true,
+            configuracoes: true,
+            tempo: true,
+            custo: true
+        };
+    }
+    
+    console.log('=== DEBUG: Aplicando configuração de colunas ===');
+    console.log('Configuração:', configuracaoColunas);
+    
+    // Aplicar configuração diretamente na tabela
+    const tabela = document.querySelector('#tabela-analises-container table');
+    if (tabela) {
+        const thead = tabela.querySelector('thead tr');
+        const tbody = tabela.querySelector('tbody');
+        
+        if (thead && tbody) {
+            // Aplicar configuração no cabeçalho
+            const ths = thead.querySelectorAll('th');
+            const colunasConfig = [
+                { index: 1, key: 'data' },
+                { index: 2, key: 'intimacao' },
+                { index: 3, key: 'prompt' },
+                { index: 4, key: 'classificacao_manual' },
+                { index: 5, key: 'informacao_adicional' },
+                { index: 6, key: 'resultado_ia' },
+                { index: 7, key: 'status' },
+                { index: 8, key: 'configuracoes' },
+                { index: 9, key: 'tempo' },
+                { index: 10, key: 'custo' },
+                { index: 11, key: 'prompt_completo' },
+                { index: 12, key: 'resposta_ia' }
+            ];
+            
+            colunasConfig.forEach(({ index, key }) => {
+                if (ths[index]) {
+                    const visivel = configuracaoColunas[key];
+                    console.log(`Cabeçalho ${key} (índice ${index}): visível = ${visivel}`);
+                    if (visivel) {
+                        ths[index].style.display = '';
+                    } else {
+                        ths[index].style.display = 'none';
+                    }
+                }
+            });
+            
+            // Aplicar configuração nas linhas de dados
+            const trs = tbody.querySelectorAll('tr');
+            trs.forEach((tr, rowIndex) => {
+                const tds = tr.querySelectorAll('td');
+                colunasConfig.forEach(({ index, key }) => {
+                    if (tds[index]) {
+                        const visivel = configuracaoColunas[key];
+                        if (visivel) {
+                            tds[index].style.display = '';
+                        } else {
+                            tds[index].style.display = 'none';
+                        }
+                    }
+                });
+            });
+            
+            console.log(`Aplicada configuração em ${trs.length} linhas de dados`);
+        }
+    } else {
+        console.log('Tabela não encontrada!');
+    }
+    
+    console.log('=== DEBUG: Configuração aplicada ===');
+}
+
+
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+R para atualizar
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        atualizarRelatorios();
+    }
+    
+    // Ctrl+E para exportar
+    if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        exportarRelatorio();
+    }
+    
+    // Ctrl+F para filtros
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        configurarFiltros();
+    }
+});
+</script>
+{% endblock %}

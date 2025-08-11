@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+
+{% block title %}Intimações - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-file-text"></i>
+        Intimações
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selecionarTodas()">
+                <i class="bi bi-check-all"></i>
+                Selecionar Todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecao()">
+                <i class="bi bi-x-circle"></i>
+                Limpar Seleção
+            </button>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('nova_intimacao') }}" class="btn btn-sm btn-primary" onclick="console.log('=== DEBUG: BOTÃO NOVA INTIMAÇÃO CLICADO (FRONTEND) ==='); console.log('Redirecionando para nova intimação...');">
+                <i class="bi bi-plus-circle"></i>
+                Nova Intimação
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-4">
+                <label for="busca" class="form-label">Buscar no contexto</label>
+                <input type="text" class="form-control" id="busca" name="busca" 
+                       value="{{ request.args.get('busca', '') }}" 
+                       placeholder="Digite palavras-chave...">
+            </div>
+            <div class="col-md-3">
+                <label for="classificacao" class="form-label">Classificação</label>
+                <select class="form-select" id="classificacao" name="classificacao">
+                    <option value="">Todas as classificações</option>
+                    {% for tipo in tipos_acao %}
+                        <option value="{{ tipo }}" 
+                                {% if request.args.get('classificacao') == tipo %}selected{% endif %}>
+                            {{ tipo }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="ordenacao" class="form-label">Ordenar por</label>
+                <select class="form-select" id="ordenacao" name="ordenacao">
+                    <option value="data_desc" {% if request.args.get('ordenacao', 'data_desc') == 'data_desc' %}selected{% endif %}>Data (mais recente)</option>
+                    <option value="data_asc" {% if request.args.get('ordenacao') == 'data_asc' %}selected{% endif %}>Data (mais antiga)</option>
+                    <option value="classificacao" {% if request.args.get('ordenacao') == 'classificacao' %}selected{% endif %}>Classificação</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="bi bi-search"></i>
+                        Filtrar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Estatísticas rápidas -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">{{ intimacoes | length }}</h5>
+                <p class="card-text">Total de Intimações</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'ELABORAR PEÇA') | list | length }}</h5>
+                <p class="card-text">Elaborar Peça</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'URGÊNCIA') | list | length }}</h5>
+                <p class="card-text">Urgência</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'ANALISAR PROCESSO') | list | length }}</h5>
+                <p class="card-text">Analisar Processo</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Intimações -->
+{% if intimacoes %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>
+            <i class="bi bi-list"></i>
+            Lista de Intimações ({{ intimacoes | length }} encontradas)
+        </span>
+        <div>
+            <span id="contador-selecionadas" class="badge bg-primary">0 selecionadas</span>
+            <button type="button" class="btn btn-sm btn-success" onclick="analisarSelecionadas()" id="btn-analisar" disabled>
+                <i class="bi bi-cpu"></i>
+                Analisar Selecionadas
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="50">
+                            <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
+                        </th>
+                        <th>Contexto</th>
+                        <th width="200">Classificação Manual</th>
+                        <th width="150">Data de Criação</th>
+                        <th width="120">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intimacao in intimacoes %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="intimacao-checkbox" 
+                                   value="{{ intimacao.id }}" 
+                                   onchange="updateSelectionCounter()">
+                        </td>
+                        <td>
+                            <div class="text-truncate-custom" title="{{ intimacao.contexto }}">
+                                {{ intimacao.contexto }}
+                            </div>
+                            {% if intimacao.informacao_adicional %}
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i>
+                                    {{ intimacao.informacao_adicional[:100] }}{% if intimacao.informacao_adicional | length > 100 %}...{% endif %}
+                                </small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set badge_class = {
+                                'URGÊNCIA': 'danger',
+                                'ELABORAR PEÇA': 'success',
+                                'ANALISAR PROCESSO': 'info',
+                                'CONTATAR ASSISTIDO': 'warning',
+                                'RENUNCIAR PRAZO': 'secondary',
+                                'OCULTAR': 'dark',
+                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                            } %}
+                            <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
+                                {{ intimacao.classificacao_manual }}
+                            </span>
+                        </td>
+                        <td>
+                            <small class="text-muted">
+                                {% if intimacao.data_criacao %}
+                                    {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
+                                    {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
+                                    {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" 
+                                   class="btn btn-outline-primary" title="Visualizar">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button type="button" class="btn btn-outline-danger" 
+                                        onclick="confirmarExclusao('{{ intimacao.id }}')" title="Excluir">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-file-text fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">Nenhuma intimação encontrada</h5>
+        <p class="text-muted">Comece cadastrando sua primeira intimação para análise.</p>
+        <a href="{{ url_for('nova_intimacao') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i>
+            Cadastrar Primeira Intimação
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir esta intimação?</p>
+                <p class="text-muted"><small>Esta ação não pode ser desfeita.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-exclusao">
+                    <i class="bi bi-trash"></i>
+                    Excluir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let intimacaoParaExcluir = null;
+
+// Função para selecionar/deselecionar todas
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateSelectionCounter();
+}
+
+// Função para selecionar todas
+function selecionarTodas() {
+    document.getElementById('select-all').checked = true;
+    toggleSelectAll();
+}
+
+// Função para limpar seleção
+function limparSelecao() {
+    document.getElementById('select-all').checked = false;
+    toggleSelectAll();
+}
+
+// Função para atualizar contador de selecionadas
+function updateSelectionCounter() {
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
+    const counter = document.getElementById('contador-selecionadas');
+    const btnAnalisar = document.getElementById('btn-analisar');
+    
+    if (counter) {
+        counter.textContent = `${checkboxes.length} selecionadas`;
+    }
+    
+    if (btnAnalisar) {
+        btnAnalisar.disabled = checkboxes.length === 0;
+    }
+    
+    // Atualizar estado do checkbox "selecionar todas"
+    const allCheckboxes = document.querySelectorAll('.intimacao-checkbox');
+    const selectAll = document.getElementById('select-all');
+    
+    if (selectAll) {
+        if (checkboxes.length === 0) {
+            selectAll.indeterminate = false;
+            selectAll.checked = false;
+        } else if (checkboxes.length === allCheckboxes.length) {
+            selectAll.indeterminate = false;
+            selectAll.checked = true;
+        } else {
+            selectAll.indeterminate = true;
+        }
+    }
+}
+
+// Função para analisar intimações selecionadas
+function analisarSelecionadas() {
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
+    const intimacaoIds = Array.from(checkboxes).map(cb => cb.value);
+    
+    if (intimacaoIds.length === 0) {
+        showToast('Selecione pelo menos uma intimação para analisar.', 'warning');
+        return;
+    }
+    
+    // Redirecionar para página de análise com intimações pré-selecionadas
+    const params = new URLSearchParams();
+    intimacaoIds.forEach(id => params.append('intimacao_ids', id));
+    
+    window.location.href = `{{ url_for('analise') }}?${params.toString()}`;
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao(intimacaoId) {
+    intimacaoParaExcluir = intimacaoId;
+    const modal = new bootstrap.Modal(document.getElementById('modalExclusao'));
+    modal.show();
+}
+
+// Event listener para confirmação de exclusão
+document.getElementById('btn-confirmar-exclusao').addEventListener('click', function() {
+    if (intimacaoParaExcluir) {
+        console.log('=== DEBUG: CONFIRMANDO EXCLUSÃO DE INTIMAÇÃO (LISTA) ===');
+        console.log('ID da intimação:', intimacaoParaExcluir);
+        
+        const btnConfirmar = this;
+        const originalText = btnConfirmar.innerHTML;
+        
+        // Mostrar loading
+        btnConfirmar.innerHTML = '<i class="bi bi-hourglass-split"></i> Excluindo...';
+        btnConfirmar.disabled = true;
+        
+        // Fazer requisição para excluir
+        fetch(`/api/intimacoes/${intimacaoParaExcluir}/excluir`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('Resposta da exclusão:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Dados da resposta:', data);
+            
+            if (data.success) {
+                showToast('Intimação excluída com sucesso!', 'success');
+                
+                // Fechar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalExclusao'));
+                modal.hide();
+                
+                // Recarregar a página após 1 segundo
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(`Erro ao excluir: ${data.message}`, 'error');
+                btnConfirmar.innerHTML = originalText;
+                btnConfirmar.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Erro na exclusão:', error);
+            showToast('Erro ao excluir intimação!', 'error');
+            btnConfirmar.innerHTML = originalText;
+            btnConfirmar.disabled = false;
+        });
+        
+        intimacaoParaExcluir = null;
+    }
+});
+
+// Aplicar formatação de data após carregamento da página
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DEBUG: PÁGINA DE LISTA CARREGADA (FRONTEND) ===');
+    console.log('Página de intimações carregada!');
+    console.log('URL atual:', window.location.href);
+    
+    // Atualizar contador inicial
+    updateSelectionCounter();
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+A para selecionar todas
+    if (e.ctrlKey && e.key === 'a') {
+        e.preventDefault();
+        selecionarTodas();
+    }
+    
+    // Escape para limpar seleção
+    if (e.key === 'Escape') {
+        limparSelecao();
+    }
+    
+    // Enter para analisar selecionadas
+    if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        analisarSelecionadas();
+    }
+});
+</script>
+{% endblock %}

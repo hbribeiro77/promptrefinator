@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Prompt - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-plus-circle"></i>
+        Novo Prompt
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('listar_prompts') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-code-square"></i>
+                    Dados do Prompt
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="form-prompt">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">
+                            Nome do Prompt <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="nome" name="nome" 
+                               placeholder="Ex: Classificador de Intimações v1.0" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Escolha um nome descritivo e único para identificar este prompt.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">
+                            Descrição
+                        </label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3" 
+                                  placeholder="Descreva o objetivo e funcionamento deste prompt..."></textarea>
+                        <div class="form-text">
+                            <i class="bi bi-lightbulb"></i>
+                            Explique o que este prompt faz e quando deve ser usado.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="conteudo" class="form-label">
+                            Conteúdo do Prompt <span class="text-danger">*</span>
+                        </label>
+                        <div class="position-relative">
+                            <textarea class="form-control" id="conteudo" name="conteudo" rows="15" 
+                                      placeholder="Digite o prompt aqui..." required></textarea>
+                            <div class="position-absolute top-0 end-0 p-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="inserirVariavel('{CONTEXTO}')" title="Inserir variável CONTEXTO">
+                                    <i class="bi bi-braces"></i>
+                                    {CONTEXTO}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Use <code>{CONTEXTO}</code> onde o texto da intimação deve ser inserido.
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Caracteres: <span id="char-count">0</span> | 
+                                Palavras: <span id="word-count">0</span> | 
+                                Linhas: <span id="line-count">0</span> |
+                                Tokens estimados: <span id="token-count">0</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-secondary" onclick="limparFormulario()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Limpar
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="previewPrompt()">
+                            <i class="bi bi-eye"></i>
+                            Pré-visualizar
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="btn-salvar">
+                            <i class="bi bi-check-circle"></i>
+                            Salvar Prompt
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Dicas e Ajuda -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i>
+                    Dicas para Criação
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> Estrutura</h6>
+                    <ul class="mb-0">
+                        <li>Seja claro e específico</li>
+                        <li>Use exemplos quando possível</li>
+                        <li>Defina o formato de saída esperado</li>
+                        <li>Inclua instruções sobre classificações</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Variáveis</h6>
+                    <ul class="mb-0">
+                        <li><code>{CONTEXTO}</code> - Texto da intimação</li>
+                        <li>Use exatamente esta sintaxe</li>
+                        <li>A variável será substituída automaticamente</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Template de Exemplo -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-file-code"></i>
+                    Template de Exemplo
+                </h6>
+            </div>
+            <div class="card-body">
+                <button type="button" class="btn btn-outline-primary btn-sm mb-2" onclick="carregarTemplate()">
+                    <i class="bi bi-download"></i>
+                    Carregar Template
+                </button>
+                <pre class="bg-light p-2 rounded small" style="font-size: 0.8em;">Analise a seguinte intimação e classifique-a em uma das categorias:
+
+- URGÊNCIA
+- ELABORAR PEÇA
+- ANALISAR PROCESSO
+- CONTATAR ASSISTIDO
+- RENUNCIAR PRAZO
+- OCULTAR
+- ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR
+
+Intimação:
+{CONTEXTO}
+
+Responda apenas com a classificação, sem explicações adicionais.</pre>
+            </div>
+        </div>
+
+        <!-- Tipos de Ação -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-list-check"></i>
+                    Classificações Disponíveis
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for tipo in classificacoes %}
+                        {% set badge_class = {
+                            'URGÊNCIA': 'danger',
+                            'ELABORAR PEÇA': 'success',
+                            'ANALISAR PROCESSO': 'info',
+                            'CONTATAR ASSISTIDO': 'warning',
+                            'RENUNCIAR PRAZO': 'secondary',
+                            'OCULTAR': 'dark',
+                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                        } %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <small>{{ tipo }}</small>
+                            <span class="badge bg-{{ badge_class.get(tipo, 'secondary') }} rounded-pill">
+                                <i class="bi bi-tag"></i>
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de pré-visualização -->
+<div class="modal fade" id="modalPreview" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye text-info"></i>
+                    Pré-visualização do Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="exemplo-contexto" class="form-label">Exemplo de contexto para teste:</label>
+                    <textarea class="form-control" id="exemplo-contexto" rows="4" 
+                              placeholder="Cole aqui um exemplo de intimação para ver como ficará o prompt final..."></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Prompt final que será enviado para a IA:</label>
+                    <pre id="prompt-final" class="bg-light p-3 rounded" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></pre>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Dica:</strong> Verifique se o prompt está claro e se a variável {CONTEXTO} foi substituída corretamente.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarPromptFinal()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmação -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle text-success"></i>
+                    Prompt Salvo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Prompt criado com sucesso!</p>
+                <p class="text-muted">O que você gostaria de fazer agora?</p>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ url_for('novo_prompt') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Criar Outro
+                </a>
+                <a href="{{ url_for('listar_prompts') }}" class="btn btn-primary">
+                    <i class="bi bi-list"></i>
+                    Ver Lista
+                </a>
+                <button type="button" class="btn btn-success" onclick="testarEstePrompt()">
+                    <i class="bi bi-play-circle"></i>
+                    Testar Agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let ultimoPromptId = null;
+
+// Template padrão
+const templatePadrao = `Analise a seguinte intimação e classifique-a em uma das categorias abaixo:
+
+- URGÊNCIA: Para intimações que requerem ação imediata
+- ELABORAR PEÇA: Para intimações que requerem elaboração de documentos
+- ANALISAR PROCESSO: Para intimações que requerem análise detalhada
+- CONTATAR ASSISTIDO: Para intimações que requerem contato com o assistido
+- RENUNCIAR PRAZO: Para intimações relacionadas a prazos
+- OCULTAR: Para intimações que devem ser ocultadas
+- ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR: Para intimações que devem ser encaminhadas
+
+Intimação:
+{CONTEXTO}
+
+Instruções:
+1. Leia cuidadosamente o texto da intimação
+2. Identifique o tipo de ação necessária
+3. Responda APENAS com uma das classificações listadas acima
+4. Não inclua explicações ou texto adicional
+
+Classificação:`;
+
+// Função para contar caracteres, palavras, linhas e tokens
+function updateTextStats() {
+    const textarea = document.getElementById('conteudo');
+    const text = textarea.value;
+    
+    const charCount = text.length;
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const lineCount = text.split('\n').length;
+    const tokenCount = Math.ceil(charCount / 4); // Estimativa aproximada
+    
+    document.getElementById('char-count').textContent = charCount.toLocaleString();
+    document.getElementById('word-count').textContent = wordCount.toLocaleString();
+    document.getElementById('line-count').textContent = lineCount.toLocaleString();
+    document.getElementById('token-count').textContent = tokenCount.toLocaleString();
+    
+    // Avisos baseados no tamanho do texto
+    const formText = textarea.parentElement.querySelector('.form-text');
+    if (formText) {
+        if (charCount > 4000) {
+            formText.className = 'form-text text-warning';
+            formText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Prompt muito longo. Considere simplificar para reduzir custos.';
+        } else if (charCount < 50) {
+            formText.className = 'form-text text-warning';
+            formText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Prompt muito curto. Adicione mais instruções para melhor precisão.';
+        } else if (!text.includes('{CONTEXTO}')) {
+            formText.className = 'form-text text-danger';
+            formText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Prompt deve conter a variável {CONTEXTO}.';
+        } else {
+            formText.className = 'form-text';
+            formText.innerHTML = '<i class="bi bi-info-circle"></i> Use <code>{CONTEXTO}</code> onde o texto da intimação deve ser inserido.';
+        }
+    }
+}
+
+// Função para inserir variável
+function inserirVariavel(variavel) {
+    const textarea = document.getElementById('conteudo');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    textarea.value = text.substring(0, start) + variavel + text.substring(end);
+    textarea.focus();
+    textarea.setSelectionRange(start + variavel.length, start + variavel.length);
+    
+    updateTextStats();
+}
+
+// Função para carregar template
+function carregarTemplate() {
+    if (document.getElementById('conteudo').value.trim() && 
+        !confirm('Isso substituirá o conteúdo atual. Continuar?')) {
+        return;
+    }
+    
+    document.getElementById('conteudo').value = templatePadrao;
+    updateTextStats();
+    showToast('Template carregado com sucesso!', 'success');
+}
+
+// Função para pré-visualizar prompt
+function previewPrompt() {
+    const conteudo = document.getElementById('conteudo').value;
+    
+    if (!conteudo.trim()) {
+        showToast('Digite o conteúdo do prompt primeiro.', 'warning');
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalPreview'));
+    modal.show();
+    
+    // Atualizar pré-visualização quando o contexto de exemplo mudar
+    document.getElementById('exemplo-contexto').addEventListener('input', atualizarPreview);
+    
+    // Atualizar pré-visualização inicial
+    atualizarPreview();
+}
+
+// Função para atualizar pré-visualização
+function atualizarPreview() {
+    const conteudo = document.getElementById('conteudo').value;
+    const exemploContexto = document.getElementById('exemplo-contexto').value || '[CONTEXTO DA INTIMAÇÃO SERÁ INSERIDO AQUI]';
+    
+    const promptFinal = conteudo.replace(/{CONTEXTO}/g, exemploContexto);
+    document.getElementById('prompt-final').textContent = promptFinal;
+}
+
+// Função para copiar prompt final
+function copiarPromptFinal() {
+    const promptFinal = document.getElementById('prompt-final').textContent;
+    
+    navigator.clipboard.writeText(promptFinal).then(function() {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar prompt: ', err);
+        showToast('Erro ao copiar prompt.', 'error');
+    });
+}
+
+// Função para limpar formulário
+function limparFormulario() {
+    if (confirm('Tem certeza que deseja limpar todos os campos?')) {
+        document.getElementById('form-prompt').reset();
+        updateTextStats();
+        document.getElementById('nome').focus();
+    }
+}
+
+// Função para testar este prompt
+function testarEstePrompt() {
+    if (ultimoPromptId) {
+        window.location.href = `{{ url_for('analise') }}?prompt_ids=${ultimoPromptId}`;
+    }
+}
+
+// Validação do formulário
+function validarFormulario() {
+    const nome = document.getElementById('nome').value.trim();
+    const conteudo = document.getElementById('conteudo').value.trim();
+    
+    if (!nome) {
+        showToast('O nome do prompt é obrigatório.', 'error');
+        document.getElementById('nome').focus();
+        return false;
+    }
+    
+    if (nome.length < 3) {
+        showToast('O nome deve ter pelo menos 3 caracteres.', 'error');
+        document.getElementById('nome').focus();
+        return false;
+    }
+    
+    if (!conteudo) {
+        showToast('O conteúdo do prompt é obrigatório.', 'error');
+        document.getElementById('conteudo').focus();
+        return false;
+    }
+    
+    if (conteudo.length < 20) {
+        showToast('O conteúdo deve ter pelo menos 20 caracteres.', 'error');
+        document.getElementById('conteudo').focus();
+        return false;
+    }
+    
+    if (!conteudo.includes('{CONTEXTO}')) {
+        showToast('O prompt deve conter a variável {CONTEXTO}.', 'error');
+        document.getElementById('conteudo').focus();
+        return false;
+    }
+    
+    return true;
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const nomeInput = document.getElementById('nome');
+    const conteudoTextarea = document.getElementById('conteudo');
+    const form = document.getElementById('form-prompt');
+    
+    // Atualizar estatísticas do texto
+    conteudoTextarea.addEventListener('input', updateTextStats);
+    conteudoTextarea.addEventListener('paste', function() {
+        setTimeout(updateTextStats, 10);
+    });
+    
+    // Validação do formulário
+    form.addEventListener('submit', function(e) {
+        // Mostrar loading
+        const btnSalvar = document.getElementById('btn-salvar');
+        btnSalvar.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+        btnSalvar.disabled = true;
+        
+        // Permitir que o formulário seja enviado normalmente
+        console.log('Formulário será enviado para:', form.action);
+    });
+    
+    // Focar no primeiro campo
+    nomeInput.focus();
+    
+    // Atualizar estatísticas iniciais
+    updateTextStats();
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S para salvar
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('form-prompt').dispatchEvent(new Event('submit'));
+    }
+    
+    // Ctrl+R para limpar
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        limparFormulario();
+    }
+    
+    // Ctrl+P para pré-visualizar
+    if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        previewPrompt();
+    }
+    
+    // Ctrl+T para carregar template
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        carregarTemplate();
+    }
+    
+    // Escape para voltar
+    if (e.key === 'Escape') {
+        if (confirm('Deseja sair sem salvar?')) {
+            window.location.href = '{{ url_for("listar_prompts") }}';
+        }
+    }
+});
+
+// Auto-save no localStorage (rascunho)
+let autoSaveTimeout;
+function autoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(function() {
+        const formData = {
+            nome: document.getElementById('nome').value,
+            descricao: document.getElementById('descricao').value,
+            conteudo: document.getElementById('conteudo').value,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem('rascunho_prompt', JSON.stringify(formData));
+    }, 2000);
+}
+
+// Carregar rascunho se existir
+function carregarRascunho() {
+    const rascunho = localStorage.getItem('rascunho_prompt');
+    if (rascunho) {
+        try {
+            const data = JSON.parse(rascunho);
+            const timestamp = new Date(data.timestamp);
+            const agora = new Date();
+            const diffHoras = (agora - timestamp) / (1000 * 60 * 60);
+            
+            // Só carregar se o rascunho for de menos de 24 horas
+            if (diffHoras < 24) {
+                if (confirm('Encontrei um rascunho salvo. Deseja carregá-lo?')) {
+                    document.getElementById('nome').value = data.nome || '';
+                    document.getElementById('descricao').value = data.descricao || '';
+                    document.getElementById('conteudo').value = data.conteudo || '';
+                    updateTextStats();
+                }
+            } else {
+                // Remover rascunho antigo
+                localStorage.removeItem('rascunho_prompt');
+            }
+        } catch (e) {
+            console.error('Erro ao carregar rascunho:', e);
+            localStorage.removeItem('rascunho_prompt');
+        }
+    }
+}
+
+// Adicionar listeners para auto-save
+document.addEventListener('DOMContentLoaded', function() {
+    carregarRascunho();
+    
+    ['nome', 'descricao', 'conteudo'].forEach(id => {
+        document.getElementById(id).addEventListener('input', autoSave);
+    });
+});
+</script>
+{% endblock %}

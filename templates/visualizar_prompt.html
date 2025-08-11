@@ -1,0 +1,785 @@
+{% extends "base.html" %}
+
+{% block title %}Prompt: {{ prompt.nome }} - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-code-square"></i>
+        {{ prompt.nome }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('listar_prompts') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Voltar para Lista
+            </a>
+            <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-play-circle"></i>
+                Testar Prompt
+            </a>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmarExclusao()">
+                <i class="bi bi-trash"></i>
+                Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Dados do Prompt -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Informações do Prompt
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>ID:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <code>{{ prompt.id }}</code>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Nome:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ prompt.nome }}
+                    </div>
+                </div>
+                
+                {% if prompt.descricao %}
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Descrição:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ prompt.descricao }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Data de Criação:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span class="text-muted">
+                            {% if prompt.data_criacao %}
+                                {% set data = prompt.data_criacao.split('T')[0] if 'T' in prompt.data_criacao else prompt.data_criacao %}
+                                {% set hora = prompt.data_criacao.split('T')[1][:8] if 'T' in prompt.data_criacao else '' %}
+                                {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conteúdo do Prompt -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-file-code"></i>
+                    Conteúdo do Prompt
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTexto('conteudo-prompt')">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWrap('conteudo-prompt')">
+                        <i class="bi bi-text-wrap"></i>
+                        Quebra de Linha
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="previewPrompt()">
+                        <i class="bi bi-eye"></i>
+                        Pré-visualizar
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="position-relative">
+                    <pre id="conteudo-prompt" class="bg-light p-3 rounded" style="white-space: pre-wrap; max-height: 500px; overflow-y: auto;">{{ prompt.conteudo }}</pre>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Caracteres: <span id="char-count">{{ prompt.conteudo | length }}</span> | 
+                        Palavras: <span id="word-count">{{ prompt.conteudo.split() | length }}</span> | 
+                        Linhas: <span id="line-count">{{ prompt.conteudo.split('\n') | length }}</span> |
+                        Tokens estimados: <span id="token-count">{{ (prompt.conteudo | length / 4) | round | int }}</span>
+                    </small>
+                </div>
+                
+                <!-- Verificação de variáveis -->
+                <div class="mt-3">
+                    {% if '{CONTEXTO}' in prompt.conteudo %}
+                        <span class="badge bg-success">
+                            <i class="bi bi-check-circle"></i>
+                            Variável {CONTEXTO} encontrada
+                        </span>
+                    {% else %}
+                        <span class="badge bg-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Variável {CONTEXTO} não encontrada
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico de Uso -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history"></i>
+                    Histórico de Uso
+                </h5>
+                <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Nova Análise
+                </a>
+            </div>
+            <div class="card-body">
+                {% if analises %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Intimação</th>
+                                    <th>Resultado IA</th>
+                                    <th>Classificação Manual</th>
+                                    <th>Acurácia</th>
+                                    <th>Tempo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for analise in analises %}
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if analise.data_analise %}
+                                                {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
+                                                {% set hora = analise.data_analise.split('T')[1][:5] if 'T' in analise.data_analise else '' %}
+                                                {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 150px;" title="{{ analise.intimacao_contexto or 'N/A' }}">
+                                            #{{ analise.intimacao_id }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if analise.resultado_ia %}
+                                            {% set badge_class = {
+                                                'URGÊNCIA': 'danger',
+                                                'ELABORAR PEÇA': 'success',
+                                                'ANALISAR PROCESSO': 'info',
+                                                'CONTATAR ASSISTIDO': 'warning',
+                                                'RENUNCIAR PRAZO': 'secondary',
+                                                'OCULTAR': 'dark',
+                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                            } %}
+                                            <span class="badge bg-{{ badge_class.get(analise.resultado_ia, 'secondary') }}">
+                                                {{ analise.resultado_ia }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if analise.classificacao_manual %}
+                                            {% set badge_class = {
+                                                'URGÊNCIA': 'danger',
+                                                'ELABORAR PEÇA': 'success',
+                                                'ANALISAR PROCESSO': 'info',
+                                                'CONTATAR ASSISTIDO': 'warning',
+                                                'RENUNCIAR PRAZO': 'secondary',
+                                                'OCULTAR': 'dark',
+                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                            } %}
+                                            <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
+                                                {{ analise.classificacao_manual }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if analise.acertou is not none %}
+                                            {% if analise.acertou %}
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle"></i>
+                                                    Acertou
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-x-circle"></i>
+                                                    Errou
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">
+                                                <i class="bi bi-question-circle"></i>
+                                                N/A
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ '%.2f'|format(analise.tempo_processamento) }}s
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('visualizar_analise', analise_id=analise.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-play-circle fa-2x text-muted mb-3"></i>
+                        <h6 class="text-muted">Prompt ainda não foi usado</h6>
+                        <p class="text-muted">Este prompt ainda não foi testado com nenhuma intimação.</p>
+                        <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-primary">
+                            <i class="bi bi-play-circle"></i>
+                            Fazer Primeiro Teste
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Estatísticas do Prompt -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-bar-chart"></i>
+                    Estatísticas de Performance
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h5 class="text-primary mb-0">{{ analises | length }}</h5>
+                            <small class="text-muted">Usos</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="text-success mb-0">
+                            {% set acertos = analises | selectattr('acertou', 'equalto', true) | list | length %}
+                            {% if analises | length > 0 %}
+                                {{ '%.1f'|format((acertos / (analises | length)) * 100) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </h5>
+                        <small class="text-muted">Acurácia</small>
+                    </div>
+                </div>
+                
+                {% if analises %}
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h6 class="text-info mb-0">
+                                    {{ '%.2f'|format(analises | map(attribute='tempo_processamento') | sum / (analises | length)) }}s
+                                </h6>
+                                <small class="text-muted">Tempo Médio</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-warning mb-0">
+                                {% set custo_total = analises | map(attribute='custo_estimado') | sum %}
+                                ${{ '%.4f'|format(custo_total) }}
+                            </h6>
+                            <small class="text-muted">Custo Total</small>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <hr>
+                
+                <div class="d-grid gap-2">
+                    <small class="text-muted mb-2">
+                        <i class="bi bi-info-circle"></i>
+                        Resultados por Classificação:
+                    </small>
+                    
+                    {% set resultados_count = {} %}
+                    {% for analise in analises %}
+                        {% if analise.resultado_ia %}
+                            {% set _ = resultados_count.update({analise.resultado_ia: resultados_count.get(analise.resultado_ia, 0) + 1}) %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if resultados_count %}
+                        {% for resultado, count in resultados_count.items() %}
+                            {% set badge_class = {
+                                'URGÊNCIA': 'danger',
+                                'ELABORAR PEÇA': 'success',
+                                'ANALISAR PROCESSO': 'info',
+                                'CONTATAR ASSISTIDO': 'warning',
+                                'RENUNCIAR PRAZO': 'secondary',
+                                'OCULTAR': 'dark',
+                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                            } %}
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-{{ badge_class.get(resultado, 'secondary') }}">{{ resultado }}</span>
+                                <small class="text-muted">{{ count }}x ({{ '%.1f'|format((count / (analises | length)) * 100) }}%)</small>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <small class="text-muted">Nenhuma análise disponível</small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações Rápidas -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Ações Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-play-circle"></i>
+                        Testar Prompt
+                    </a>
+                    
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copiarTexto('conteudo-prompt')">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar Conteúdo
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="previewPrompt()">
+                        <i class="bi bi-eye"></i>
+                        Pré-visualizar
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="duplicarPrompt()">
+                        <i class="bi bi-files"></i>
+                        Duplicar Prompt
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="exportarPrompt()">
+                        <i class="bi bi-download"></i>
+                        Exportar Dados
+                    </button>
+                    
+                    <hr>
+                    
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="confirmarExclusao()">
+                        <i class="bi bi-trash"></i>
+                        Excluir Prompt
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Técnicas -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-gear"></i>
+                    Informações Técnicas
+                </h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">
+                    <div class="mb-2">
+                        <strong>ID:</strong> <code>{{ prompt.id }}</code>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Criado em:</strong> 
+                        {% if prompt.data_criacao %}
+                            {% set data = prompt.data_criacao.split('T')[0] if 'T' in prompt.data_criacao else prompt.data_criacao %}
+                            {% set hora = prompt.data_criacao.split('T')[1][:8] if 'T' in prompt.data_criacao else '' %}
+                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Tamanho:</strong> {{ prompt.conteudo | length }} caracteres
+                    </div>
+                    <div class="mb-2">
+                        <strong>Tokens estimados:</strong> {{ (prompt.conteudo | length / 4) | round | int }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Total de usos:</strong> {{ analises | length }}
+                    </div>
+                    {% if analises and analises|length > 0 %}
+                        <div class="mb-2">
+                            <strong>Último uso:</strong> 
+                            {% if analises and analises|length > 0 and analises[0].data_analise %}
+                                {% set data = analises[0].data_analise.split('T')[0] if 'T' in analises[0].data_analise else analises[0].data_analise %}
+                                {% set hora = analises[0].data_analise.split('T')[1][:5] if 'T' in analises[0].data_analise else '' %}
+                                {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                    <div class="mb-2">
+                        <strong>Contém {CONTEXTO}:</strong> 
+                        {% if '{CONTEXTO}' in prompt.conteudo %}
+                            <span class="text-success">Sim</span>
+                        {% else %}
+                            <span class="text-danger">Não</span>
+                        {% endif %}
+                    </div>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de pré-visualização -->
+<div class="modal fade" id="modalPreview" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-eye text-info"></i>
+                    Pré-visualização do Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="exemplo-contexto" class="form-label">Exemplo de contexto para teste:</label>
+                    <textarea class="form-control" id="exemplo-contexto" rows="4" 
+                              placeholder="Cole aqui um exemplo de intimação para ver como ficará o prompt final..."></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Prompt final que será enviado para a IA:</label>
+                    <pre id="prompt-final" class="bg-light p-3 rounded" style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></pre>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Dica:</strong> Verifique se o prompt está claro e se a variável {CONTEXTO} foi substituída corretamente.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarPromptFinal()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir este prompt?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Esta ação também excluirá todas as {{ analises | length }} análises relacionadas a este prompt.
+                </div>
+                <p class="text-muted"><small>Esta ação não pode ser desfeita.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-confirmar-exclusao">
+                    <i class="bi bi-trash"></i>
+                    Excluir Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Função para copiar texto
+function copiarTexto(elementId) {
+    const elemento = document.getElementById(elementId);
+    const texto = elemento.textContent || elemento.innerText;
+    
+    navigator.clipboard.writeText(texto).then(function() {
+        showToast('Texto copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar texto: ', err);
+        showToast('Erro ao copiar texto.', 'error');
+    });
+}
+
+// Função para alternar quebra de linha
+function toggleWrap(elementId) {
+    const elemento = document.getElementById(elementId);
+    const currentWrap = elemento.style.whiteSpace;
+    
+    if (currentWrap === 'nowrap') {
+        elemento.style.whiteSpace = 'pre-wrap';
+        showToast('Quebra de linha ativada', 'info');
+    } else {
+        elemento.style.whiteSpace = 'nowrap';
+        showToast('Quebra de linha desativada', 'info');
+    }
+}
+
+// Função para pré-visualizar prompt
+function previewPrompt() {
+    const modal = new bootstrap.Modal(document.getElementById('modalPreview'));
+    modal.show();
+    
+    // Atualizar pré-visualização quando o contexto de exemplo mudar
+    document.getElementById('exemplo-contexto').addEventListener('input', atualizarPreview);
+    
+    // Atualizar pré-visualização inicial
+    atualizarPreview();
+}
+
+// Função para atualizar pré-visualização
+function atualizarPreview() {
+    const conteudo = document.getElementById('conteudo-prompt').textContent;
+    const exemploContexto = document.getElementById('exemplo-contexto').value || '[CONTEXTO DA INTIMAÇÃO SERÁ INSERIDO AQUI]';
+    
+    const promptFinal = conteudo.replace(/{CONTEXTO}/g, exemploContexto);
+    document.getElementById('prompt-final').textContent = promptFinal;
+}
+
+// Função para copiar prompt final
+function copiarPromptFinal() {
+    const promptFinal = document.getElementById('prompt-final').textContent;
+    
+    navigator.clipboard.writeText(promptFinal).then(function() {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar prompt: ', err);
+        showToast('Erro ao copiar prompt.', 'error');
+    });
+}
+
+// Função para duplicar prompt
+function duplicarPrompt() {
+    const conteudo = document.getElementById('conteudo-prompt').textContent;
+    const nome = '{{ prompt.nome }} (Cópia)';
+    const descricao = '{{ prompt.descricao or "" }}';
+    
+    // Criar URL com parâmetros para pré-preencher o formulário
+    const params = new URLSearchParams();
+    params.append('nome', nome);
+    params.append('descricao', descricao);
+    params.append('conteudo', conteudo);
+    
+    window.location.href = `{{ url_for('novo_prompt') }}?${params.toString()}`;
+}
+
+// Função para confirmar exclusão
+function confirmarExclusao() {
+    const modal = new bootstrap.Modal(document.getElementById('modalExclusao'));
+    modal.show();
+}
+
+// Função para exportar prompt
+function exportarPrompt() {
+    const dados = {
+        id: '{{ prompt.id }}',
+        nome: '{{ prompt.nome | replace("'", "\\'")|replace('\n', '\\n') }}',
+        descricao: '{{ prompt.descricao | replace("'", "\\'")|replace('\n', '\\n') if prompt.descricao else "" }}',
+        conteudo: '{{ prompt.conteudo | replace("'", "\\'")|replace('\n', '\\n') }}',
+        data_criacao: '{{ prompt.data_criacao }}',
+        total_usos: {{ analises | length }},
+        acuracia: {% set acertos = analises | selectattr('acertou', 'equalto', true) | list | length %}{% if analises | length > 0 %}{{ (acertos / (analises | length)) * 100 }}{% else %}0{% endif %},
+        analises: [
+            {% for analise in analises %}
+            {
+                id: '{{ analise.id }}',
+                data_analise: '{{ analise.data_analise }}',
+                intimacao_id: '{{ analise.intimacao_id }}',
+                resultado_ia: '{{ analise.resultado_ia or "" }}',
+                classificacao_manual: '{{ analise.classificacao_manual or "" }}',
+                acertou: {{ 'true' if analise.acertou else 'false' if analise.acertou is not none else 'null' }},
+                tempo_processamento: {{ analise.tempo_processamento or 0 }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+    };
+    
+    const dataStr = JSON.stringify(dados, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `prompt_${dados.id}_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    
+    showToast('Dados do prompt exportados!', 'success');
+}
+
+// Event listener para confirmação de exclusão
+document.getElementById('btn-confirmar-exclusao').addEventListener('click', function() {
+    console.log('=== DEBUG: CONFIRMANDO EXCLUSÃO DE PROMPT ===');
+    console.log('ID do prompt:', '{{ prompt.id }}');
+    
+    const promptId = '{{ prompt.id }}';
+    const btnConfirmar = this;
+    const originalText = btnConfirmar.innerHTML;
+    
+    // Mostrar loading
+    btnConfirmar.innerHTML = '<i class="bi bi-hourglass-split"></i> Excluindo...';
+    btnConfirmar.disabled = true;
+    
+    // Fazer requisição para excluir
+    fetch(`/api/prompts/${promptId}/excluir`, {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => {
+        console.log('Resposta da exclusão:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dados da resposta:', data);
+        
+        if (data.success) {
+            showToast('Prompt excluído com sucesso!', 'success');
+            
+            // Fechar modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalExclusao'));
+            modal.hide();
+            
+            // Redirecionar para lista após 1 segundo
+            setTimeout(() => {
+                window.location.href = '{{ url_for("listar_prompts") }}';
+            }, 1000);
+        } else {
+            showToast(`Erro ao excluir: ${data.message}`, 'error');
+            btnConfirmar.innerHTML = originalText;
+            btnConfirmar.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Erro na exclusão:', error);
+        showToast('Erro ao excluir prompt!', 'error');
+        btnConfirmar.innerHTML = originalText;
+        btnConfirmar.disabled = false;
+    });
+});
+
+// Função para formatar data usando JavaScript nativo
+function formatarData(dateString, format = 'DD/MM/YYYY HH:mm') {
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Data inválida';
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        
+        if (format === 'DD/MM/YYYY HH:mm:ss') {
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        } else if (format === 'DD/MM/YYYY HH:mm') {
+            return `${day}/${month}/${year} ${hours}:${minutes}`;
+        }
+        
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) {
+        return 'Data inválida';
+    }
+}
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+C para copiar conteúdo
+    if (e.ctrlKey && e.key === 'c' && !window.getSelection().toString()) {
+        e.preventDefault();
+        copiarTexto('conteudo-prompt');
+    }
+    
+    // Ctrl+T para testar
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        window.location.href = `{{ url_for('analise') }}?prompt_ids={{ prompt.id }}`;
+    }
+    
+    // Ctrl+P para pré-visualizar
+    if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        previewPrompt();
+    }
+    
+    // Ctrl+D para duplicar
+    if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        duplicarPrompt();
+    }
+    
+    // Escape para voltar
+    if (e.key === 'Escape') {
+        window.location.href = '{{ url_for("listar_prompts") }}';
+    }
+});
+
+// Aplicar formatação de data após carregamento da página
+document.addEventListener('DOMContentLoaded', function() {
+    // Formatar datas nas tabelas
+    const dateCells = document.querySelectorAll('td small.text-muted');
+    dateCells.forEach(cell => {
+        const dateText = cell.textContent.trim();
+        if (dateText && dateText !== 'N/A' && dateText.includes('-')) {
+            try {
+                const formatted = formatarData(dateText, 'DD/MM/YYYY HH:mm');
+                cell.textContent = formatted;
+            } catch (e) {
+                // Manter texto original se não conseguir formatar
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

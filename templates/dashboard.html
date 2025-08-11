@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('nova_intimacao') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-plus-circle"></i>
+                Nova Intimação
+            </a>
+            <a href="{{ url_for('novo_prompt') }}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-plus-circle"></i>
+                Novo Prompt
+            </a>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('analise') }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-cpu"></i>
+                Executar Análise
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Métricas principais -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card card-metric border-0 shadow-sm">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total de Intimações
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ total_intimacoes | default(0) }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-file-text fa-2x text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card card-metric success border-0 shadow-sm">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Total de Análises
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ total_analises | default(0) }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-cpu fa-2x text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card card-metric warning border-0 shadow-sm">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Taxa de Acurácia
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ taxa_acuracia | default(0) }}%
+                        </div>
+                        <div class="progress progress-thin mt-2">
+                            <div class="progress-bar bg-warning" role="progressbar" 
+                                 style="width: {{ taxa_acuracia | default(0) }}%" 
+                                 aria-valuenow="{{ taxa_acuracia | default(0) }}" 
+                                 aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-bullseye fa-2x text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card card-metric danger border-0 shadow-sm">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                            Prompts Ativos
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ prompts_ativos | default(0) }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-chat-square-text fa-2x text-danger"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row mb-4">
+    <!-- Distribuição de Classificações -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-pie-chart"></i>
+                    Distribuição de Classificações Manuais
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if stats.distribuicao_classificacao %}
+                    <canvas id="chartDistribuicao" width="400" height="200"></canvas>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-pie-chart fa-3x mb-3"></i>
+                        <p>Nenhuma intimação cadastrada ainda.</p>
+                        <a href="{{ url_for('nova_intimacao') }}" class="btn btn-primary btn-sm">
+                            Cadastrar Primeira Intimação
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Status das Análises -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-bar-chart"></i>
+                    Status das Análises
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if stats.total_analises > 0 %}
+                    <canvas id="chartStatus" width="400" height="200"></canvas>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-bar-chart fa-3x mb-3"></i>
+                        <p>Nenhuma análise executada ainda.</p>
+                        <a href="{{ url_for('analise') }}" class="btn btn-primary btn-sm">
+                            Executar Primeira Análise
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ações Rápidas -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-lightning"></i>
+                    Ações Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <a href="{{ url_for('nova_intimacao') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-file-plus"></i><br>
+                                <small>Cadastrar Intimação</small>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <a href="{{ url_for('novo_prompt') }}" class="btn btn-outline-success">
+                                <i class="bi bi-chat-plus"></i><br>
+                                <small>Criar Prompt</small>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <a href="{{ url_for('analise') }}" class="btn btn-outline-info">
+                                <i class="bi bi-cpu"></i><br>
+                                <small>Executar Análise</small>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="d-grid">
+                            <a href="{{ url_for('relatorios') }}" class="btn btn-outline-warning">
+                                <i class="bi bi-graph-up"></i><br>
+                                <small>Ver Relatórios</small>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumo dos Tipos de Ação -->
+{% if tipos_acao %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="bi bi-list-check"></i>
+                    Tipos de Ação Disponíveis
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for tipo in tipos_acao %}
+                        <div class="col-md-6 col-lg-4 mb-2">
+                            <span class="badge bg-secondary me-1">{{ loop.index }}</span>
+                            {{ tipo }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Dados para os gráficos
+const dadosGraficos = {
+    distribuicao: {{ stats.distribuicao_classificacao | tojson | safe if stats.distribuicao_classificacao else '{}' }},
+    totalAnalises: {{ stats.total_analises | default(0) | safe }},
+    taxaAcuracia: {{ stats.taxa_acuracia_geral | default(0) | safe }}
+};
+
+// Gráfico de Distribuição de Classificações
+if (dadosGraficos.distribuicao && Object.keys(dadosGraficos.distribuicao).length > 0) {
+    const ctxDistribuicao = document.getElementById('chartDistribuicao').getContext('2d');
+    const chartDistribuicao = new Chart(ctxDistribuicao, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(dadosGraficos.distribuicao),
+            datasets: [{
+                data: Object.values(dadosGraficos.distribuicao),
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40',
+                    '#FF6384'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Gráfico de Status das Análises
+if (dadosGraficos.totalAnalises > 0) {
+    const ctxStatus = document.getElementById('chartStatus').getContext('2d');
+    const acertos = Math.round((dadosGraficos.taxaAcuracia * dadosGraficos.totalAnalises) / 100);
+    const erros = dadosGraficos.totalAnalises - acertos;
+
+    const chartStatus = new Chart(ctxStatus, {
+        type: 'bar',
+        data: {
+            labels: ['Acertos', 'Erros'],
+            datasets: [{
+                label: 'Quantidade',
+                data: [acertos, erros],
+                backgroundColor: [
+                    '#28a745',
+                    '#dc3545'
+                ],
+                borderColor: [
+                    '#1e7e34',
+                    '#c82333'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// Auto-refresh do dashboard a cada 5 minutos
+setInterval(function() {
+    location.reload();
+}, 300000);
+</script>
+{% endblock %}

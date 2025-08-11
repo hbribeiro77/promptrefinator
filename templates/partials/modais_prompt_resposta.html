@@ -1,0 +1,63 @@
+<!-- Modal para mostrar Prompt Completo -->
+<div class="modal fade" id="modalPromptCompleto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-code-square text-info"></i>
+                    Prompt Completo Enviado para IA
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Intimação ID:</label>
+                    <span id="prompt-intimacao-id" class="badge bg-secondary"></span>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Prompt Completo:</label>
+                    <pre id="prompt-completo-conteudo" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-info" onclick="copiarPrompt()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar Resposta Completa -->
+<div class="modal fade" id="modalRespostaCompleta" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-chat-dots text-success"></i>
+                    Resposta Completa da IA
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Intimação ID:</label>
+                    <span id="resposta-intimacao-id" class="badge bg-secondary"></span>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Resposta Completa:</label>
+                    <pre id="resposta-completa-conteudo" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-success" onclick="copiarResposta()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

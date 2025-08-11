@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Nova Intimação - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-plus-circle"></i>
+        Nova Intimação
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('listar_intimacoes') }}" class="btn btn-sm btn-outline-secondary" onclick="console.log('=== DEBUG: BOTÃO VER LISTA CLICADO (FRONTEND) ==='); console.log('Redirecionando para lista de intimações...');">
+            <i class="bi bi-arrow-left"></i>
+            Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-file-text"></i>
+                    Dados da Intimação
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="form-intimacao">
+                    <div class="mb-3">
+                        <label for="contexto" class="form-label">
+                            Contexto da Intimação <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="contexto" name="contexto" rows="8" 
+                                  placeholder="Cole aqui o texto completo da intimação..." required></textarea>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Cole o texto completo da intimação. Este será o contexto usado para análise pela IA.
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Caracteres: <span id="char-count">0</span> | 
+                                Palavras: <span id="word-count">0</span> | 
+                                Linhas: <span id="line-count">0</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="classificacao_manual" class="form-label">
+                            Classificação Manual <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="classificacao_manual" name="classificacao_manual" required>
+                            <option value="">Selecione a classificação...</option>
+                            {% for tipo in tipos_acao %}
+                                <option value="{{ tipo }}">{{ tipo }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Esta é a classificação correta que será usada para comparar com a análise da IA.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="informacoes_adicionais" class="form-label">
+                            Informações Adicionais
+                        </label>
+                        <textarea class="form-control" id="informacoes_adicionais" name="informacoes_adicionais" rows="3" 
+                                  placeholder="Observações, contexto adicional, notas importantes..."></textarea>
+                        <div class="form-text">
+                            <i class="bi bi-lightbulb"></i>
+                            Informações que podem ajudar na análise ou contexto adicional relevante.
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="button" class="btn btn-outline-secondary" onclick="limparFormulario()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Limpar
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="btn-salvar">
+                            <i class="bi bi-check-circle"></i>
+                            Salvar Intimação
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Dicas e Ajuda -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i>
+                    Dicas para Cadastro
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> Contexto</h6>
+                    <ul class="mb-0">
+                        <li>Cole o texto completo da intimação</li>
+                        <li>Inclua todas as informações relevantes</li>
+                        <li>Mantenha a formatação original quando possível</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Classificação</h6>
+                    <ul class="mb-0">
+                        <li>Escolha a classificação mais adequada</li>
+                        <li>Esta será usada para medir a precisão da IA</li>
+                        <li>Em caso de dúvida, use "ANALISAR PROCESSO"</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tipos de Ação Disponíveis -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-list-check"></i>
+                    Tipos de Ação
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    {% for tipo in tipos_acao %}
+                        {% set badge_class = {
+                            'URGÊNCIA': 'danger',
+                            'ELABORAR PEÇA': 'success',
+                            'ANALISAR PROCESSO': 'info',
+                            'CONTATAR ASSISTIDO': 'warning',
+                            'RENUNCIAR PRAZO': 'secondary',
+                            'OCULTAR': 'dark',
+                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                        } %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <small>{{ tipo }}</small>
+                            <span class="badge bg-{{ badge_class.get(tipo, 'secondary') }} rounded-pill">
+                                <i class="bi bi-tag"></i>
+                            </span>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de confirmação -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-check-circle text-success"></i>
+                    Intimação Salva
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Intimação cadastrada com sucesso!</p>
+                <p class="text-muted">O que você gostaria de fazer agora?</p>
+            </div>
+            <div class="modal-footer">
+                <a href="{{ url_for('nova_intimacao') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Cadastrar Outra
+                </a>
+                <a href="{{ url_for('listar_intimacoes') }}" class="btn btn-primary">
+                    <i class="bi bi-list"></i>
+                    Ver Lista
+                </a>
+                <button type="button" class="btn btn-success" onclick="analisarEstaIntimacao()">
+                    <i class="bi bi-cpu"></i>
+                    Analisar Agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let ultimaIntimacaoId = null;
+
+// Função para contar caracteres, palavras e linhas
+function updateTextStats() {
+    const textarea = document.getElementById('contexto');
+    const text = textarea.value;
+    
+    const charCount = text.length;
+    const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const lineCount = text.split('\n').length;
+    
+    document.getElementById('char-count').textContent = charCount.toLocaleString();
+    document.getElementById('word-count').textContent = wordCount.toLocaleString();
+    document.getElementById('line-count').textContent = lineCount.toLocaleString();
+    
+    // Avisos baseados no tamanho do texto
+    const formText = textarea.parentElement.querySelector('.form-text');
+    if (charCount > 4000) {
+        formText.className = 'form-text text-warning';
+        formText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Texto muito longo. Considere resumir para melhor análise.';
+    } else if (charCount < 50) {
+        formText.className = 'form-text text-warning';
+        formText.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Texto muito curto. Adicione mais contexto para melhor análise.';
+    } else {
+        formText.className = 'form-text';
+        formText.innerHTML = '<i class="bi bi-info-circle"></i> Cole o texto completo da intimação. Este será o contexto usado para análise pela IA.';
+    }
+}
+
+// Função para limpar formulário
+function limparFormulario() {
+    if (confirm('Tem certeza que deseja limpar todos os campos?')) {
+        document.getElementById('form-intimacao').reset();
+        updateTextStats();
+        document.getElementById('contexto').focus();
+    }
+}
+
+// Função para analisar esta intimação
+function analisarEstaIntimacao() {
+    if (ultimaIntimacaoId) {
+        window.location.href = `{{ url_for('analise') }}?intimacao_ids=${ultimaIntimacaoId}`;
+    }
+}
+
+// Validação do formulário
+function validarFormulario() {
+    const contexto = document.getElementById('contexto').value.trim();
+    const classificacao = document.getElementById('classificacao_manual').value;
+    
+    if (!contexto) {
+        showToast('O contexto da intimação é obrigatório.', 'error');
+        document.getElementById('contexto').focus();
+        return false;
+    }
+    
+    if (contexto.length < 10) {
+        showToast('O contexto deve ter pelo menos 10 caracteres.', 'error');
+        document.getElementById('contexto').focus();
+        return false;
+    }
+    
+    if (!classificacao) {
+        showToast('A classificação manual é obrigatória.', 'error');
+        document.getElementById('classificacao_manual').focus();
+        return false;
+    }
+    
+    return true;
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const textarea = document.getElementById('contexto');
+    const form = document.getElementById('form-intimacao');
+    
+    // Atualizar estatísticas do texto
+    textarea.addEventListener('input', updateTextStats);
+    textarea.addEventListener('paste', function() {
+        setTimeout(updateTextStats, 10);
+    });
+    
+    // Validação do formulário
+    form.addEventListener('submit', function(e) {
+        console.log('=== DEBUG: BOTÃO SALVAR CLICADO (FRONTEND) ===');
+        console.log('Formulário submetido!');
+        
+        e.preventDefault();
+        
+        console.log('Validando formulário...');
+        if (!validarFormulario()) {
+            console.log('Validação falhou!');
+            return;
+        }
+        
+        console.log('Validação passou! Preparando dados...');
+        
+        // Capturar dados do formulário
+        const contexto = document.getElementById('contexto').value;
+        const classificacao = document.getElementById('classificacao_manual').value;
+        const informacoes = document.getElementById('informacoes_adicionais').value;
+        
+        console.log('Dados do formulário:');
+        console.log('- Contexto:', contexto);
+        console.log('- Classificação:', classificacao);
+        console.log('- Informações:', informacoes);
+        
+        // Mostrar loading
+        const btnSalvar = document.getElementById('btn-salvar');
+        const originalText = btnSalvar.innerHTML;
+        btnSalvar.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+        btnSalvar.disabled = true;
+        
+        console.log('Enviando dados para o servidor...');
+        
+        // Enviar dados para o servidor
+        const formData = new FormData(form);
+        
+        fetch('{{ url_for("nova_intimacao") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log('Resposta do servidor:', response.status, response.statusText);
+            if (response.redirected) {
+                console.log('Redirecionando para:', response.url);
+                window.location.href = response.url;
+            } else {
+                return response.text();
+            }
+        })
+        .then(html => {
+            if (html) {
+                console.log('HTML recebido do servidor');
+                // Se não foi redirecionado, mostrar a página
+                document.open();
+                document.write(html);
+                document.close();
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao enviar dados:', error);
+            btnSalvar.innerHTML = originalText;
+            btnSalvar.disabled = false;
+            showToast('Erro ao salvar intimação!', 'error');
+        });
+    });
+    
+    // Focar no primeiro campo
+    textarea.focus();
+    
+    // Atualizar estatísticas iniciais
+    updateTextStats();
+});
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S para salvar
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        document.getElementById('form-intimacao').dispatchEvent(new Event('submit'));
+    }
+    
+    // Ctrl+R para limpar
+    if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault();
+        limparFormulario();
+    }
+    
+    // Escape para voltar
+    if (e.key === 'Escape') {
+        if (confirm('Deseja sair sem salvar?')) {
+            window.location.href = '{{ url_for("listar_intimacoes") }}';
+        }
+    }
+});
+
+// Auto-save no localStorage (rascunho)
+let autoSaveTimeout;
+function autoSave() {
+    clearTimeout(autoSaveTimeout);
+    autoSaveTimeout = setTimeout(function() {
+        const formData = {
+            contexto: document.getElementById('contexto').value,
+            classificacao_manual: document.getElementById('classificacao_manual').value,
+            informacoes_adicionais: document.getElementById('informacoes_adicionais').value,
+            timestamp: new Date().toISOString()
+        };
+        
+        localStorage.setItem('rascunho_intimacao', JSON.stringify(formData));
+    }, 2000);
+}
+
+// Carregar rascunho se existir
+function carregarRascunho() {
+    const rascunho = localStorage.getItem('rascunho_intimacao');
+    if (rascunho) {
+        try {
+            const data = JSON.parse(rascunho);
+            const timestamp = new Date(data.timestamp);
+            const agora = new Date();
+            const diffHoras = (agora - timestamp) / (1000 * 60 * 60);
+            
+            // Só carregar se o rascunho for de menos de 24 horas
+            if (diffHoras < 24) {
+                if (confirm('Encontrei um rascunho salvo. Deseja carregá-lo?')) {
+                    document.getElementById('contexto').value = data.contexto || '';
+                    document.getElementById('classificacao_manual').value = data.classificacao_manual || '';
+                    document.getElementById('informacoes_adicionais').value = data.informacoes_adicionais || '';
+                    updateTextStats();
+                }
+            } else {
+                // Remover rascunho antigo
+                localStorage.removeItem('rascunho_intimacao');
+            }
+        } catch (e) {
+            console.error('Erro ao carregar rascunho:', e);
+            localStorage.removeItem('rascunho_intimacao');
+        }
+    }
+}
+
+// Adicionar listeners para auto-save
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DEBUG: PÁGINA NOVA INTIMAÇÃO CARREGADA (FRONTEND) ===');
+    console.log('Página de nova intimação carregada!');
+    console.log('URL atual:', window.location.href);
+    
+    carregarRascunho();
+    
+            ['contexto', 'classificacao_manual', 'informacoes_adicionais'].forEach(id => {
+        document.getElementById(id).addEventListener('input', autoSave);
+    });
+});
+
+// Limpar rascunho quando formulário for enviado com sucesso
+window.addEventListener('beforeunload', function() {
+    // Não limpar aqui, só quando realmente salvar
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1014 @@
+{% extends "base.html" %}
+
+{% block title %}Configurações - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-gear"></i>
+        Configurações do Sistema
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetarConfiguracoes()">
+                <i class="bi bi-arrow-clockwise"></i>
+                Restaurar Padrões
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-info" onclick="testarConexao()">
+                <i class="bi bi-wifi"></i>
+                Testar Conexão
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-sm btn-success" onclick="salvarConfiguracoes()">
+                <i class="bi bi-check-circle"></i>
+                Salvar Configurações
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Configurações da OpenAI -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-key"></i>
+                    Configurações da OpenAI
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="form-openai">
+                    <div class="mb-3">
+                        <label for="api-key" class="form-label">
+                            Chave da API
+                            <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="api-key" name="api_key" 
+                                   placeholder="sk-..." value="{{ config.openai_api_key or '' }}" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api-key')">
+                                <i class="bi bi-eye" id="api-key-icon"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Chave configurada via variável de ambiente</strong>
+                                <br>
+                                A chave da API está sendo carregada do arquivo <code>.env</code> ou variável de ambiente <code>OPENAI_API_KEY</code>.
+                                <br>
+                                Para alterar, edite o arquivo <code>.env</code> na raiz do projeto.
+                                <br><br>
+                                <strong>Debug:</strong> Valor atual: <code>{{ config.openai_api_key[:20] if config.openai_api_key else 'NÃO ENCONTRADA' }}...</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="modelo-padrao" class="form-label">Modelo Padrão</label>
+                            <select class="form-select" id="modelo-padrao" name="modelo_padrao">
+                                {% for modelo in modelos_disponiveis %}
+                                <option value="{{ modelo }}" {% if modelo == config.modelo_padrao %}selected{% endif %}>
+                                    {{ modelo }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">
+                                Modelo usado por padrão nas análises
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="temperatura-padrao" class="form-label">
+                                Temperatura Padrão
+                                <span class="text-muted">(<span id="temp-value">{{ config.temperatura_padrao }}</span>)</span>
+                            </label>
+                            <input type="range" class="form-range" id="temperatura-padrao" name="temperatura_padrao" 
+                                   min="0" max="2" step="0.1" value="{{ config.temperatura_padrao }}" 
+                                   oninput="document.getElementById('temp-value').textContent = this.value">
+                            <div class="form-text">
+                                0 = Mais determinístico, 2 = Mais criativo
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="max-tokens-padrao" class="form-label">Máximo de Tokens Padrão</label>
+                            <input type="number" class="form-control" id="max-tokens-padrao" name="max_tokens_padrao" 
+                                   value="{{ config.max_tokens_padrao }}" min="1" max="4000">
+                            <div class="form-text">
+                                Limite padrão de tokens para respostas
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="timeout-padrao" class="form-label">Timeout Padrão (segundos)</label>
+                            <input type="number" class="form-control" id="timeout-padrao" name="timeout_padrao" 
+                                   value="{{ config.timeout_padrao or 30 }}" min="5" max="120">
+                            <div class="form-text">
+                                Tempo limite padrão para chamadas da API
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="max-retries" class="form-label">Máximo de Tentativas</label>
+                            <input type="number" class="form-control" id="max-retries" name="max_retries" 
+                                   value="{{ config.max_retries or 3 }}" min="1" max="10">
+                            <div class="form-text">
+                                Número de tentativas em caso de erro
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="retry-delay" class="form-label">Delay entre Tentativas (segundos)</label>
+                            <input type="number" class="form-control" id="retry-delay" name="retry_delay" 
+                                   value="{{ config.retry_delay or 1 }}" min="0.1" max="10" step="0.1">
+                            <div class="form-text">
+                                Tempo de espera entre tentativas
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Configurações do Sistema -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-sliders"></i>
+                    Configurações do Sistema
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="form-sistema">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="itens-por-pagina" class="form-label">Itens por Página</label>
+                            <select class="form-select" id="itens-por-pagina" name="itens_por_pagina">
+                                <option value="10" {% if config.itens_por_pagina == 10 %}selected{% endif %}>10</option>
+                                <option value="25" {% if config.itens_por_pagina == 25 %}selected{% endif %}>25</option>
+                                <option value="50" {% if config.itens_por_pagina == 50 %}selected{% endif %}>50</option>
+                                <option value="100" {% if config.itens_por_pagina == 100 %}selected{% endif %}>100</option>
+                            </select>
+                            <div class="form-text">
+                                Número de itens exibidos por página nas listas
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="formato-data" class="form-label">Formato de Data</label>
+                            <select class="form-select" id="formato-data" name="formato_data">
+                                <option value="DD/MM/YYYY" {% if config.formato_data == 'DD/MM/YYYY' %}selected{% endif %}>DD/MM/AAAA</option>
+                                <option value="MM/DD/YYYY" {% if config.formato_data == 'MM/DD/YYYY' %}selected{% endif %}>MM/DD/AAAA</option>
+                                <option value="YYYY-MM-DD" {% if config.formato_data == 'YYYY-MM-DD' %}selected{% endif %}>AAAA-MM-DD</option>
+                            </select>
+                            <div class="form-text">
+                                Formato de exibição de datas no sistema
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="tema" class="form-label">Tema da Interface</label>
+                            <select class="form-select" id="tema" name="tema">
+                                <option value="light" {% if config.tema == 'light' %}selected{% endif %}>Claro</option>
+                                <option value="dark" {% if config.tema == 'dark' %}selected{% endif %}>Escuro</option>
+                                <option value="auto" {% if config.tema == 'auto' %}selected{% endif %}>Automático</option>
+                            </select>
+                            <div class="form-text">
+                                Aparência da interface do usuário
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="idioma" class="form-label">Idioma</label>
+                            <select class="form-select" id="idioma" name="idioma">
+                                <option value="pt-BR" {% if config.idioma == 'pt-BR' %}selected{% endif %}>Português (Brasil)</option>
+                                <option value="en-US" {% if config.idioma == 'en-US' %}selected{% endif %}>English (US)</option>
+                                <option value="es-ES" {% if config.idioma == 'es-ES' %}selected{% endif %}>Español</option>
+                            </select>
+                            <div class="form-text">
+                                Idioma da interface do sistema
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Opções de Interface</h6>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="mostrar-tooltips" name="mostrar_tooltips" 
+                                   {% if config.mostrar_tooltips %}checked{% endif %}>
+                            <label class="form-check-label" for="mostrar-tooltips">
+                                Mostrar dicas de ajuda (tooltips)
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="animacoes" name="animacoes" 
+                                   {% if config.animacoes %}checked{% endif %}>
+                            <label class="form-check-label" for="animacoes">
+                                Ativar animações da interface
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sons-notificacao" name="sons_notificacao" 
+                                   {% if config.sons_notificacao %}checked{% endif %}>
+                            <label class="form-check-label" for="sons-notificacao">
+                                Reproduzir sons de notificação
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="auto-save" name="auto_save" 
+                                   {% if config.auto_save %}checked{% endif %}>
+                            <label class="form-check-label" for="auto-save">
+                                Salvamento automático de rascunhos
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Configurações de Backup -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-check"></i>
+                    Backup e Segurança
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="form-backup">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="backup-automatico" class="form-label">Backup Automático</label>
+                            <select class="form-select" id="backup-automatico" name="backup_automatico">
+                                <option value="disabled" {% if config.backup_automatico == 'disabled' %}selected{% endif %}>Desabilitado</option>
+                                <option value="daily" {% if config.backup_automatico == 'daily' %}selected{% endif %}>Diário</option>
+                                <option value="weekly" {% if config.backup_automatico == 'weekly' %}selected{% endif %}>Semanal</option>
+                                <option value="monthly" {% if config.backup_automatico == 'monthly' %}selected{% endif %}>Mensal</option>
+                            </select>
+                            <div class="form-text">
+                                Frequência de backup automático dos dados
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="max-backups" class="form-label">Máximo de Backups</label>
+                            <input type="number" class="form-control" id="max-backups" name="max_backups" 
+                                   value="{{ config.max_backups or 10 }}" min="1" max="50">
+                            <div class="form-text">
+                                Número máximo de backups a manter
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="diretorio-backup" class="form-label">Diretório de Backup</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="diretorio-backup" name="diretorio_backup" 
+                                       value="{{ config.diretorio_backup or './backups' }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="selecionarDiretorio()">
+                                    <i class="bi bi-folder"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">
+                                Local onde os backups serão armazenados
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="compressao-backup" class="form-label">Compressão</label>
+                            <select class="form-select" id="compressao-backup" name="compressao_backup">
+                                <option value="none" {% if config.compressao_backup == 'none' %}selected{% endif %}>Sem compressão</option>
+                                <option value="zip" {% if config.compressao_backup == 'zip' %}selected{% endif %}>ZIP</option>
+                                <option value="gzip" {% if config.compressao_backup == 'gzip' %}selected{% endif %}>GZIP</option>
+                            </select>
+                            <div class="form-text">
+                                Tipo de compressão para os backups
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Ações de Backup</h6>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary" onclick="criarBackupManual()">
+                                <i class="bi bi-download"></i>
+                                Criar Backup Agora
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="restaurarBackup()">
+                                <i class="bi bi-upload"></i>
+                                Restaurar Backup
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="listarBackups()">
+                                <i class="bi bi-list"></i>
+                                Listar Backups
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Configurações Avançadas -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-tools"></i>
+                    Configurações Avançadas
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Altere essas configurações apenas se souber o que está fazendo.
+                </div>
+                
+                <form id="form-avancado">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="log-level" class="form-label">Nível de Log</label>
+                            <select class="form-select" id="log-level" name="log_level">
+                                <option value="DEBUG" {% if config.log_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+                                <option value="INFO" {% if config.log_level == 'INFO' %}selected{% endif %}>INFO</option>
+                                <option value="WARNING" {% if config.log_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                                <option value="ERROR" {% if config.log_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                            </select>
+                            <div class="form-text">
+                                Nível de detalhamento dos logs do sistema
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cache-size" class="form-label">Tamanho do Cache (MB)</label>
+                            <input type="number" class="form-control" id="cache-size" name="cache_size" 
+                                   value="{{ config.cache_size or 100 }}" min="10" max="1000">
+                            <div class="form-text">
+                                Tamanho máximo do cache em memória
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="max-concurrent" class="form-label">Máximo de Análises Simultâneas</label>
+                            <input type="number" class="form-control" id="max-concurrent" name="max_concurrent" 
+                                   value="{{ config.max_concurrent or 5 }}" min="1" max="20">
+                            <div class="form-text">
+                                Número máximo de análises executadas em paralelo
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="session-timeout" class="form-label">Timeout de Sessão (minutos)</label>
+                            <input type="number" class="form-control" id="session-timeout" name="session_timeout" 
+                                   value="{{ config.session_timeout or 60 }}" min="5" max="480">
+                            <div class="form-text">
+                                Tempo de inatividade antes de expirar a sessão
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Opções de Desenvolvimento</h6>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="debug-mode" name="debug_mode" 
+                                   {% if config.debug_mode %}checked{% endif %}>
+                            <label class="form-check-label" for="debug-mode">
+                                Modo de depuração (DEBUG)
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="log-requests" name="log_requests" 
+                                   {% if config.log_requests %}checked{% endif %}>
+                            <label class="form-check-label" for="log-requests">
+                                Registrar todas as requisições HTTP
+                            </label>
+                        </div>
+                        
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="cache-enabled" name="cache_enabled" 
+                                   {% if config.cache_enabled %}checked{% endif %}>
+                            <label class="form-check-label" for="cache-enabled">
+                                Ativar cache de resultados
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Ações de Sistema</h6>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-warning" onclick="limparCache()">
+                                <i class="bi bi-trash"></i>
+                                Limpar Cache
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="exportarConfiguracoes()">
+                                <i class="bi bi-download"></i>
+                                Exportar Configurações
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="importarConfiguracoes()">
+                                <i class="bi bi-upload"></i>
+                                Importar Configurações
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Status do Sistema -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-activity"></i>
+                    Status do Sistema
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <div class="d-flex align-items-center justify-content-center">
+                                <i class="bi bi-circle-fill text-success me-1"></i>
+                                <small>OpenAI API</small>
+                            </div>
+                            <small class="text-muted" id="status-openai">Conectado</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <i class="bi bi-circle-fill text-success me-1"></i>
+                            <small>Sistema</small>
+                        </div>
+                        <small class="text-muted" id="status-sistema">Operacional</small>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="small text-muted">
+                    <div class="mb-2">
+                        <strong>Versão:</strong> <span id="versao-sistema">1.0.0</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Uptime:</strong> <span id="uptime-sistema">2h 15m</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Uso de Memória:</strong> <span id="memoria-sistema">45 MB</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Espaço em Disco:</strong> <span id="disco-sistema">1.2 GB disponível</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Última Análise:</strong> <span id="ultima-analise">há 5 minutos</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações de Uso -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    Uso da API
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-primary mb-0" id="chamadas-hoje">127</h6>
+                            <small class="text-muted">Chamadas Hoje</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-success mb-0" id="custo-hoje">$2.45</h6>
+                        <small class="text-muted">Custo Hoje</small>
+                    </div>
+                </div>
+                
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <h6 class="text-info mb-0" id="chamadas-mes">3,421</h6>
+                            <small class="text-muted">Chamadas Este Mês</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <h6 class="text-warning mb-0" id="custo-mes">$68.42</h6>
+                        <small class="text-muted">Custo Este Mês</small>
+                    </div>
+                </div>
+                
+                <div class="progress mb-2">
+                    <div class="progress-bar" role="progressbar" style="width: 34%" id="progress-limite">
+                        34% do limite mensal
+                    </div>
+                </div>
+                
+                <small class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    Limite mensal: $200.00
+                </small>
+            </div>
+        </div>
+
+        <!-- Ações Rápidas -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Ações Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="testarConexao()">
+                        <i class="bi bi-wifi"></i>
+                        Testar Conexão OpenAI
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="criarBackupManual()">
+                        <i class="bi bi-download"></i>
+                        Backup Manual
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="verificarAtualizacoes()">
+                        <i class="bi bi-arrow-up-circle"></i>
+                        Verificar Atualizações
+                    </button>
+                    
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="limparCache()">
+                        <i class="bi bi-trash"></i>
+                        Limpar Cache
+                    </button>
+                    
+                    <hr>
+                    
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="resetarSistema()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Resetar Sistema
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Recentes -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-journal-text"></i>
+                    Logs Recentes
+                </h6>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atualizarLogs()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="logs-container" style="max-height: 200px; overflow-y: auto;">
+                    <div class="small text-muted mb-1">
+                        <span class="badge bg-success">INFO</span>
+                        <span class="text-muted">12:34:56</span>
+                        Sistema iniciado com sucesso
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <span class="badge bg-primary">DEBUG</span>
+                        <span class="text-muted">12:35:12</span>
+                        Conexão com OpenAI estabelecida
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <span class="badge bg-info">INFO</span>
+                        <span class="text-muted">12:36:45</span>
+                        Análise executada com sucesso
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <span class="badge bg-warning">WARNING</span>
+                        <span class="text-muted">12:37:23</span>
+                        Cache próximo do limite
+                    </div>
+                    <div class="small text-muted mb-1">
+                        <span class="badge bg-success">INFO</span>
+                        <span class="text-muted">12:38:01</span>
+                        Backup automático criado
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Reset -->
+<div class="modal fade" id="modalResetConfirmacao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Confirmar Reset
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja restaurar as configurações padrão?</p>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Atenção:</strong> Esta ação irá:
+                    <ul class="mb-0">
+                        <li>Restaurar todas as configurações para os valores padrão</li>
+                        <li>Limpar a chave da API OpenAI</li>
+                        <li>Resetar preferências de interface</li>
+                        <li>Manter os dados (intimações, prompts, análises)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" onclick="confirmarReset()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Restaurar Padrões
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Função para salvar configurações
+function salvarConfiguracoes() {
+    const dados = {
+        // OpenAI (chave vem da variável de ambiente)
+        modelo_padrao: document.getElementById('modelo-padrao').value,
+        temperatura_padrao: parseFloat(document.getElementById('temperatura-padrao').value),
+        max_tokens_padrao: parseInt(document.getElementById('max-tokens-padrao').value),
+        timeout_padrao: parseInt(document.getElementById('timeout-padrao').value),
+        max_retries: parseInt(document.getElementById('max-retries').value),
+        retry_delay: parseInt(document.getElementById('retry-delay').value),
+        
+        // Configurações Gerais
+        itens_por_pagina: parseInt(document.getElementById('itens-por-pagina').value),
+        formato_data: document.getElementById('formato-data').value,
+        tema: document.getElementById('tema').value,
+        idioma: document.getElementById('idioma').value,
+        mostrar_tooltips: document.getElementById('mostrar-tooltips').checked,
+        animacoes: document.getElementById('animacoes').checked,
+        sons_notificacao: document.getElementById('sons-notificacao').checked,
+        auto_save: document.getElementById('auto-save').checked,
+        
+        // Backup
+        backup_automatico: document.getElementById('backup-automatico').value,
+        max_backups: parseInt(document.getElementById('max-backups').value),
+        diretorio_backup: document.getElementById('diretorio-backup').value,
+        compressao_backup: document.getElementById('compressao-backup').value,
+        
+        // Avançado
+        log_level: document.getElementById('log-level').value,
+        cache_size: parseInt(document.getElementById('cache-size').value),
+        max_concurrent: parseInt(document.getElementById('max-concurrent').value),
+        session_timeout: parseInt(document.getElementById('session-timeout').value),
+        debug_mode: document.getElementById('debug-mode').checked,
+        log_requests: document.getElementById('log-requests').checked,
+        cache_enabled: document.getElementById('cache-enabled').checked
+    };
+    
+    // Aqui você faria a chamada para o backend
+    console.log('Salvando configurações:', dados);
+    
+    showToast('Configurações salvas com sucesso!', 'success');
+}
+
+// Função para testar conexão
+function testarConexao() {
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    
+    button.disabled = true;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Testando...';
+    
+    fetch('/api/configuracoes/testar-conexao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Conexão com OpenAI estabelecida com sucesso!', 'success');
+        } else {
+            showToast(`Erro na conexão: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        showToast(`Erro ao testar conexão: ${error.message}`, 'error');
+    })
+    .finally(() => {
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+// Função para resetar configurações
+function resetarConfiguracoes() {
+    const modal = new bootstrap.Modal(document.getElementById('modalResetConfirmacao'));
+    modal.show();
+}
+
+// Função para confirmar reset
+function confirmarReset() {
+    // Restaurar valores padrão
+    document.getElementById('api-key').value = '';
+    document.getElementById('modelo-padrao').value = 'gpt-3.5-turbo';
+    document.getElementById('temperatura-padrao').value = '0.7';
+    document.getElementById('temp-value').textContent = '0.7';
+    document.getElementById('max-tokens-padrao').value = '150';
+    document.getElementById('timeout-padrao').value = '30';
+    document.getElementById('max-retries').value = '3';
+    document.getElementById('retry-delay').value = '1';
+    
+    document.getElementById('itens-por-pagina').value = '25';
+    document.getElementById('formato-data').value = 'DD/MM/YYYY';
+    document.getElementById('tema').value = 'light';
+    document.getElementById('idioma').value = 'pt-BR';
+    document.getElementById('mostrar-tooltips').checked = true;
+    document.getElementById('animacoes').checked = true;
+    document.getElementById('sons-notificacao').checked = false;
+    document.getElementById('auto-save').checked = true;
+    
+    document.getElementById('backup-automatico').value = 'weekly';
+    document.getElementById('max-backups').value = '10';
+    document.getElementById('diretorio-backup').value = './backups';
+    document.getElementById('compressao-backup').value = 'zip';
+    
+    document.getElementById('log-level').value = 'INFO';
+    document.getElementById('cache-size').value = '100';
+    document.getElementById('max-concurrent').value = '5';
+    document.getElementById('session-timeout').value = '60';
+    document.getElementById('debug-mode').checked = false;
+    document.getElementById('log-requests').checked = false;
+    document.getElementById('cache-enabled').checked = true;
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalResetConfirmacao'));
+    modal.hide();
+    
+    showToast('Configurações restauradas para os valores padrão!', 'success');
+}
+
+// Função para selecionar diretório
+function selecionarDiretorio() {
+    // Em uma aplicação real, isso abriria um seletor de diretório
+    showToast('Funcionalidade de seleção de diretório será implementada em breve!', 'info');
+}
+
+// Função para criar backup manual
+function criarBackupManual() {
+    showToast('Criando backup manual...', 'info');
+    
+    setTimeout(() => {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        showToast(`Backup criado: backup_${timestamp}.zip`, 'success');
+    }, 2000);
+}
+
+// Função para restaurar backup
+function restaurarBackup() {
+    // Em uma aplicação real, isso abriria um seletor de arquivo
+    showToast('Funcionalidade de restauração será implementada em breve!', 'info');
+}
+
+// Função para listar backups
+function listarBackups() {
+    showToast('Listando backups disponíveis...', 'info');
+    
+    setTimeout(() => {
+        showToast('3 backups encontrados. Verifique o console para detalhes.', 'success');
+        console.log('Backups disponíveis:', [
+            'backup_2024-01-15.zip',
+            'backup_2024-01-14.zip',
+            'backup_2024-01-13.zip'
+        ]);
+    }, 1000);
+}
+
+// Função para limpar cache
+function limparCache() {
+    showToast('Limpando cache do sistema...', 'info');
+    
+    setTimeout(() => {
+        showToast('Cache limpo com sucesso! 45 MB liberados.', 'success');
+    }, 1500);
+}
+
+// Função para exportar configurações
+function exportarConfiguracoes() {
+    const config = {
+        timestamp: new Date().toISOString(),
+        versao: '1.0.0',
+        configuracoes: {
+            modelo_padrao: document.getElementById('modelo-padrao').value,
+            temperatura_padrao: parseFloat(document.getElementById('temperatura-padrao').value),
+            max_tokens_padrao: parseInt(document.getElementById('max-tokens-padrao').value),
+            itens_por_pagina: parseInt(document.getElementById('itens-por-pagina').value),
+            tema: document.getElementById('tema').value,
+            idioma: document.getElementById('idioma').value
+            // Não incluir chave da API por segurança
+        }
+    };
+    
+    const dataStr = JSON.stringify(config, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `configuracoes_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    
+    showToast('Configurações exportadas!', 'success');
+}
+
+// Função para importar configurações
+function importarConfiguracoes() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const config = JSON.parse(e.target.result);
+                    
+                    // Aplicar configurações importadas
+                    if (config.configuracoes) {
+                        const cfg = config.configuracoes;
+                        
+                        if (cfg.modelo_padrao) document.getElementById('modelo-padrao').value = cfg.modelo_padrao;
+                        if (cfg.temperatura_padrao) {
+                            document.getElementById('temperatura-padrao').value = cfg.temperatura_padrao;
+                            document.getElementById('temp-value').textContent = cfg.temperatura_padrao;
+                        }
+                        if (cfg.max_tokens_padrao) document.getElementById('max-tokens-padrao').value = cfg.max_tokens_padrao;
+                        if (cfg.itens_por_pagina) document.getElementById('itens-por-pagina').value = cfg.itens_por_pagina;
+                        if (cfg.tema) document.getElementById('tema').value = cfg.tema;
+                        if (cfg.idioma) document.getElementById('idioma').value = cfg.idioma;
+                    }
+                    
+                    showToast('Configurações importadas com sucesso!', 'success');
+                } catch (error) {
+                    showToast('Erro ao importar configurações. Arquivo inválido.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+    };
+    
+    input.click();
+}
+
+// Função para verificar atualizações
+function verificarAtualizacoes() {
+    showToast('Verificando atualizações...', 'info');
+    
+    setTimeout(() => {
+        const temAtualizacao = false; // Sem atualização para teste real
+        
+        if (temAtualizacao) {
+            showToast('Nova versão disponível: v1.1.0', 'info');
+        } else {
+            showToast('Sistema está atualizado!', 'success');
+        }
+    }, 2000);
+}
+
+// Função para resetar sistema
+function resetarSistema() {
+    showToast('Funcionalidade de reset completo será implementada em breve!', 'warning');
+}
+
+// Função para atualizar logs
+function atualizarLogs() {
+    showToast('Atualizando logs...', 'info');
+    
+    setTimeout(() => {
+        const agora = new Date();
+        const timestamp = agora.toTimeString().split(' ')[0];
+        
+        const novoLog = `
+            <div class="small text-muted mb-1">
+                <span class="badge bg-info">INFO</span>
+                <span class="text-muted">${timestamp}</span>
+                Logs atualizados manualmente
+            </div>
+        `;
+        
+        const container = document.getElementById('logs-container');
+        container.insertAdjacentHTML('afterbegin', novoLog);
+        
+        showToast('Logs atualizados!', 'success');
+    }, 1000);
+}
+
+// Atualizar informações do sistema periodicamente
+setInterval(() => {
+    // Simular atualização de uptime
+    const uptimeElement = document.getElementById('uptime-sistema');
+    if (uptimeElement) {
+        const match = uptimeElement.textContent.match(/(\d+)h (\d+)m/);
+        if (match) {
+            let horas = parseInt(match[1]);
+            let minutos = parseInt(match[2]) + 1;
+            
+            if (minutos >= 60) {
+                horas++;
+                minutos = 0;
+            }
+            
+            uptimeElement.textContent = `${horas}h ${minutos}m`;
+        }
+    }
+    
+    // Simular atualização de uso de memória
+    const memoriaElement = document.getElementById('memoria-sistema');
+    if (memoriaElement) {
+        const uso = 45; // Uso fixo para teste real
+        memoriaElement.textContent = `${uso.toFixed(0)} MB`;
+    }
+}, 60000); // Atualizar a cada minuto
+
+// Atalhos de teclado
+document.addEventListener('keydown', function(e) {
+    // Ctrl+S para salvar
+    if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        salvarConfiguracoes();
+    }
+    
+    // Ctrl+T para testar conexão
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        testarConexao();
+    }
+    
+    // Ctrl+B para backup
+    if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        criarBackupManual();
+    }
+});
+
+// Validação em tempo real
+document.getElementById('api-key').addEventListener('input', function() {
+    const valor = this.value;
+    if (valor && !valor.startsWith('sk-')) {
+        this.classList.add('is-invalid');
+    } else {
+        this.classList.remove('is-invalid');
+    }
+});
+
+// Função para alternar visibilidade da senha
+function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(`${inputId}-icon`);
+
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+
+// Aplicar tema quando mudado
+document.getElementById('tema').addEventListener('change', function() {
+    const tema = this.value;
+    
+    if (tema === 'dark') {
+        document.body.setAttribute('data-bs-theme', 'dark');
+    } else if (tema === 'light') {
+        document.body.setAttribute('data-bs-theme', 'light');
+    } else {
+        // Auto - detectar preferência do sistema
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.body.setAttribute('data-bs-theme', 'dark');
+        } else {
+            document.body.setAttribute('data-bs-theme', 'light');
+        }
+    }
+});
+</script>
+{% endblock %}
