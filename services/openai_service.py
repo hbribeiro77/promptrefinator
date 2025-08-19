@@ -293,3 +293,21 @@ class OpenAIService:
         output_cost = (output_tokens / 1000) * costs_per_1k[model]['output']
         
         return input_cost + output_cost
+    
+    def analyze_text(self, 
+                    prompt: str, 
+                    modelo: str = "gpt-4", 
+                    temperatura: float = 0.1, 
+                    max_tokens: int = 500) -> str:
+        """Método simples para análise de texto genérica"""
+        if not self.client:
+            raise Exception("Cliente OpenAI não inicializado. Configure a chave da API.")
+        
+        parametros = {
+            'model': modelo,
+            'temperature': temperatura,
+            'max_tokens': max_tokens,
+            'top_p': 1.0
+        }
+        
+        return self._fazer_chamada_com_retry(prompt, parametros)

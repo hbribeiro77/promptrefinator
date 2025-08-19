@@ -1,0 +1,152 @@
+<!-- Componente Card Compacto de Intimação para Tabela -->
+<div class="intimacao-card-compact">
+    <div class="card-intimacao-header-compact">
+        <div class="card-intimacao-processo-compact">
+            <i class="bi bi-hourglass"></i>
+            <span class="processo-numero-compact">{{ intimacao.processo or 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="card-intimacao-content-compact">
+        <div class="card-intimacao-row-compact">
+            <div class="card-intimacao-field-compact">
+                <span class="field-label-compact">Órgão:</span>
+                <span class="field-value-compact">{{ intimacao.orgao_julgador or 'N/A' }}</span>
+            </div>
+            <div class="card-intimacao-field-compact">
+                <span class="field-label-compact">Status:</span>
+                <span class="field-value-compact status-{{ intimacao.status|lower|replace(' ', '-') if intimacao.status else 'pendente' }}">
+                    {{ intimacao.status or 'Pendente' }}
+                </span>
+            </div>
+        </div>
+        <div class="card-intimacao-row-compact">
+            <div class="card-intimacao-field-compact">
+                <span class="field-label-compact">Prazo:</span>
+                <span class="field-value-compact">{{ intimacao.prazo or 'N/A' }}</span>
+            </div>
+            <div class="card-intimacao-field-compact">
+                <span class="field-label-compact">Intimado:</span>
+                <span class="field-value-compact">{{ intimacao.intimado or 'N/A' }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Card compacto dentro da tabela */
+.intimacao-card-compact {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.intimacao-card-compact::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+}
+
+.intimacao-card-compact:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+/* Header compacto */
+.card-intimacao-header-compact {
+    background: #f8f9fa;
+    padding: 6px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.card-intimacao-processo-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.processo-numero-compact {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.card-intimacao-processo-compact i {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+/* Conteúdo compacto */
+.card-intimacao-content-compact {
+    padding: 8px 10px;
+}
+
+.card-intimacao-row-compact {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.card-intimacao-row-compact:last-child {
+    margin-bottom: 0;
+}
+
+.card-intimacao-field-compact {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.field-label-compact {
+    font-weight: 600;
+    font-size: 10px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.field-value-compact {
+    font-size: 11px;
+    color: #212529;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+/* Status específicos */
+.status-pendente {
+    color: #fd7e14;
+    font-weight: 600;
+}
+
+.status-concluido {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.status-urgente {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .card-intimacao-row-compact {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .card-intimacao-field-compact {
+        flex: none;
+    }
+}
+</style>

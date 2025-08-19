@@ -28,9 +28,15 @@
             <div class="card-body">
                 <form method="POST" id="form-intimacao">
                     <div class="mb-3">
-                        <label for="contexto" class="form-label">
-                            Contexto da Intimação <span class="text-danger">*</span>
-                        </label>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label for="contexto" class="form-label mb-0">
+                                Contexto da Intimação <span class="text-danger">*</span>
+                            </label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-extrair-info" onclick="extrairInformacoes()">
+                                <i class="bi bi-magic"></i>
+                                Extrair Informações
+                            </button>
+                        </div>
                         <textarea class="form-control" id="contexto" name="contexto" rows="8" 
                                   placeholder="Cole aqui o texto completo da intimação..." required></textarea>
                         <div class="form-text">
@@ -43,6 +49,68 @@
                                 Palavras: <span id="word-count">0</span> | 
                                 Linhas: <span id="line-count">0</span>
                             </small>
+                        </div>
+                    </div>
+
+                    <!-- Informações Básicas -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="processo" class="form-label">
+                                Processo
+                            </label>
+                            <input type="text" class="form-control" id="processo" name="processo" 
+                                   placeholder="Número do processo" value="{{ dados.processo or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="orgao_julgador" class="form-label">
+                                Órgão Julgador
+                            </label>
+                            <input type="text" class="form-control" id="orgao_julgador" name="orgao_julgador" 
+                                   placeholder="Órgão julgador" value="{{ dados.orgao_julgador or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="classe" class="form-label">
+                                Classe
+                            </label>
+                            <input type="text" class="form-control" id="classe" name="classe" 
+                                   placeholder="Classe processual" value="{{ dados.classe or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="disponibilizacao" class="form-label">
+                                Disponibilização
+                            </label>
+                            <input type="text" class="form-control" id="disponibilizacao" name="disponibilizacao" 
+                                   placeholder="Data de disponibilização" value="{{ dados.disponibilizacao or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="intimado" class="form-label">
+                                Intimado
+                            </label>
+                            <input type="text" class="form-control" id="intimado" name="intimado" 
+                                   placeholder="Nome do intimado" value="{{ dados.intimado or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="status" class="form-label">
+                                Status
+                            </label>
+                            <input type="text" class="form-control" id="status" name="status" 
+                                   placeholder="Status da intimação" value="{{ dados.status or '' }}">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="prazo" class="form-label">
+                                Prazo
+                            </label>
+                            <input type="text" class="form-control" id="prazo" name="prazo" 
+                                   placeholder="Prazo da intimação" value="{{ dados.prazo or '' }}">
                         </div>
                     </div>
 
@@ -375,6 +443,13 @@ function autoSave() {
             contexto: document.getElementById('contexto').value,
             classificacao_manual: document.getElementById('classificacao_manual').value,
             informacoes_adicionais: document.getElementById('informacoes_adicionais').value,
+            processo: document.getElementById('processo').value,
+            orgao_julgador: document.getElementById('orgao_julgador').value,
+            classe: document.getElementById('classe').value,
+            disponibilizacao: document.getElementById('disponibilizacao').value,
+            intimado: document.getElementById('intimado').value,
+            status: document.getElementById('status').value,
+            prazo: document.getElementById('prazo').value,
             timestamp: new Date().toISOString()
         };
         
@@ -398,6 +473,13 @@ function carregarRascunho() {
                     document.getElementById('contexto').value = data.contexto || '';
                     document.getElementById('classificacao_manual').value = data.classificacao_manual || '';
                     document.getElementById('informacoes_adicionais').value = data.informacoes_adicionais || '';
+                    document.getElementById('processo').value = data.processo || '';
+                    document.getElementById('orgao_julgador').value = data.orgao_julgador || '';
+                    document.getElementById('classe').value = data.classe || '';
+                    document.getElementById('disponibilizacao').value = data.disponibilizacao || '';
+                    document.getElementById('intimado').value = data.intimado || '';
+                    document.getElementById('status').value = data.status || '';
+                    document.getElementById('prazo').value = data.prazo || '';
                     updateTextStats();
                 }
             } else {
@@ -411,6 +493,75 @@ function carregarRascunho() {
     }
 }
 
+// Função para extrair informações do contexto
+function extrairInformacoes() {
+    const contexto = document.getElementById('contexto').value.trim();
+    
+    if (!contexto) {
+        showToast('Cole o contexto da intimação primeiro!', 'warning');
+        return;
+    }
+    
+    console.log('=== DEBUG: Extraindo informações do contexto ===');
+    
+    // Desabilitar botão e mostrar loading
+    const btnExtrair = document.getElementById('btn-extrair-info');
+    const originalText = btnExtrair.innerHTML;
+    btnExtrair.disabled = true;
+    btnExtrair.innerHTML = '<i class="bi bi-hourglass-split"></i> Extraindo...';
+    
+    // Fazer chamada para a API
+    fetch('/api/extrair-informacoes', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ contexto: contexto })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('=== DEBUG: Informações extraídas:', data);
+        
+        if (data.success) {
+            // Preencher os campos com as informações extraídas
+            if (data.informacoes.processo) {
+                document.getElementById('processo').value = data.informacoes.processo;
+            }
+            if (data.informacoes.orgao_julgador) {
+                document.getElementById('orgao_julgador').value = data.informacoes.orgao_julgador;
+            }
+            if (data.informacoes.classe) {
+                document.getElementById('classe').value = data.informacoes.classe;
+            }
+            if (data.informacoes.disponibilizacao) {
+                document.getElementById('disponibilizacao').value = data.informacoes.disponibilizacao;
+            }
+            if (data.informacoes.intimado) {
+                document.getElementById('intimado').value = data.informacoes.intimado;
+            }
+            if (data.informacoes.status) {
+                document.getElementById('status').value = data.informacoes.status;
+            }
+            if (data.informacoes.prazo) {
+                document.getElementById('prazo').value = data.informacoes.prazo;
+            }
+            
+            showToast('Informações extraídas com sucesso!', 'success');
+        } else {
+            showToast('Erro ao extrair informações: ' + (data.error || 'Erro desconhecido'), 'error');
+        }
+    })
+    .catch(error => {
+        console.error('=== ERRO na extração:', error);
+        showToast('Erro ao extrair informações: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Reabilitar botão
+        btnExtrair.disabled = false;
+        btnExtrair.innerHTML = originalText;
+    });
+}
+
 // Adicionar listeners para auto-save
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DEBUG: PÁGINA NOVA INTIMAÇÃO CARREGADA (FRONTEND) ===');
@@ -419,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     carregarRascunho();
     
-            ['contexto', 'classificacao_manual', 'informacoes_adicionais'].forEach(id => {
+            ['contexto', 'classificacao_manual', 'informacoes_adicionais', 'processo', 'orgao_julgador', 'classe', 'disponibilizacao', 'intimado', 'status', 'prazo'].forEach(id => {
         document.getElementById(id).addEventListener('input', autoSave);
     });
 });

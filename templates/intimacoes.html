@@ -240,6 +240,84 @@
     </div>
 </div>
 
+<!-- Visualização em Tabela com Cards -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-table"></i>
+                    Visualização em Tabela com Cards
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover intimacoes-cards-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40%;">Card da Intimação</th>
+                                <th style="width: 15%;">Classificação Manual</th>
+                                <th style="width: 20%;">Informações Adicionais</th>
+                                <th style="width: 15%;">Data de Criação</th>
+                                <th style="width: 10%;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for intimacao in intimacoes %}
+                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}">
+                                <td class="card-cell">
+                                    {% include 'partials/card_intimacao_compact.html' %}
+                                </td>
+                                <td class="classificacao-cell">
+                                    {% if intimacao.classificacao_manual %}
+                                    <span class="badge bg-primary">{{ intimacao.classificacao_manual }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="info-cell">
+                                    {% if intimacao.informacoes_adicionais %}
+                                    <div class="info-adicional-text" title="{{ intimacao.informacoes_adicionais }}">
+                                        {{ intimacao.informacoes_adicionais[:50] }}{% if intimacao.informacoes_adicionais|length > 50 %}...{% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="data-cell">
+                                    {% if intimacao.data_criacao %}
+                                    <small class="text-muted">
+                                        {{ intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao }}
+                                    </small>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="acoes-cell">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" 
+                                           class="btn btn-outline-primary btn-sm" 
+                                           title="Visualizar">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-outline-danger btn-sm" 
+                                                onclick="excluirIntimacaoTabela('{{ intimacao.id }}')"
+                                                title="Excluir">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -316,6 +394,45 @@ function analisarSelecionadas() {
     intimacaoIds.forEach(id => params.append('intimacao_ids', id));
     
     window.location.href = `{{ url_for('analise') }}?${params.toString()}`;
+}
+
+// Função para excluir intimação da tabela
+function excluirIntimacaoTabela(intimacaoId) {
+    if (confirm('Tem certeza que deseja excluir esta intimação?')) {
+        console.log('=== DEBUG: EXCLUINDO INTIMAÇÃO DA TABELA ===');
+        console.log('ID da intimação:', intimacaoId);
+        
+        // Fazer requisição para excluir
+        fetch(`/api/intimacoes/${intimacaoId}/excluir`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('Resposta da exclusão:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Dados da resposta:', data);
+            
+            if (data.success) {
+                showToast('Intimação excluída com sucesso!', 'success');
+                
+                // Remover a linha da tabela
+                const row = document.querySelector(`tr[data-intimacao-id="${intimacaoId}"]`);
+                if (row) {
+                    row.remove();
+                }
+            } else {
+                showToast(`Erro ao excluir: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro na exclusão:', error);
+            showToast('Erro ao excluir intimação!', 'error');
+        });
+    }
 }
 
 // Função para confirmar exclusão
@@ -410,4 +527,197 @@ document.addEventListener('keydown', function(e) {
     }
 });
 </script>
+
+<style>
+/* Estilos para a tabela de cards */
+.intimacoes-cards-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.intimacoes-cards-table th {
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    padding: 12px 8px;
+    background: #f8f9fa;
+}
+
+.intimacoes-cards-table td {
+    padding: 8px;
+    vertical-align: top;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.intimacao-row:hover {
+    background-color: #f8f9fa;
+}
+
+/* Card compacto dentro da tabela */
+.intimacao-card-compact {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.intimacao-card-compact::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+}
+
+.intimacao-card-compact:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+/* Header compacto */
+.card-intimacao-header-compact {
+    background: #f8f9fa;
+    padding: 6px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.card-intimacao-processo-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.processo-numero-compact {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.card-intimacao-processo-compact i {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+/* Conteúdo compacto */
+.card-intimacao-content-compact {
+    padding: 8px 10px;
+}
+
+.card-intimacao-row-compact {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.card-intimacao-row-compact:last-child {
+    margin-bottom: 0;
+}
+
+.card-intimacao-field-compact {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.field-label-compact {
+    font-weight: 600;
+    font-size: 10px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.field-value-compact {
+    font-size: 11px;
+    color: #212529;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+/* Status específicos */
+.status-pendente {
+    color: #fd7e14;
+    font-weight: 600;
+}
+
+.status-concluido {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.status-urgente {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Células da tabela */
+.classificacao-cell {
+    text-align: center;
+}
+
+.info-cell {
+    max-width: 200px;
+}
+
+.info-adicional-text {
+    font-size: 12px;
+    line-height: 1.3;
+    color: #495057;
+    cursor: help;
+}
+
+.data-cell {
+    text-align: center;
+}
+
+.acoes-cell {
+    text-align: center;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .intimacoes-cards-table {
+        font-size: 12px;
+    }
+    
+    .card-intimacao-row-compact {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .card-intimacao-field-compact {
+        flex: none;
+    }
+    
+    .info-cell {
+        max-width: 150px;
+    }
+}
+
+/* Container para lista vertical de cards (mantido para compatibilidade) */
+.intimacoes-cards-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.intimacao-card-wrapper {
+    margin-bottom: 8px;
+}
+
+/* Responsividade para os cards */
+@media (max-width: 768px) {
+    .intimacoes-cards-container {
+        max-width: 100%;
+    }
+}
+</style>
+
 {% endblock %}

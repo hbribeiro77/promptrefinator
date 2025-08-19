@@ -10,4 +10,3 @@ markupsafe>=2.1.0
 itsdangerous>=2.1.0
 numpy>=1.24.0
 pytz>=2023.3
-gunicorn>=21.0.0

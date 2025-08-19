@@ -9,6 +9,13 @@ class Intimacao:
                  contexto: str,
                  classificacao_manual: str,
                  informacao_adicional: Optional[str] = None,
+                 processo: Optional[str] = None,
+                 orgao_julgador: Optional[str] = None,
+                 classe: Optional[str] = None,
+                 disponibilizacao: Optional[str] = None,
+                 intimado: Optional[str] = None,
+                 status: Optional[str] = None,
+                 prazo: Optional[str] = None,
                  id: Optional[str] = None,
                  data_criacao: Optional[datetime] = None):
         """
@@ -18,6 +25,13 @@ class Intimacao:
             contexto: Texto completo da intimação
             classificacao_manual: Classificação manual da intimação
             informacao_adicional: Observações opcionais do usuário
+            processo: Número do processo
+            orgao_julgador: Órgão julgador
+            classe: Classe processual
+            disponibilizacao: Data de disponibilização
+            intimado: Nome do intimado
+            status: Status da intimação
+            prazo: Prazo da intimação
             id: ID único da intimação (gerado automaticamente se não fornecido)
             data_criacao: Data de criação (atual se não fornecida)
         """
@@ -25,6 +39,13 @@ class Intimacao:
         self.contexto = contexto
         self.classificacao_manual = classificacao_manual
         self.informacao_adicional = informacao_adicional or ""
+        self.processo = processo or ""
+        self.orgao_julgador = orgao_julgador or ""
+        self.classe = classe or ""
+        self.disponibilizacao = disponibilizacao or ""
+        self.intimado = intimado or ""
+        self.status = status or ""
+        self.prazo = prazo or ""
         self.data_criacao = data_criacao or datetime.now()
     
     def to_dict(self) -> dict:
@@ -34,6 +55,13 @@ class Intimacao:
             'contexto': self.contexto,
             'classificacao_manual': self.classificacao_manual,
             'informacao_adicional': self.informacao_adicional,
+            'processo': self.processo,
+            'orgao_julgador': self.orgao_julgador,
+            'classe': self.classe,
+            'disponibilizacao': self.disponibilizacao,
+            'intimado': self.intimado,
+            'status': self.status,
+            'prazo': self.prazo,
             'data_criacao': self.data_criacao.isoformat() if isinstance(self.data_criacao, datetime) else self.data_criacao
         }
     
@@ -54,6 +82,13 @@ class Intimacao:
             contexto=data.get('contexto', ''),
             classificacao_manual=data.get('classificacao_manual', ''),
             informacao_adicional=data.get('informacao_adicional', ''),
+            processo=data.get('processo', ''),
+            orgao_julgador=data.get('orgao_julgador', ''),
+            classe=data.get('classe', ''),
+            disponibilizacao=data.get('disponibilizacao', ''),
+            intimado=data.get('intimado', ''),
+            status=data.get('status', ''),
+            prazo=data.get('prazo', ''),
             data_criacao=data_criacao
         )
     

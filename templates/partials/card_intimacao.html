@@ -1,0 +1,356 @@
+<!-- Componente Card de Intimação -->
+<div class="card-intimacao" data-intimacao-id="{{ intimacao.id }}">
+    <!-- Header do Card -->
+    <div class="card-intimacao-header">
+        <div class="card-intimacao-processo">
+            <i class="bi bi-hourglass"></i>
+            <span class="processo-numero">{{ intimacao.processo or 'N/A' }}</span>
+            <i class="bi bi-search"></i>
+        </div>
+    </div>
+    
+    <!-- Conteúdo do Card -->
+    <div class="card-intimacao-content">
+        <div class="card-intimacao-row">
+            <div class="card-intimacao-field">
+                <span class="field-label">Órgão julgador:</span>
+                <span class="field-value">{{ intimacao.orgao_julgador or 'N/A' }}</span>
+            </div>
+            <div class="card-intimacao-field">
+                <span class="field-label">Classe:</span>
+                <span class="field-value">{{ intimacao.classe or 'N/A' }}</span>
+            </div>
+        </div>
+        
+        <div class="card-intimacao-row">
+            <div class="card-intimacao-field">
+                <span class="field-label">Disponibilização:</span>
+                <span class="field-value">{{ intimacao.disponibilizacao or 'N/A' }}</span>
+            </div>
+            <div class="card-intimacao-field">
+                <span class="field-label">Intimado:</span>
+                <span class="field-value">{{ intimacao.intimado or 'N/A' }}</span>
+            </div>
+        </div>
+        
+        <div class="card-intimacao-row">
+            <div class="card-intimacao-field">
+                <span class="field-label">Status:</span>
+                <span class="field-value status-{{ intimacao.status|lower|replace(' ', '-') if intimacao.status else 'pendente' }}">
+                    {{ intimacao.status or 'Pendente' }}
+                </span>
+            </div>
+            <div class="card-intimacao-field">
+                <span class="field-label">Prazo:</span>
+                <span class="field-value">{{ intimacao.prazo or 'N/A' }}</span>
+            </div>
+        </div>
+        
+        <!-- Informações adicionais (opcional) -->
+        {% if intimacao.classificacao_manual %}
+        <div class="card-intimacao-row">
+            <div class="card-intimacao-field full-width">
+                <span class="field-label">Classificação:</span>
+                <span class="field-value classificacao-badge">{{ intimacao.classificacao_manual }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Footer do Card (opcional) -->
+    {% if show_actions %}
+    <div class="card-intimacao-footer">
+        <button class="btn btn-sm btn-outline-primary" onclick="visualizarIntimacao('{{ intimacao.id }}')">
+            <i class="bi bi-eye"></i> Visualizar
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="editarIntimacao('{{ intimacao.id }}')">
+            <i class="bi bi-pencil"></i> Editar
+        </button>
+        <button class="btn btn-sm btn-outline-danger" onclick="excluirIntimacao('{{ intimacao.id }}')">
+            <i class="bi bi-trash"></i> Excluir
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+/* Estilos do Card de Intimação */
+.card-intimacao {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+    width: 100%;
+}
+
+.card-intimacao::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+}
+
+.card-intimacao:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+/* Header do Card */
+.card-intimacao-header {
+    background: #f8f9fa;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.card-intimacao-processo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.processo-numero {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.card-intimacao-processo i {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+/* Conteúdo do Card */
+.card-intimacao-content {
+    padding: 12px;
+}
+
+.card-intimacao-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.card-intimacao-row:last-child {
+    margin-bottom: 0;
+}
+
+.card-intimacao-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.card-intimacao-field.full-width {
+    flex: none;
+    width: 100%;
+}
+
+.field-label {
+    font-weight: 600;
+    font-size: 11px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.field-value {
+    font-size: 13px;
+    color: #212529;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+/* Status específicos */
+.status-pendente {
+    color: #fd7e14;
+    font-weight: 600;
+}
+
+.status-concluido {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.status-urgente {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Badge de classificação */
+.classificacao-badge {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* Footer do Card */
+.card-intimacao-footer {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .card-intimacao-row {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .card-intimacao-field {
+        flex: none;
+    }
+    
+    .card-intimacao-footer {
+        flex-direction: column;
+    }
+    
+    .card-intimacao-footer .btn {
+        width: 100%;
+    }
+}
+
+/* Variações de tema */
+.card-intimacao.card-intimacao-success::before {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.card-intimacao.card-intimacao-warning::before {
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+}
+
+.card-intimacao.card-intimacao-danger::before {
+    background: linear-gradient(135deg, #dc3545, #e83e8c);
+}
+
+.card-intimacao.card-intimacao-info::before {
+    background: linear-gradient(135deg, #17a2b8, #007bff);
+}
+</style>
+
+<script>
+// Funções JavaScript para o componente
+function visualizarIntimacao(id) {
+    window.location.href = `/intimacoes/${id}`;
+}
+
+function editarIntimacao(id) {
+    // Implementar edição
+    console.log('Editar intimação:', id);
+}
+
+function excluirIntimacao(id) {
+    if (confirm('Tem certeza que deseja excluir esta intimação?')) {
+        fetch(`/api/intimacoes/${id}/excluir`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remover o card do DOM
+                document.querySelector(`[data-intimacao-id="${id}"]`).remove();
+                showToast('Intimação excluída com sucesso!', 'success');
+            } else {
+                showToast('Erro ao excluir intimação: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('Erro ao excluir intimação: ' + error.message, 'error');
+        });
+    }
+}
+
+// Função para criar card dinamicamente
+function criarCardIntimacao(intimacao, showActions = true) {
+    const template = `
+        <div class="card-intimacao" data-intimacao-id="${intimacao.id}">
+            <div class="card-intimacao-header">
+                <div class="card-intimacao-processo">
+                    <i class="bi bi-hourglass"></i>
+                    <span class="processo-numero">${intimacao.processo || 'N/A'}</span>
+                    <i class="bi bi-search"></i>
+                </div>
+            </div>
+            
+            <div class="card-intimacao-content">
+                <div class="card-intimacao-row">
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Órgão julgador:</span>
+                        <span class="field-value">${intimacao.orgao_julgador || 'N/A'}</span>
+                    </div>
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Classe:</span>
+                        <span class="field-value">${intimacao.classe || 'N/A'}</span>
+                    </div>
+                </div>
+                
+                <div class="card-intimacao-row">
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Disponibilização:</span>
+                        <span class="field-value">${intimacao.disponibilizacao || 'N/A'}</span>
+                    </div>
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Intimado:</span>
+                        <span class="field-value">${intimacao.intimado || 'N/A'}</span>
+                    </div>
+                </div>
+                
+                <div class="card-intimacao-row">
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Status:</span>
+                        <span class="field-value status-${(intimacao.status || 'pendente').toLowerCase().replace(' ', '-')}">
+                            ${intimacao.status || 'Pendente'}
+                        </span>
+                    </div>
+                    <div class="card-intimacao-field">
+                        <span class="field-label">Prazo:</span>
+                        <span class="field-value">${intimacao.prazo || 'N/A'}</span>
+                    </div>
+                </div>
+                
+                ${intimacao.classificacao_manual ? `
+                <div class="card-intimacao-row">
+                    <div class="card-intimacao-field full-width">
+                        <span class="field-label">Classificação:</span>
+                        <span class="field-value classificacao-badge">${intimacao.classificacao_manual}</span>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+            
+            ${showActions ? `
+            <div class="card-intimacao-footer">
+                <button class="btn btn-sm btn-outline-primary" onclick="visualizarIntimacao('${intimacao.id}')">
+                    <i class="bi bi-eye"></i> Visualizar
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="editarIntimacao('${intimacao.id}')">
+                    <i class="bi bi-pencil"></i> Editar
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="excluirIntimacao('${intimacao.id}')">
+                    <i class="bi bi-trash"></i> Excluir
+                </button>
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    return template;
+}
+</script>

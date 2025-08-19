@@ -1,0 +1,666 @@
+<!-- Componente Tabela de Análises Avançada -->
+<!-- Inclui: configuração de colunas, paginação, filtros, exportação -->
+
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-table"></i>
+                    {{ titulo or 'Análises Detalhadas' }}
+                </h5>
+                <small class="text-muted">{{ subtitulo or 'Visualize e configure as análises realizadas' }}</small>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atualizarTabelaAnalises()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Atualizar
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleConfiguracaoColunas()">
+                    <i class="bi bi-gear"></i>
+                    Configurar
+                </button>
+                <button type="button" class="btn btn-sm btn-success" onclick="exportarTabelaAnalises()">
+                    <i class="bi bi-download"></i>
+                    Exportar
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuração de Colunas (colapsável) -->
+    <div class="card-body border-bottom" id="configuracao-colunas" style="display: none;">
+        <div class="row">
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2">Colunas Básicas</h6>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-data" checked>
+                    <label class="form-check-label" for="col-data">Data</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-intimacao" checked>
+                    <label class="form-check-label" for="col-intimacao">Intimação</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-prompt" checked>
+                    <label class="form-check-label" for="col-prompt">Prompt</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-classificacao-manual" checked>
+                    <label class="form-check-label" for="col-classificacao-manual">Classificação Manual</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2">Colunas de Resultado</h6>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-informacao-adicional" checked>
+                    <label class="form-check-label" for="col-informacao-adicional">Informação Adicional</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-resultado-ia" checked>
+                    <label class="form-check-label" for="col-resultado-ia">Resultado IA</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-status" checked>
+                    <label class="form-check-label" for="col-status">Status</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-configuracoes" checked>
+                    <label class="form-check-label" for="col-configuracoes">Configurações</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2">Colunas de Métricas</h6>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-tempo" checked>
+                    <label class="form-check-label" for="col-tempo">Tempo</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-custo" checked>
+                    <label class="form-check-label" for="col-custo">Custo</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-prompt-completo" checked>
+                    <label class="form-check-label" for="col-prompt-completo">Prompt Completo</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-resposta-ia" checked>
+                    <label class="form-check-label" for="col-resposta-ia">Resposta IA</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2">Ações</h6>
+                <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="selecionarTodasColunas()">
+                        <i class="bi bi-check-all"></i>
+                        Selecionar Todas
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecaoColunas()">
+                        <i class="bi bi-x-circle"></i>
+                        Limpar Seleção
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success" onclick="salvarConfiguracaoColunas()">
+                        <i class="bi bi-check-circle"></i>
+                        Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filtros Rápidos -->
+    <div class="card-body border-bottom">
+        <div class="row">
+            <div class="col-md-3">
+                <label for="filtro-rapido-status" class="form-label">Status</label>
+                <select class="form-select form-select-sm" id="filtro-rapido-status" onchange="aplicarFiltroRapido()">
+                    <option value="">Todos</option>
+                    <option value="acertou">Acertou</option>
+                    <option value="errou">Errou</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filtro-rapido-prompt" class="form-label">Prompt</label>
+                <select class="form-select form-select-sm" id="filtro-rapido-prompt" onchange="aplicarFiltroRapido()">
+                    <option value="">Todos</option>
+                    {% for prompt in prompts or [] %}
+                    <option value="{{ prompt.id }}">{{ prompt.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="filtro-rapido-data" class="form-label">Período</label>
+                <select class="form-select form-select-sm" id="filtro-rapido-data" onchange="aplicarFiltroRapido()">
+                    <option value="">Todos</option>
+                    <option value="hoje">Hoje</option>
+                    <option value="semana">Última Semana</option>
+                    <option value="mes">Último Mês</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparFiltrosRapidos()">
+                        <i class="bi bi-x-circle"></i>
+                        Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Contadores e Paginação -->
+    <div class="card-body border-bottom">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <span class="badge bg-primary me-2" id="contador-analises">{{ analises|length if analises else 0 }}</span>
+                <span class="text-muted">análise(s) encontrada(s)</span>
+                {% if analises %}
+                <span class="badge bg-success ms-2" id="contador-acertos">
+                    {{ analises|selectattr('acertou', 'equalto', true)|list|length }}
+                </span>
+                <span class="text-muted">acertos</span>
+                <span class="badge bg-danger ms-2" id="contador-erros">
+                    {{ analises|selectattr('acertou', 'equalto', false)|list|length }}
+                </span>
+                <span class="text-muted">erros</span>
+                {% endif %}
+            </div>
+            <div class="col-md-6 text-end">
+                <div class="btn-group btn-group-sm">
+                    <button type="button" class="btn btn-outline-secondary" onclick="paginaAnterior()">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    <span class="btn btn-outline-secondary disabled" id="info-paginacao">
+                        Página <span id="pagina-atual">1</span> de <span id="total-paginas">1</span>
+                    </span>
+                    <button type="button" class="btn btn-outline-secondary" onclick="proximaPagina()">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tabela de Análises -->
+    <div class="card-body p-0">
+        <div id="tabela-analises-container">
+            {% if analises %}
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="col-data">
+                                <input type="checkbox" class="form-check-input" id="select-all-analises" onchange="toggleSelectAllAnalises()">
+                            </th>
+                            <th class="col-data">Data</th>
+                            <th class="col-intimacao">Intimação</th>
+                            <th class="col-prompt">Prompt</th>
+                            <th class="col-classificacao-manual">Classificação Manual</th>
+                            <th class="col-informacao-adicional">Informação Adicional</th>
+                            <th class="col-resultado-ia">Resultado IA</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-configuracoes">Configurações</th>
+                            <th class="col-tempo">Tempo</th>
+                            <th class="col-custo">Custo</th>
+                            <th class="col-prompt-completo">Prompt Completo</th>
+                            <th class="col-resposta-ia">Resposta IA</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for analise in analises %}
+                        <tr>
+                            <td class="col-data">
+                                <input type="checkbox" class="form-check-input analise-checkbox" 
+                                       value="{{ analise.intimacao_id }}_{{ analise.id }}" 
+                                       onchange="updateAnalisesSelection()">
+                            </td>
+                            <td class="col-data">
+                                <small class="text-muted">
+                                    {% if analise.data_analise %}
+                                        {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
+                                        {% set hora = analise.data_analise.split('T')[1][:8] if 'T' in analise.data_analise else '' %}
+                                        {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td class="col-intimacao">
+                                <small>#{{ analise.intimacao_id[:8] }}...</small>
+                                <br>
+                                <small class="text-muted">{{ analise.contexto[:50] }}{% if analise.contexto | length > 50 %}...{% endif %}</small>
+                            </td>
+                            <td class="col-prompt">
+                                <span class="badge bg-info" style="cursor: pointer;" 
+                                      data-intimacao-id="{{ analise.intimacao_id }}"
+                                      data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                                      onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                                      title="Clique para ver o prompt completo">
+                                    {{ analise.prompt_nome }}
+                                </span>
+                            </td>
+                            <td class="col-classificacao-manual">
+                                {% set badge_class = {
+                                    'URGÊNCIA': 'danger',
+                                    'ELABORAR PEÇA': 'success',
+                                    'ANALISAR PROCESSO': 'info',
+                                    'CONTATAR ASSISTIDO': 'warning',
+                                    'RENUNCIAR PRAZO': 'secondary',
+                                    'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                } %}
+                                <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
+                                    {{ analise.classificacao_manual or 'N/A' }}
+                                </span>
+                            </td>
+                            <td class="col-informacao-adicional">
+                                <small class="text-muted">
+                                    {{ analise.informacao_adicional[:50] if analise.informacao_adicional else 'N/A' }}{% if analise.informacao_adicional and analise.informacao_adicional | length > 50 %}...{% endif %}
+                                </small>
+                            </td>
+                            <td class="col-resultado-ia">
+                                <span class="badge bg-primary">{{ analise.resultado_ia or 'N/A' }}</span>
+                            </td>
+                            <td class="col-status">
+                                {% if analise.acertou %}
+                                    <i class="bi bi-check-circle text-success"></i> Acertou
+                                {% else %}
+                                    <i class="bi bi-x-circle text-danger"></i> Errou
+                                {% endif %}
+                            </td>
+                            <td class="col-configuracoes">
+                                <small>
+                                    <div><strong>Modelo:</strong> {{ analise.modelo or 'N/A' }}</div>
+                                    <div><strong>Temp:</strong> 
+                                        {% if analise.temperatura is not none %}
+                                            {{ "%.1f"|format(analise.temperatura) }}
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </div>
+                                </small>
+                            </td>
+                            <td class="col-tempo">
+                                <small>{{ analise.tempo_processamento or 0 }}s</small>
+                            </td>
+                            <td class="col-custo">
+                                <small>${{ "%.4f"|format(analise.custo_estimado or 0) }}</small>
+                            </td>
+                            <td class="col-prompt-completo">
+                                <button class="btn btn-sm btn-outline-info" 
+                                        onclick="mostrarPromptCompletoRelatorios('{{ analise.intimacao_id }}', '{{ analise.prompt_completo or 'N/A' }}')"
+                                        title="Ver prompt completo">
+                                    <i class="bi bi-code-square"></i>
+                                </button>
+                            </td>
+                            <td class="col-resposta-ia">
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="mostrarRespostaCompletaRelatorios('{{ analise.intimacao_id }}', '{{ analise.resposta_completa or 'N/A' }}')"
+                                        title="Ver resposta completa">
+                                    <i class="bi bi-chat-dots"></i>
+                                </button>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-primary" 
+                                            onclick="visualizarAnalise('{{ analise.id }}')"
+                                            title="Visualizar">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" 
+                                            onclick="excluirAnalise('{{ analise.id }}')"
+                                            title="Excluir">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                <h5 class="text-muted mt-3">Nenhuma análise encontrada</h5>
+                <p class="text-muted">Não há análises para exibir com os filtros atuais.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+/* Estilos para configuração de colunas */
+.col-data, .col-intimacao, .col-prompt, .col-classificacao-manual, 
+.col-informacao-adicional, .col-resultado-ia, .col-status, 
+.col-configuracoes, .col-tempo, .col-custo, .col-prompt-completo, .col-resposta-ia {
+    transition: all 0.3s ease;
+}
+
+/* Quando uma coluna está oculta */
+.col-data[style*="display: none"], 
+.col-intimacao[style*="display: none"], 
+.col-prompt[style*="display: none"], 
+.col-classificacao-manual[style*="display: none"], 
+.col-informacao-adicional[style*="display: none"], 
+.col-resultado-ia[style*="display: none"], 
+.col-status[style*="display: none"], 
+.col-configuracoes[style*="display: none"], 
+.col-tempo[style*="display: none"], 
+.col-custo[style*="display: none"],
+.col-prompt-completo[style*="display: none"],
+.col-resposta-ia[style*="display: none"] {
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+}
+
+/* Aplicar também para th e td ocultos */
+th[style*="display: none"], td[style*="display: none"] {
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .table {
+        font-size: 12px;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 11px;
+    }
+}
+</style>
+
+<script>
+// Variáveis globais para o componente
+let configuracaoColunas = {};
+let paginaAtual = 1;
+let itensPorPagina = 25;
+let analisesFiltradas = [];
+
+// Inicialização do componente
+document.addEventListener('DOMContentLoaded', function() {
+    carregarConfiguracaoColunas();
+    aplicarConfiguracaoColunas();
+    atualizarContadores();
+});
+
+// Funções de configuração de colunas
+function carregarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasAvancada');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        configuracaoColunas = {
+            data: true,
+            intimacao: true,
+            prompt: true,
+            classificacao_manual: true,
+            informacao_adicional: true,
+            resultado_ia: true,
+            status: true,
+            configuracoes: true,
+            tempo: true,
+            custo: true,
+            prompt_completo: true,
+            resposta_ia: true
+        };
+    }
+    
+    // Aplicar configuração aos checkboxes
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = configuracaoColunas[key];
+        }
+    });
+}
+
+function aplicarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasAvancada');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        configuracaoColunas = {
+            data: true,
+            intimacao: true,
+            prompt: true,
+            classificacao_manual: true,
+            informacao_adicional: true,
+            resultado_ia: true,
+            status: true,
+            configuracoes: true,
+            tempo: true,
+            custo: true,
+            prompt_completo: true,
+            resposta_ia: true
+        };
+    }
+    
+    // Aplicar visibilidade das colunas
+    const colunas = {
+        'data': '.col-data',
+        'intimacao': '.col-intimacao',
+        'prompt': '.col-prompt',
+        'classificacao_manual': '.col-classificacao-manual',
+        'informacao_adicional': '.col-informacao-adicional',
+        'resultado_ia': '.col-resultado-ia',
+        'status': '.col-status',
+        'configuracoes': '.col-configuracoes',
+        'tempo': '.col-tempo',
+        'custo': '.col-custo',
+        'prompt_completo': '.col-prompt-completo',
+        'resposta_ia': '.col-resposta-ia'
+    };
+    
+    Object.keys(colunas).forEach(key => {
+        const visivel = configuracaoColunas[key];
+        const elementos = document.querySelectorAll(colunas[key]);
+        elementos.forEach(el => {
+            el.style.display = visivel ? '' : 'none';
+        });
+    });
+}
+
+// Event listeners para checkboxes
+document.addEventListener('change', function(e) {
+    if (e.target.matches('input[type="checkbox"][id^="col-"]')) {
+        const key = e.target.id.replace('col-', '').replace('-', '_');
+        configuracaoColunas[key] = this.checked;
+        localStorage.setItem('configuracaoColunasAvancada', JSON.stringify(configuracaoColunas));
+        aplicarConfiguracaoColunas();
+    }
+});
+
+// Funções de ação
+function toggleConfiguracaoColunas() {
+    const configDiv = document.getElementById('configuracao-colunas');
+    configDiv.style.display = configDiv.style.display === 'none' ? 'block' : 'none';
+}
+
+function selecionarTodasColunas() {
+    configuracaoColunas = {
+        data: true,
+        intimacao: true,
+        prompt: true,
+        classificacao_manual: true,
+        informacao_adicional: true,
+        resultado_ia: true,
+        status: true,
+        configuracoes: true,
+        tempo: true,
+        custo: true,
+        prompt_completo: true,
+        resposta_ia: true
+    };
+    
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    });
+    
+    localStorage.setItem('configuracaoColunasAvancada', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+}
+
+function limparSelecaoColunas() {
+    configuracaoColunas = {
+        data: false,
+        intimacao: false,
+        prompt: false,
+        classificacao_manual: false,
+        informacao_adicional: false,
+        resultado_ia: false,
+        status: false,
+        configuracoes: false,
+        tempo: false,
+        custo: false,
+        prompt_completo: false,
+        resposta_ia: false
+    };
+    
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+    });
+    
+    localStorage.setItem('configuracaoColunasAvancada', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+}
+
+function salvarConfiguracaoColunas() {
+    // A configuração já é salva automaticamente no localStorage
+    mostrarToast('Configuração salva com sucesso!', 'success');
+    toggleConfiguracaoColunas();
+}
+
+// Funções de filtros
+function aplicarFiltroRapido() {
+    // Implementar lógica de filtro
+    mostrarToast('Filtros aplicados!', 'info');
+}
+
+function limparFiltrosRapidos() {
+    document.getElementById('filtro-rapido-status').value = '';
+    document.getElementById('filtro-rapido-prompt').value = '';
+    document.getElementById('filtro-rapido-data').value = '';
+    mostrarToast('Filtros limpos!', 'info');
+}
+
+// Funções de paginação
+function paginaAnterior() {
+    if (paginaAtual > 1) {
+        paginaAtual--;
+        atualizarPaginacao();
+    }
+}
+
+function proximaPagina() {
+    const totalPaginas = Math.ceil(analisesFiltradas.length / itensPorPagina);
+    if (paginaAtual < totalPaginas) {
+        paginaAtual++;
+        atualizarPaginacao();
+    }
+}
+
+function atualizarPaginacao() {
+    document.getElementById('pagina-atual').textContent = paginaAtual;
+    const totalPaginas = Math.ceil(analisesFiltradas.length / itensPorPagina);
+    document.getElementById('total-paginas').textContent = totalPaginas;
+}
+
+// Funções de seleção
+function toggleSelectAllAnalises() {
+    const selectAll = document.getElementById('select-all-analises');
+    const checkboxes = document.querySelectorAll('.analise-checkbox');
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAll.checked;
+    });
+    
+    updateAnalisesSelection();
+}
+
+function updateAnalisesSelection() {
+    const checkboxes = document.querySelectorAll('.analise-checkbox:checked');
+    const selectAll = document.getElementById('select-all-analises');
+    
+    // Atualizar checkbox "selecionar todos"
+    const totalCheckboxes = document.querySelectorAll('.analise-checkbox');
+    selectAll.checked = checkboxes.length === totalCheckboxes.length;
+    selectAll.indeterminate = checkboxes.length > 0 && checkboxes.length < totalCheckboxes.length;
+}
+
+// Funções de ação
+function atualizarTabelaAnalises() {
+    mostrarToast('Tabela atualizada!', 'info');
+    // Aqui você pode implementar uma chamada AJAX para recarregar os dados
+}
+
+function exportarTabelaAnalises() {
+    const checkboxes = document.querySelectorAll('.analise-checkbox:checked');
+    if (checkboxes.length === 0) {
+        mostrarToast('Selecione pelo menos uma análise para exportar!', 'warning');
+        return;
+    }
+    
+    mostrarToast(`Exportando ${checkboxes.length} análise(s)...`, 'success');
+    // Aqui você pode implementar a lógica de exportação
+}
+
+function visualizarAnalise(id) {
+    mostrarToast(`Visualizando análise: ${id}`, 'info');
+}
+
+function excluirAnalise(id) {
+    if (confirm('Tem certeza que deseja excluir esta análise?')) {
+        mostrarToast(`Análise ${id} excluída!`, 'success');
+    }
+}
+
+// Funções de modal (se não existirem, criar placeholders)
+function mostrarPromptCompletoRelatorios(intimacaoId, promptCompleto) {
+    if (typeof mostrarModalPrompt === 'function') {
+        mostrarModalPrompt();
+    } else {
+        alert(`Prompt completo da intimação ${intimacaoId}:\n\n${promptCompleto}`);
+    }
+}
+
+function mostrarRespostaCompletaRelatorios(intimacaoId, respostaCompleta) {
+    if (typeof mostrarModalResposta === 'function') {
+        mostrarModalResposta();
+    } else {
+        alert(`Resposta completa da intimação ${intimacaoId}:\n\n${respostaCompleta}`);
+    }
+}
+
+// Função utilitária
+function mostrarToast(mensagem, tipo = 'info') {
+    console.log(`Toast ${tipo}: ${mensagem}`);
+    // Implementar toast real se disponível
+    alert(`${tipo.toUpperCase()}: ${mensagem}`);
+}
+
+function atualizarContadores() {
+    const totalAnalises = document.querySelectorAll('.analise-checkbox').length;
+    const acertos = document.querySelectorAll('.col-status .bi-check-circle').length;
+    const erros = document.querySelectorAll('.col-status .bi-x-circle').length;
+    
+    document.getElementById('contador-analises').textContent = totalAnalises;
+    document.getElementById('contador-acertos').textContent = acertos;
+    document.getElementById('contador-erros').textContent = erros;
+}
+</script>

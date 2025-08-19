@@ -28,6 +28,10 @@
                 <i class="bi bi-play-circle"></i>
                 Executar Análise
             </button>
+            <button type="button" class="btn btn-sm btn-secondary ms-2" onclick="testarLoading()">
+                <i class="bi bi-hourglass"></i>
+                Testar Loading
+            </button>
         </div>
     </div>
 </div>
@@ -261,29 +265,13 @@
                         </div>
                     </div>
 
-                    <!-- Opções Avançadas -->
-                    <div class="mb-4">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="salvar-resultados" name="salvar_resultados" checked>
-                            <label class="form-check-label" for="salvar-resultados">
-                                Salvar resultados no histórico
-                            </label>
-                        </div>
-                        
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="calcular-acuracia" name="calcular_acuracia" checked>
-                            <label class="form-check-label" for="calcular-acuracia">
-                                Calcular acurácia automaticamente (apenas para intimações com classificação manual)
-                            </label>
-                        </div>
-                        
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="modo-paralelo" name="modo_paralelo">
-                            <label class="form-check-label" for="modo-paralelo">
-                                Executar análises em paralelo (mais rápido, mas pode consumir mais recursos)
-                            </label>
-                        </div>
+                    <!-- Opções Avançadas (Ocultas) -->
+                    <div style="display: none;">
+                        <input class="form-check-input" type="checkbox" id="salvar-resultados" name="salvar_resultados" checked>
+                        <input class="form-check-input" type="checkbox" id="calcular-acuracia" name="calcular_acuracia" checked>
+                        <input class="form-check-input" type="checkbox" id="modo-paralelo" name="modo_paralelo">
                     </div>
+
                 </form>
             </div>
         </div>
@@ -524,6 +512,27 @@
 {% endblock %}
 
 {% block extra_css %}
+<!-- Overlay de Loading -->
+<div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="loading-content">
+        <div class="loading-spinner">
+            <div class="ai-brain">
+                <div class="brain-pulse"></div>
+                <div class="brain-pulse"></div>
+                <div class="brain-pulse"></div>
+            </div>
+        </div>
+        <div class="loading-text">
+            <h4 class="text-white mb-3">🤖 IA Analisando...</h4>
+            <p class="text-white-50 mb-0">Processando intimações com inteligência artificial</p>
+            <div class="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </div>
+</div>
 <style>
     .text-truncate-custom {
         max-width: 300px;
@@ -538,6 +547,130 @@
     
     .intimacao-checkbox:checked + td {
         background-color: rgba(40, 167, 69, 0.1);
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        z-index: 99999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(10px);
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    
+    .loading-overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    .loading-content {
+        text-align: center;
+        color: white;
+    }
+
+    .loading-spinner {
+        margin-bottom: 2rem;
+    }
+
+    /* AI Brain Animation */
+    .ai-brain {
+        position: relative;
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(5px);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .brain-pulse {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        background: #fff;
+        border-radius: 50%;
+        animation: brainPulse 2s infinite;
+    }
+
+    .brain-pulse:nth-child(1) {
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        animation-delay: 0s;
+    }
+
+    .brain-pulse:nth-child(2) {
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        animation-delay: 0.6s;
+    }
+
+    .brain-pulse:nth-child(3) {
+        bottom: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        animation-delay: 1.2s;
+    }
+
+    @keyframes brainPulse {
+        0%, 100% {
+            opacity: 0.3;
+            transform: scale(0.8);
+        }
+        50% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    }
+
+    /* Loading Dots */
+    .loading-dots {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 1rem;
+    }
+
+    .loading-dots span {
+        width: 8px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.7);
+        border-radius: 50%;
+        animation: loadingDots 1.4s infinite ease-in-out;
+    }
+
+    .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0s; }
+
+    @keyframes loadingDots {
+        0%, 80%, 100% {
+            transform: scale(0.8);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* Smooth Scroll */
+    html {
+        scroll-behavior: smooth;
     }
 </style>
 {% endblock %}
@@ -686,6 +819,61 @@ function limparSelecaoIntimacoes() {
     updateIntimacoesSelection();
 }
 
+// Função para mostrar loading
+function mostrarLoading() {
+    console.log('=== DEBUG: Mostrando loading ===');
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+        overlay.style.visibility = 'visible';
+        overlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Bloquear scroll
+        console.log('=== DEBUG: Loading overlay ativado ===');
+    } else {
+        console.error('=== ERRO: Loading overlay não encontrado ===');
+    }
+}
+
+// Função para esconder loading
+function esconderLoading() {
+    console.log('=== DEBUG: Escondendo loading ===');
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.style.opacity = '0';
+        overlay.style.visibility = 'hidden';
+        overlay.classList.add('hidden');
+        document.body.style.overflow = 'auto'; // Restaurar scroll
+        console.log('=== DEBUG: Loading overlay desativado ===');
+    } else {
+        console.error('=== ERRO: Loading overlay não encontrado ===');
+    }
+}
+
+// Função para testar loading
+function testarLoading() {
+    console.log('=== DEBUG: Testando loading ===');
+    mostrarLoading();
+    
+    // Simular processamento por 3 segundos
+    setTimeout(() => {
+        esconderLoading();
+        showToast('Teste de loading concluído!', 'success');
+    }, 3000);
+}
+
+// Função para scroll suave para resultados
+function scrollParaResultados() {
+    const resultadosContainer = document.getElementById('resultados-container');
+    if (resultadosContainer) {
+        resultadosContainer.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+        });
+    }
+}
+
 // Função para executar análise
 function executarAnalise() {
     console.log('=== DEBUG: executarAnalise chamada ===');
@@ -716,6 +904,8 @@ function executarAnalise() {
         }
     };
     
+    // Mostrar loading antes de iniciar
+    mostrarLoading();
     iniciarAnalise(dados);
 }
 
@@ -1042,6 +1232,9 @@ function executarAnalise() {
 
 // Função para iniciar análise
 function iniciarAnalise(dados) {
+    // Mostrar loading
+    mostrarLoading();
+    
     // Desabilitar botão
     const btnExecutar = document.getElementById('btn-executar');
     btnExecutar.disabled = true;
@@ -1099,6 +1292,9 @@ function executarAnaliseReal(dados) {
     .catch(error => {
         console.error('=== ERRO na análise:', error);
         
+        // Esconder loading
+        esconderLoading();
+        
         // Reabilitar botão
         const btnExecutar = document.getElementById('btn-executar');
         btnExecutar.disabled = false;
@@ -1114,6 +1310,9 @@ function finalizarAnalise() {
     const acertos = resultadosAnalise.filter(r => r.acertou).length;
     const acuracia = totalAnalises > 0 ? (acertos / totalAnalises * 100).toFixed(1) : 0;
     
+    // Esconder loading
+    esconderLoading();
+    
     // Reabilitar botão
     const btnExecutar = document.getElementById('btn-executar');
     btnExecutar.disabled = false;
@@ -1121,6 +1320,11 @@ function finalizarAnalise() {
     
     // Mostrar resultados
     exibirResultados();
+    
+    // Scroll suave para os resultados
+    setTimeout(() => {
+        scrollParaResultados();
+    }, 100);
     
     showToast(`${totalAnalises} análises concluídas. Acurácia: ${acuracia}%`, 'success');
 }

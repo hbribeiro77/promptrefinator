@@ -47,7 +47,7 @@
                         </label>
                         <div class="input-group">
                             <input type="password" class="form-control" id="api-key" name="api_key" 
-                                   placeholder="sk-..." value="{{ config.openai_api_key or '' }}" readonly>
+                                   placeholder="sk-..." value="***CONFIGURADO VIA .ENV***" readonly>
                             <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('api-key')">
                                 <i class="bi bi-eye" id="api-key-icon"></i>
                             </button>
@@ -61,7 +61,7 @@
                                 <br>
                                 Para alterar, edite o arquivo <code>.env</code> na raiz do projeto.
                                 <br><br>
-                                <strong>Debug:</strong> Valor atual: <code>{{ config.openai_api_key[:20] if config.openai_api_key else 'NÃO ENCONTRADA' }}...</code>
+                                <strong>Status:</strong> <code>Configurada via variável de ambiente</code>
                             </div>
                         </div>
                     </div>

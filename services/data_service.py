@@ -51,9 +51,13 @@ class DataService:
     def _save_json(self, file_path: str, data: Dict[str, Any]):
         """Salvar dados em um arquivo JSON"""
         try:
-            # Fazer backup se configurado
+            # Fazer backup se configurado (exceto para config.json)
             if self.config.BACKUP_ON_SAVE and os.path.exists(file_path):
-                self._create_backup(file_path)
+                # Não fazer backup de arquivos sensíveis
+                if 'config.json' not in file_path:
+                    self._create_backup(file_path)
+                else:
+                    print("🔒 Proteção: Backup de config.json desabilitado por segurança")
             
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -360,6 +364,20 @@ class DataService:
     
     def save_config(self, config: Dict[str, Any]):
         """Salvar configurações"""
+        # Proteger contra salvamento da chave da API
+        if 'openai_api_key' in config:
+            api_key = config['openai_api_key']
+            # Se for uma chave real (começa com sk-), não salvar
+            if api_key.startswith('sk-'):
+                print("⚠️  AVISO: Tentativa de salvar chave da API no arquivo de configuração bloqueada!")
+                # Manter apenas o placeholder
+                config['openai_api_key'] = '${OPENAI_API_KEY}'
+            # Se não for placeholder, não salvar
+            elif not (api_key.startswith('${') and api_key.endswith('}')):
+                print("⚠️  AVISO: Tentativa de salvar valor inválido para chave da API bloqueada!")
+                # Manter apenas o placeholder
+                config['openai_api_key'] = '${OPENAI_API_KEY}'
+        
         self._save_json(self.config.CONFIG_FILE, config)
     
     # Métodos de estatísticas

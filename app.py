@@ -13,6 +13,20 @@ from services.export_service import ExportService
 from dotenv import load_dotenv
 load_dotenv()
 
+# Fallback: definir variável diretamente se não foi carregada do .env
+if not os.environ.get('OPENAI_API_KEY'):
+    try:
+        with open('.env', 'r', encoding='utf-8') as f:
+            content = f.read()
+            for line in content.split('\n'):
+                # Remover BOM se presente
+                line = line.replace('\ufeff', '')
+                if line.startswith('OPENAI_API_KEY='):
+                    os.environ['OPENAI_API_KEY'] = line.strip().split('=', 1)[1]
+                    break
+    except Exception as e:
+        pass
+
 # Inicializar serviços
 data_service = DataService()
 openai_service = OpenAIService()
@@ -275,10 +289,24 @@ def nova_intimacao():
             contexto = request.form.get('contexto', '').strip()
             classificacao_manual = request.form.get('classificacao_manual', '').strip()
             informacoes_adicionais = request.form.get('informacoes_adicionais', '').strip()
+            processo = request.form.get('processo', '').strip()
+            orgao_julgador = request.form.get('orgao_julgador', '').strip()
+            classe = request.form.get('classe', '').strip()
+            disponibilizacao = request.form.get('disponibilizacao', '').strip()
+            intimado = request.form.get('intimado', '').strip()
+            status = request.form.get('status', '').strip()
+            prazo = request.form.get('prazo', '').strip()
             
             print(f"Contexto extraído: '{contexto}'")
             print(f"Classificação extraída: '{classificacao_manual}'")
             print(f"Informações extraídas: '{informacoes_adicionais}'")
+            print(f"Processo: '{processo}'")
+            print(f"Órgão Julgador: '{orgao_julgador}'")
+            print(f"Classe: '{classe}'")
+            print(f"Disponibilização: '{disponibilizacao}'")
+            print(f"Intimado: '{intimado}'")
+            print(f"Status: '{status}'")
+            print(f"Prazo: '{prazo}'")
             
             if not contexto:
                 print("DEBUG: Contexto vazio, retornando erro")
@@ -288,13 +316,27 @@ def nova_intimacao():
                                      tipos_acao=Config.TIPOS_ACAO,
                                      dados={'contexto': contexto, 
                                            'classificacao_manual': classificacao_manual,
-                                           'informacoes_adicionais': informacoes_adicionais})
+                                           'informacoes_adicionais': informacoes_adicionais,
+                                           'processo': processo,
+                                           'orgao_julgador': orgao_julgador,
+                                           'classe': classe,
+                                           'disponibilizacao': disponibilizacao,
+                                           'intimado': intimado,
+                                           'status': status,
+                                           'prazo': prazo})
             
             # Criar a intimação
             intimacao_data = {
                 'contexto': contexto,
                 'classificacao_manual': classificacao_manual if classificacao_manual else None,
                 'informacoes_adicionais': informacoes_adicionais if informacoes_adicionais else None,
+                'processo': processo if processo else None,
+                'orgao_julgador': orgao_julgador if orgao_julgador else None,
+                'classe': classe if classe else None,
+                'disponibilizacao': disponibilizacao if disponibilizacao else None,
+                'intimado': intimado if intimado else None,
+                'status': status if status else None,
+                'prazo': prazo if prazo else None,
                 'data_criacao': datetime.now().isoformat(),
                 'analises': []
             }
@@ -320,7 +362,14 @@ def nova_intimacao():
                                  tipos_acao=Config.TIPOS_ACAO,
                                  dados={'contexto': request.form.get('contexto', ''), 
                                        'classificacao_manual': request.form.get('classificacao_manual', ''),
-                                       'informacoes_adicionais': request.form.get('informacoes_adicionais', '')})
+                                       'informacoes_adicionais': request.form.get('informacoes_adicionais', ''),
+                                       'processo': request.form.get('processo', ''),
+                                       'orgao_julgador': request.form.get('orgao_julgador', ''),
+                                       'classe': request.form.get('classe', ''),
+                                       'disponibilizacao': request.form.get('disponibilizacao', ''),
+                                       'intimado': request.form.get('intimado', ''),
+                                       'status': request.form.get('status', ''),
+                                       'prazo': request.form.get('prazo', '')})
     
     return render_template('nova_intimacao.html', 
                          classificacoes=Config.TIPOS_ACAO,
@@ -1023,6 +1072,11 @@ def api_relatorios_pagina(pagina):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/componentes-demo')
+def componentes_demo():
+    """Página de demonstração dos componentes"""
+    return render_template('componentes_demo.html')
+
 @app.route('/exportar')
 def exportar_dados():
     """Exportar dados em diferentes formatos"""
@@ -1184,11 +1238,15 @@ def configuracoes():
         if not config:
             config = {}
         
-        # Buscar chave da API da variável de ambiente
-        config['openai_api_key'] = os.environ.get('OPENAI_API_KEY', '')
+        # Buscar chave da API da variável de ambiente (não expor no frontend)
+        api_key = os.environ.get('OPENAI_API_KEY', '')
+        if api_key:
+            config['openai_api_key'] = '***CONFIGURADO VIA .ENV***'
+        else:
+            config['openai_api_key'] = 'NÃO CONFIGURADA'
         
         # Debug: verificar se a chave está sendo passada
-        print(f"=== DEBUG: Chave da API para interface: {config['openai_api_key'][:20]}... ===")
+        print("=== DEBUG: Chave da API configurada via variável de ambiente ===")
         
         # Valores padrão para configurações
         config.setdefault('modelo_padrao', 'gpt-4')
@@ -1435,6 +1493,80 @@ def criar_backup():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/extrair-informacoes', methods=['POST'])
+def extrair_informacoes():
+    """Extrair informações do contexto da intimação usando IA"""
+    try:
+        data = request.get_json()
+        contexto = data.get('contexto', '').strip()
+        
+        if not contexto:
+            return jsonify({'success': False, 'error': 'Contexto não fornecido'})
+        
+        print(f"=== DEBUG: Extraindo informações do contexto ===")
+        print(f"Contexto length: {len(contexto)}")
+        
+        # Prompt para extrair informações
+        prompt_extrair = f"""
+Analise o seguinte contexto de intimação e extraia as informações solicitadas. Retorne APENAS um JSON válido com as seguintes chaves:
+
+- processo: número do processo (se encontrado)
+- orgao_julgador: órgão julgador (se encontrado)
+- classe: classe processual (se encontrada)
+- disponibilizacao: data de disponibilização (se encontrada)
+- intimado: nome do intimado (se encontrado)
+- status: status da intimação (se encontrado)
+- prazo: prazo da intimação (se encontrado)
+
+Se alguma informação não for encontrada, retorne null para essa chave.
+
+Contexto da intimação:
+{contexto}
+
+Retorne APENAS o JSON, sem texto adicional.
+"""
+        
+        # Chamar a IA
+        resposta = openai_service.analyze_text(
+            prompt_extrair,
+            modelo="gpt-4",
+            temperatura=0.1,
+            max_tokens=500
+        )
+        
+        print(f"=== DEBUG: Resposta da IA: {resposta}")
+        
+        # Tentar extrair JSON da resposta
+        try:
+            # Limpar a resposta para extrair apenas o JSON
+            json_str = resposta.strip()
+            if json_str.startswith('```json'):
+                json_str = json_str[7:]
+            if json_str.endswith('```'):
+                json_str = json_str[:-3]
+            
+            import json
+            informacoes = json.loads(json_str)
+            
+            print(f"=== DEBUG: Informações extraídas: {informacoes}")
+            
+            return jsonify({
+                'success': True,
+                'informacoes': informacoes
+            })
+            
+        except json.JSONDecodeError as e:
+            print(f"=== ERRO: JSON inválido: {e}")
+            print(f"Resposta da IA: {resposta}")
+            return jsonify({
+                'success': False,
+                'error': 'Erro ao processar resposta da IA'
+            })
+            
+    except Exception as e:
+        print(f"=== ERRO na extração: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/sistema/limpar-cache', methods=['POST'])
 def limpar_cache():

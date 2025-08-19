@@ -169,6 +169,12 @@
                                 Relatórios
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'componentes_demo' %}active{% endif %}" href="{{ url_for('componentes_demo') }}">
+                                <i class="bi bi-puzzle"></i>
+                                Componentes
+                            </a>
+                        </li>
                     </ul>
                     
                     <hr>
