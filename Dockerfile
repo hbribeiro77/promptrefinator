@@ -49,4 +49,4 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-5000}/ || exit 1
 
 # Comando para executar a aplicação (usando PORT do Railway ou 5000 como fallback)
-CMD gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 3 --timeout 120 --access-logfile - --error-logfile - app:app
+CMD ["sh", "-c", "echo 'Iniciando aplicação na porta ${PORT:-5000}' && gunicorn --bind 0.0.0.0:${PORT:-5000} --workers 1 --timeout 120 --access-logfile - --error-logfile - --log-level info app:app"]
