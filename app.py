@@ -2554,6 +2554,196 @@ def analise_progresso():
     
     return Response(generate(), mimetype='text/event-stream')
 
+# Rotas de Backup do Banco
+@app.route('/api/backup/banco')
+def download_backup_banco():
+    """Endpoint para download do banco de dados"""
+    try:
+        db_path = 'data/database.db'
+        
+        if not os.path.exists(db_path):
+            return jsonify({
+                'success': False,
+                'message': 'Banco de dados não encontrado'
+            }), 404
+        
+        # Gerar nome do arquivo com timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'database_backup_{timestamp}.db'
+        
+        return send_file(
+            db_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/octet-stream'
+        )
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao fazer backup: {str(e)}'
+        }), 500
+
+@app.route('/api/backup/stats')
+def stats_banco():
+    """Endpoint para estatísticas do banco de dados"""
+    try:
+        db_path = 'data/database.db'
+        
+        if not os.path.exists(db_path):
+            return jsonify({
+                'success': False,
+                'message': 'Banco de dados não encontrado'
+            })
+        
+        # Conectar ao banco
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Contar registros em cada tabela
+        stats = {}
+        
+        # Prompts
+        cursor.execute("SELECT COUNT(*) FROM prompts")
+        stats['prompts'] = cursor.fetchone()[0]
+        
+        # Intimações
+        cursor.execute("SELECT COUNT(*) FROM intimacoes")
+        stats['intimacoes'] = cursor.fetchone()[0]
+        
+        # Análises
+        cursor.execute("SELECT COUNT(*) FROM analises")
+        stats['analises'] = cursor.fetchone()[0]
+        
+        # Tamanho do arquivo
+        size_bytes = os.path.getsize(db_path)
+        stats['tamanho_mb'] = round(size_bytes / (1024 * 1024), 2)
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter estatísticas: {str(e)}'
+        }), 500
+
+@app.route('/api/backup/restaurar', methods=['POST'])
+def restaurar_backup_banco():
+    """Endpoint para restaurar backup do banco de dados"""
+    try:
+        # Verificar se foi enviado um arquivo
+        if 'backup_file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum arquivo foi enviado'
+            }), 400
+        
+        file = request.files['backup_file']
+        
+        # Verificar se o arquivo foi selecionado
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum arquivo foi selecionado'
+            }), 400
+        
+        # Verificar extensão do arquivo
+        if not file.filename.lower().endswith('.db'):
+            return jsonify({
+                'success': False,
+                'message': 'Arquivo deve ter extensão .db'
+            }), 400
+        
+        # Verificar tamanho do arquivo (máximo 50MB)
+        max_size = 50 * 1024 * 1024  # 50MB
+        file.seek(0, 2)  # Ir para o final do arquivo
+        file_size = file.tell()
+        file.seek(0)  # Voltar para o início
+        
+        if file_size > max_size:
+            return jsonify({
+                'success': False,
+                'message': 'Arquivo muito grande. Máximo 50MB.'
+            }), 400
+        
+        # Caminhos dos arquivos
+        db_path = 'data/database.db'
+        backup_dir = 'data/backups'
+        
+        # Criar diretório de backup se não existir
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Fazer backup do banco atual antes de restaurar
+        if os.path.exists(db_path):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = os.path.join(backup_dir, f'backup_antes_restauracao_{timestamp}.db')
+            
+            import shutil
+            shutil.copy2(db_path, backup_path)
+            print(f"Backup do banco atual salvo em: {backup_path}")
+        
+        # Salvar o arquivo de backup enviado
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(backup_dir, f'restore_{timestamp}_{filename}')
+        file.save(temp_path)
+        
+        # Validar se o arquivo é um banco SQLite válido
+        try:
+            import sqlite3
+            conn = sqlite3.connect(temp_path)
+            cursor = conn.cursor()
+            
+            # Verificar se as tabelas necessárias existem
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            
+            required_tables = ['prompts', 'intimacoes', 'analises']
+            missing_tables = [table for table in required_tables if table not in tables]
+            
+            if missing_tables:
+                conn.close()
+                os.remove(temp_path)
+                return jsonify({
+                    'success': False,
+                    'message': f'Banco inválido. Tabelas ausentes: {", ".join(missing_tables)}'
+                }), 400
+            
+            conn.close()
+            
+        except Exception as e:
+            # Limpar arquivo temporário
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            
+            return jsonify({
+                'success': False,
+                'message': f'Arquivo não é um banco SQLite válido: {str(e)}'
+            }), 400
+        
+        # Restaurar o banco
+        import shutil
+        shutil.copy2(temp_path, db_path)
+        
+        # Limpar arquivo temporário
+        os.remove(temp_path)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Backup restaurado com sucesso'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao restaurar backup: {str(e)}'
+        }), 500
+
 # Manipuladores de erro
 @app.errorhandler(404)
 def not_found_error(error):

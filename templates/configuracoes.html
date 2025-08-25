@@ -25,6 +25,12 @@
                 Salvar Configurações
             </button>
         </div>
+        <div class="btn-group ms-2">
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="fazerBackupBanco()">
+                <i class="bi bi-download"></i>
+                Backup do Banco
+            </button>
+        </div>
     </div>
 </div>
 
@@ -1071,6 +1077,81 @@
     </div>
 </div>
 
+<!-- Seção de Backup do Banco -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-database"></i>
+                    Backup do Banco de Dados
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Backup do Banco SQLite</strong>
+                    <br>
+                    Faça o download do banco de dados completo para backup ou análise local.
+                    <br>
+                    O arquivo contém todos os dados: prompts, intimações e análises.
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="d-grid mb-3">
+                            <button type="button" class="btn btn-warning" onclick="fazerBackupBanco()">
+                                <i class="bi bi-download"></i>
+                                Download do Banco
+                            </button>
+                        </div>
+                        <div class="form-text mb-3">
+                            <i class="bi bi-clock"></i>
+                            Último backup: <span id="ultimo-backup">Nunca</span>
+                        </div>
+                        
+                        <!-- Restauração de Backup -->
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-upload"></i>
+                                    Restaurar Backup
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <strong>Atenção!</strong> A restauração irá substituir todos os dados atuais.
+                                </div>
+                                <div class="mb-3">
+                                    <label for="arquivo-backup" class="form-label">Selecionar arquivo de backup (.db)</label>
+                                    <input type="file" class="form-control" id="arquivo-backup" accept=".db" onchange="validarArquivoBackup()">
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-danger" id="btn-restaurar" onclick="restaurarBackup()" disabled>
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                        Restaurar Banco
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">📊 Estatísticas do Banco</h6>
+                                <div id="stats-banco">
+                                    <small class="text-muted">Carregando...</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -1805,6 +1886,175 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Carregar preços da API
     carregarPrecosAPI();
+    
+    // Carregar estatísticas do banco
+    carregarStatsBanco();
 })
+
+// Função para fazer backup do banco
+function fazerBackupBanco() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Preparando...';
+    button.disabled = true;
+    
+    fetch('/api/backup/banco', {
+        method: 'GET'
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.blob();
+        } else {
+            throw new Error('Erro ao gerar backup');
+        }
+    })
+    .then(blob => {
+        // Criar link para download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `database_backup_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast('Backup do banco baixado com sucesso!', 'success');
+        
+        // Atualizar timestamp do último backup
+        document.getElementById('ultimo-backup').textContent = new Date().toLocaleString('pt-BR');
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao fazer backup do banco', 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Função para carregar estatísticas do banco
+function carregarStatsBanco() {
+    fetch('/api/backup/stats')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const stats = data.stats;
+            document.getElementById('stats-banco').innerHTML = `
+                <div class="row">
+                    <div class="col-6">
+                        <small><strong>Prompts:</strong> ${stats.prompts}</small><br>
+                        <small><strong>Intimações:</strong> ${stats.intimacoes}</small>
+                    </div>
+                    <div class="col-6">
+                        <small><strong>Análises:</strong> ${stats.analises}</small><br>
+                        <small><strong>Tamanho:</strong> ${stats.tamanho_mb} MB</small>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('stats-banco').innerHTML = '<small class="text-danger">Erro ao carregar</small>';
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao carregar stats:', error);
+        document.getElementById('stats-banco').innerHTML = '<small class="text-danger">Erro ao carregar</small>';
+    });
+}
+
+// Função para validar arquivo de backup
+function validarArquivoBackup() {
+    const input = document.getElementById('arquivo-backup');
+    const btnRestaurar = document.getElementById('btn-restaurar');
+    const file = input.files[0];
+    
+    if (!file) {
+        btnRestaurar.disabled = true;
+        return;
+    }
+    
+    // Validar extensão
+    if (!file.name.toLowerCase().endsWith('.db')) {
+        showToast('Selecione um arquivo .db válido', 'error');
+        input.value = '';
+        btnRestaurar.disabled = true;
+        return;
+    }
+    
+    // Validar tamanho (máximo 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+        showToast('Arquivo muito grande. Máximo 50MB.', 'error');
+        input.value = '';
+        btnRestaurar.disabled = true;
+        return;
+    }
+    
+    // Habilitar botão de restauração
+    btnRestaurar.disabled = false;
+    showToast(`Arquivo válido: ${file.name}`, 'success');
+}
+
+// Função para restaurar backup
+function restaurarBackup() {
+    const input = document.getElementById('arquivo-backup');
+    const btnRestaurar = document.getElementById('btn-restaurar');
+    const file = input.files[0];
+    
+    if (!file) {
+        showToast('Selecione um arquivo de backup primeiro', 'error');
+        return;
+    }
+    
+    // Confirmar restauração
+    if (!confirm('ATENÇÃO! Esta operação irá substituir todos os dados atuais do banco.\n\nTem certeza que deseja continuar?')) {
+        return;
+    }
+    
+    // Preparar formulário
+    const formData = new FormData();
+    formData.append('backup_file', file);
+    
+    // Desabilitar botão e mostrar loading
+    const originalText = btnRestaurar.innerHTML;
+    btnRestaurar.innerHTML = '<i class="bi bi-hourglass-split"></i> Restaurando...';
+    btnRestaurar.disabled = true;
+    
+    fetch('/api/backup/restaurar', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Backup restaurado com sucesso! A página será recarregada.', 'success');
+            
+            // Limpar input
+            input.value = '';
+            btnRestaurar.disabled = true;
+            
+            // Recarregar estatísticas
+            setTimeout(() => {
+                carregarStatsBanco();
+            }, 1000);
+            
+            // Recarregar página após 2 segundos
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            throw new Error(data.message || 'Erro ao restaurar backup');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast(`Erro ao restaurar backup: ${error.message}`, 'error');
+    })
+    .finally(() => {
+        btnRestaurar.innerHTML = originalText;
+        btnRestaurar.disabled = false;
+    });
+}
 </script>
 {% endblock %}

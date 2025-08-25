@@ -28,8 +28,9 @@
   "azure_api_key": "***CONFIGURADO VIA .ENV***",
   "azure_endpoint": "***CONFIGURADO VIA .ENV***",
   "azure_api_version": "2024-02-15-preview",
-  "azure_deployment": "gpt-4o-mini",
+  "azure_deployment": "gpt-4o",
   "azure_temperatura": 0.0,
   "azure_max_tokens": 500,
-  "azure_timeout": 30
+  "azure_timeout": 30,
+  "ai_provider": "azure"
 }
