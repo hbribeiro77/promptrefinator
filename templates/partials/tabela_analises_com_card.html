@@ -1,0 +1,292 @@
+{% if analises %}
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>
+                    <input type="checkbox" class="form-check-input" id="select-all-analises" onchange="toggleSelectAllAnalises()">
+                </th>
+                <th class="col-data">Data</th>
+                <th class="col-intimacao" style="width: 300px;">Intimação</th>
+                <th class="col-prompt">Prompt</th>
+                <th class="col-classificacao-manual">Classificação Manual</th>
+                <th class="col-informacao-adicional">Informação Adicional</th>
+                <th class="col-resultado-ia">Resultado IA</th>
+                <th class="col-status">Status</th>
+                <th class="col-configuracoes">Configurações</th>
+                <th class="col-tempo">Tempo</th>
+                <th class="col-custo">Custo</th>
+                <th class="col-tokens-input">Tokens Input</th>
+                <th class="col-tokens-output">Tokens Output</th>
+                <th class="col-prompt-completo">Prompt Completo</th>
+                <th class="col-resposta-ia">Resposta IA</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for analise in analises %}
+            <tr>
+                <td>
+                    <input type="checkbox" class="form-check-input analise-checkbox" 
+                           value="{{ analise.intimacao_id }}_{{ analise.id }}" 
+                           onchange="updateAnalisesSelection()">
+                </td>
+                <td class="col-data">
+                    <small class="text-muted">
+                        {% if analise.data_analise %}
+                            {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
+                            {% set hora = analise.data_analise.split('T')[1][:8] if 'T' in analise.data_analise else '' %}
+                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </small>
+                </td>
+                <td class="col-intimacao">
+                    <!-- Card compacto de intimação -->
+                    {% if analise.intimacao %}
+                        {% set intimacao = analise.intimacao %}
+                        {% include 'partials/card_intimacao_compact.html' %}
+                    {% else %}
+                        <!-- Fallback para quando não há dados completos da intimação -->
+                        <div class="intimacao-fallback">
+                            <small><strong>ID:</strong> #{{ analise.intimacao_id[:8] }}...</small>
+                            <br>
+                            <small class="text-muted">{{ analise.contexto[:50] }}{% if analise.contexto | length > 50 %}...{% endif %}</small>
+                        </div>
+                    {% endif %}
+                </td>
+                <td class="col-prompt">
+                    {% set prompt_nome_truncado = analise.prompt_nome[:20] + '...' if analise.prompt_nome and analise.prompt_nome | length > 20 else analise.prompt_nome %}
+                    {% set tooltip_text = analise.prompt_nome %}
+                    {% if analise.regra_negocio %}
+                        {% set tooltip_text = tooltip_text + '\n\nRegra de Negócio:\n' + analise.regra_negocio %}
+                    {% endif %}
+                    <span class="badge bg-info" style="cursor: pointer;" 
+                          data-intimacao-id="{{ analise.intimacao_id }}"
+                          data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                          onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                          title="{{ tooltip_text | replace('\n', '&#10;') | safe }}"
+                          data-bs-toggle="tooltip" 
+                          data-bs-placement="top" 
+                          data-bs-html="true">
+                        {{ prompt_nome_truncado }}
+                    </span>
+                </td>
+                <td class="col-classificacao-manual">
+                    {% set badge_class = {
+                        'URGÊNCIA': 'danger',
+                        'ELABORAR PEÇA': 'success',
+                        'ANALISAR PROCESSO': 'info',
+                        'CONTATAR ASSISTIDO': 'warning',
+                        'RENUNCIAR PRAZO': 'secondary',
+                        'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                    } %}
+                    <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
+                        {{ analise.classificacao_manual or 'N/A' }}
+                    </span>
+                </td>
+                <td class="col-informacao-adicional">
+                    <small class="text-muted">
+                        {{ analise.informacao_adicional[:50] if analise.informacao_adicional else 'N/A' }}{% if analise.informacao_adicional and analise.informacao_adicional | length > 50 %}...{% endif %}
+                    </small>
+                </td>
+                <td class="col-resultado-ia">
+                    <span class="badge bg-primary">{{ analise.resultado_ia or 'N/A' }}</span>
+                </td>
+                <td class="col-status">
+                    {% if analise.acertou %}
+                        <i class="bi bi-check-circle text-success"></i> Acertou
+                    {% else %}
+                        <i class="bi bi-x-circle text-danger"></i> Errou
+                    {% endif %}
+                </td>
+                <td class="col-configuracoes">
+                    <small>
+                        <div><strong>Modelo:</strong> {{ analise.modelo or 'N/A' }}</div>
+                        <div><strong>Temp:</strong> 
+                            {% if analise.temperatura is not none %}
+                                {{ "%.1f"|format(analise.temperatura) }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                    </small>
+                </td>
+                <td class="col-tempo">
+                    <small>{{ analise.tempo_processamento or 0 }}s</small>
+                </td>
+                <td class="col-custo">
+                    <small>
+                        {% if analise.tokens_input and analise.tokens_output and analise.modelo %}
+                            {% set custo_real = analise.custo_real or 0.0 %}
+                            {% if custo_real > 0 %}
+                                ${{ "%.6f"|format(custo_real) }}
+                                <i class="bi bi-info-circle text-muted ms-1 custo-info-icon" 
+                                   style="cursor: pointer; font-size: 0.8em;" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   data-bs-html="true"
+                                   data-modelo="{{ analise.modelo }}"
+                                   data-tokens-input="{{ analise.tokens_input or 0 }}"
+                                   data-tokens-output="{{ analise.tokens_output or 0 }}"
+                                   data-custo-real="{{ custo_real }}"
+                                   data-provider="{{ analise.provider or 'OpenAI' }}"></i>
+                            {% else %}
+                                $0.000000
+                                <i class="bi bi-info-circle text-muted ms-1" 
+                                   style="cursor: pointer; font-size: 0.8em;" 
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   title="Custo zero - sem tokens processados"></i>
+                            {% endif %}
+                        {% else %}
+                            N/A
+                            <i class="bi bi-info-circle text-muted ms-1" 
+                               style="cursor: pointer; font-size: 0.8em;" 
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="top" 
+                               title="Dados insuficientes para calcular custo"></i>
+                        {% endif %}
+                    </small>
+                </td>
+                <td class="col-tokens-input">
+                    <small>{{ analise.tokens_input or 0 }}</small>
+                </td>
+                <td class="col-tokens-output">
+                    <small>{{ analise.tokens_output or 0 }}</small>
+                </td>
+                <td class="col-prompt-completo">
+                    <button type="button" class="btn btn-sm btn-outline-info" 
+                            data-intimacao-id="{{ analise.intimacao_id }}"
+                            data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                            onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                            title="Ver prompt completo">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+                <td class="col-resposta-ia">
+                    <button type="button" class="btn btn-sm btn-outline-success" 
+                            data-intimacao-id="{{ analise.intimacao_id }}"
+                            data-resposta-completa="{{ analise.resposta_completa or 'N/A' }}"
+                            onclick="mostrarRespostaCompletaRelatorios(this.dataset.intimacaoId, this.dataset.respostaCompleta)"
+                            title="Ver resposta da IA">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            data-intimacao-id="{{ analise.intimacao_id }}" 
+                            data-analise-id="{{ analise.id }}"
+                            onclick="excluirAnalise(this.dataset.intimacaoId, this.dataset.analiseId)"
+                            title="Excluir análise">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Paginação -->
+{% if paginacao and paginacao.get('total_paginas', 0) > 1 %}
+<nav aria-label="Paginação das análises">
+    <ul class="pagination justify-content-center" id="paginacao-container">
+        <!-- Primeira página -->
+        <li class="page-item {% if paginacao.get('pagina_atual', 1) == 1 %}disabled{% endif %}">
+            <button class="page-link" onclick="carregarPagina(1)" {% if paginacao.get('pagina_atual', 1) == 1 %}disabled{% endif %}>Primeira</button>
+        </li>
+        
+        <!-- Página anterior -->
+        {% set pagina_anterior = paginacao.get('pagina_atual', 1) - 1 %}
+        <li class="page-item {% if paginacao.get('pagina_atual', 1) == 1 %}disabled{% endif %}">
+            <button class="page-link" data-pagina="{{ pagina_anterior }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.get('pagina_atual', 1) == 1 %}disabled{% endif %}>Anterior</button>
+        </li>
+        
+        <!-- Páginas numeradas -->
+        {% set inicio_paginas = [1, paginacao.get('pagina_atual', 1)-2] | max %}
+        {% set fim_paginas = [paginacao.get('total_paginas', 1)+1, paginacao.get('pagina_atual', 1)+3] | min %}
+        {% for p in range(inicio_paginas, fim_paginas) %}
+        <li class="page-item {% if p == paginacao.get('pagina_atual', 1) %}active{% endif %}">
+            <button class="page-link" data-pagina="{{ p }}" onclick="carregarPagina(this.dataset.pagina)" {% if p == paginacao.get('pagina_atual', 1) %}disabled{% endif %}>{{ p }}</button>
+        </li>
+        {% endfor %}
+        
+        <!-- Próxima página -->
+        {% set proxima_pagina = paginacao.get('pagina_atual', 1) + 1 %}
+        <li class="page-item {% if paginacao.get('pagina_atual', 1) == paginacao.get('total_paginas', 1) %}disabled{% endif %}">
+            <button class="page-link" data-pagina="{{ proxima_pagina }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.get('pagina_atual', 1) == paginacao.get('total_paginas', 1) %}disabled{% endif %}>Próxima</button>
+        </li>
+        
+        <!-- Última página -->
+        {% set ultima_pagina = paginacao.get('total_paginas', 1) %}
+        <li class="page-item {% if paginacao.get('pagina_atual', 1) == paginacao.get('total_paginas', 1) %}disabled{% endif %}">
+            <button class="page-link" data-pagina="{{ ultima_pagina }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.get('pagina_atual', 1) == paginacao.get('total_paginas', 1) %}disabled{% endif %}>Última</button>
+        </li>
+    </ul>
+</nav>
+
+<!-- Informações da paginação -->
+<div class="text-center text-muted" id="info-paginacao">
+    <small class="text-muted">
+        Mostrando {{ paginacao.get('inicio', 1) }} a {{ paginacao.get('fim', 0) }} de {{ paginacao.get('total_itens', 0) }} análises
+        {% if paginacao.get('total_paginas', 1) > 1 %}
+        (Página {{ paginacao.get('pagina_atual', 1) }} de {{ paginacao.get('total_paginas', 1) }})
+        {% endif %}
+    </small>
+</div>
+{% endif %}
+
+<!-- Estilos específicos para a tabela com cards -->
+<style>
+.intimacao-fallback {
+    padding: 8px;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    min-height: 60px;
+}
+
+.col-intimacao {
+    min-width: 280px;
+    max-width: 320px;
+}
+
+/* Ajustes para o card compacto dentro da tabela */
+.col-intimacao .intimacao-card-compact {
+    margin: 0;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .col-intimacao {
+        min-width: 250px;
+    }
+}
+</style>
+
+{% else %}
+<div class="text-center py-4">
+    <i class="bi bi-inbox fa-3x text-muted mb-3"></i>
+    <h5 class="text-muted">Nenhuma análise encontrada</h5>
+    <p class="text-muted">Execute algumas análises para ver os resultados aqui.</p>
+    <a href="{{ url_for('analise') }}" class="btn btn-primary">
+        <i class="bi bi-play-circle"></i>
+        Executar Análise
+    </a>
+</div>
+{% endif %}
+
+<script>
+// Inicializar tooltips para os prompts truncados
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            placement: 'top'
+        });
+    });
+});
+</script>

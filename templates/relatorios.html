@@ -376,9 +376,9 @@
                         <span class="badge bg-primary ms-2" id="contador-analises">{{ paginacao.total_itens }}</span>
                     </h6>
                     <div>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirAnalisesSelecionadas()" id="btn-excluir-selecionadas" style="display: none;">
+                        <button type="button" class="btn btn-sm btn-outline-danger" id="btn-excluir-selecionadas" onclick="excluirAnalisesSelecionadas()" style="display: none;">
                             <i class="bi bi-trash"></i>
-                            Excluir Selecionadas
+                            Excluir Selecionadas (<span id="contador-selecionadas">0</span>)
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleConfiguracoesColunas()">
                             <i class="bi bi-gear"></i>
@@ -468,6 +468,18 @@
                                                 </label>
                                             </div>
                                             <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-tokens-input" checked>
+                                                <label class="form-check-label" for="col-tokens-input">
+                                                    Tokens Input
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="col-tokens-output" checked>
+                                                <label class="form-check-label" for="col-tokens-output">
+                                                    Tokens Output
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="col-prompt-completo" checked>
                                                 <label class="form-check-label" for="col-prompt-completo">
                                                     Prompt Completo
@@ -502,7 +514,7 @@
                         </div>
                         
                         <div id="tabela-analises-container">
-                            {% include 'partials/tabela_analises.html' %}
+                            {% include 'partials/tabela_analises_com_card.html' %}
                         </div>
                     </div>
 </div>
@@ -571,7 +583,8 @@
 /* Estilos para configuração de colunas */
 .col-data, .col-intimacao, .col-prompt, .col-classificacao-manual, 
 .col-informacao-adicional, .col-resultado-ia, .col-status, 
-.col-configuracoes, .col-tempo, .col-custo, .col-prompt-completo, .col-resposta-ia {
+.col-configuracoes, .col-tempo, .col-custo, .col-tokens-input, .col-tokens-output, 
+.col-prompt-completo, .col-resposta-ia {
     transition: all 0.3s ease;
 }
 
@@ -586,6 +599,8 @@
 .col-configuracoes[style*="display: none"], 
 .col-tempo[style*="display: none"], 
 .col-custo[style*="display: none"],
+.col-tokens-input[style*="display: none"],
+.col-tokens-output[style*="display: none"],
 .col-prompt-completo[style*="display: none"],
 .col-resposta-ia[style*="display: none"] {
     width: 0 !important;
@@ -605,9 +620,12 @@ th[style*="display: none"], td[style*="display: none"] {
 {% endblock %}
 
 {% block extra_js %}
+<!-- Dados dos gráficos vindos do backend -->
+<script type="application/json" id="dados-graficos">{{ dados_graficos | tojson | safe }}</script>
+
 <script>
 // Dados dos gráficos vindos do backend
-const dadosGraficos = {{ dados_graficos | tojson | safe }};
+const dadosGraficos = JSON.parse(document.getElementById('dados-graficos').textContent);
 console.log('=== DEBUG: Dados dos gráficos carregados ===');
 console.log('dadosGraficos:', dadosGraficos);
 
@@ -651,9 +669,9 @@ document.addEventListener('DOMContentLoaded', function() {
         configurarCheckboxesColunas();
     }, 500);
     // Só chamar se houver análises na página
-    if (document.querySelectorAll('.analise-checkbox').length > 0) {
-        updateAnalisesSelection();
-    }
+     if (document.querySelectorAll('.analise-checkbox').length > 0) {
+         updateAnalisesSelection();
+     }
 });
 
 // Funções para gerenciar seleção de análises
@@ -671,10 +689,11 @@ function toggleSelectAllAnalises() {
 function updateAnalisesSelection() {
     const checkboxes = document.querySelectorAll('.analise-checkbox');
     const selectAll = document.getElementById('select-all-analises');
-    const btnExcluir = document.getElementById('btn-excluir-selecionadas');
+    const btnExcluirSelecionadas = document.getElementById('btn-excluir-selecionadas');
+    const contadorSelecionadas = document.getElementById('contador-selecionadas');
     
     // Verificar se os elementos existem antes de tentar acessá-los
-    if (!selectAll || !btnExcluir) {
+    if (!selectAll) {
         console.warn('Elementos de seleção não encontrados');
         return;
     }
@@ -686,12 +705,14 @@ function updateAnalisesSelection() {
     selectAll.checked = checkedCount === totalCount && totalCount > 0;
     selectAll.indeterminate = checkedCount > 0 && checkedCount < totalCount;
     
-    // Mostrar/ocultar botão de excluir
-    if (checkedCount > 0) {
-        btnExcluir.style.display = 'inline-block';
-        btnExcluir.innerHTML = `<i class="bi bi-trash"></i> Excluir (${checkedCount})`;
-    } else {
-        btnExcluir.style.display = 'none';
+    // Mostrar/ocultar botão de exclusão em lote e atualizar contador
+    if (btnExcluirSelecionadas && contadorSelecionadas) {
+        if (checkedCount > 0) {
+            btnExcluirSelecionadas.style.display = 'inline-block';
+            contadorSelecionadas.textContent = checkedCount;
+        } else {
+            btnExcluirSelecionadas.style.display = 'none';
+        }
     }
 }
 
@@ -727,50 +748,85 @@ function excluirAnalise(intimacaoId, analiseId) {
     });
 }
 
+// Função de exclusão em lote baseada na lógica da lixeira individual
 function excluirAnalisesSelecionadas() {
     const checkboxes = document.querySelectorAll('.analise-checkbox:checked');
-    const total = checkboxes.length;
     
-    if (total === 0) {
+    if (checkboxes.length === 0) {
         showToast('Nenhuma análise selecionada', 'warning');
         return;
     }
     
-    if (!confirm(`Tem certeza que deseja excluir ${total} análise(s)?`)) {
+    if (!confirm(`Tem certeza que deseja excluir ${checkboxes.length} análise(s) selecionada(s)?`)) {
         return;
     }
     
-    const promises = Array.from(checkboxes).map(checkbox => {
+    // Coletar os IDs das análises selecionadas
+    const analisesParaExcluir = [];
+    checkboxes.forEach(checkbox => {
         const [intimacaoId, analiseId] = checkbox.value.split('_');
-        return fetch('/api/analises/excluir', {
+        analisesParaExcluir.push({ intimacaoId, analiseId });
+    });
+    
+    // Excluir cada análise usando a mesma lógica da lixeira individual
+    let sucessos = 0;
+    let erros = 0;
+    const total = analisesParaExcluir.length;
+    
+    analisesParaExcluir.forEach((analise, index) => {
+        fetch('/api/analises/excluir', {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                intimacao_id: intimacaoId,
-                analise_id: analiseId
+                intimacao_id: analise.intimacaoId,
+                analise_id: analise.analiseId
             })
-        }).then(response => response.json());
-    });
-    
-    Promise.all(promises)
-    .then(results => {
-        const successCount = results.filter(r => r.success).length;
-        const errorCount = total - successCount;
-        
-        if (errorCount === 0) {
-            showToast(`${successCount} análise(s) excluída(s) com sucesso!`, 'success');
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            showToast(`${successCount} excluída(s), ${errorCount} erro(s)`, 'warning');
-        }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        showToast('Erro ao excluir análises', 'error');
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                sucessos++;
+            } else {
+                erros++;
+                console.error('Erro ao excluir análise:', data.error);
+            }
+            
+            // Verificar se todas as requisições foram processadas
+            if (sucessos + erros === total) {
+                if (sucessos > 0) {
+                    showToast(`${sucessos} análise(s) excluída(s) com sucesso!`, 'success');
+                }
+                if (erros > 0) {
+                    showToast(`Erro ao excluir ${erros} análise(s)`, 'error');
+                }
+                
+                // Recarregar a página após um breve delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            erros++;
+            
+            // Verificar se todas as requisições foram processadas
+            if (sucessos + erros === total) {
+                if (sucessos > 0) {
+                    showToast(`${sucessos} análise(s) excluída(s) com sucesso!`, 'success');
+                }
+                if (erros > 0) {
+                    showToast(`Erro ao excluir ${erros} análise(s)`, 'error');
+                }
+                
+                // Recarregar a página após um breve delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        });
     });
 }
 
@@ -813,9 +869,12 @@ function carregarPagina(pagina) {
                 }
                 
                 // Aplicar configuração de colunas após carregar novo conteúdo
-                setTimeout(() => {
+                setTimeout(async () => {
                     console.log('=== DEBUG: Aplicando configuração após carregar página AJAX ===');
                     aplicarConfiguracaoColunas();
+                    // Carregar preços e reinicializar tooltips após carregar novo conteúdo
+                    await carregarPrecosModelos();
+                    inicializarTooltips();
                 }, 200);
                 
                 showToast(`Página ${pagina} carregada!`, 'success');
@@ -1281,7 +1340,9 @@ function carregarConfiguracaoColunas() {
             status: true,
             configuracoes: true,
             tempo: true,
-            custo: true
+            custo: true,
+            tokens_input: true,
+            tokens_output: true
         };
     }
     
@@ -1300,6 +1361,8 @@ function carregarConfiguracaoColunas() {
         { id: 'col-configuracoes', key: 'configuracoes' },
         { id: 'col-tempo', key: 'tempo' },
         { id: 'col-custo', key: 'custo' },
+        { id: 'col-tokens-input', key: 'tokens_input' },
+        { id: 'col-tokens-output', key: 'tokens_output' },
         { id: 'col-prompt-completo', key: 'prompt_completo' },
         { id: 'col-resposta-ia', key: 'resposta_ia' }
     ];
@@ -1330,6 +1393,8 @@ function configurarCheckboxesColunas() {
         { id: 'col-configuracoes', key: 'configuracoes' },
         { id: 'col-tempo', key: 'tempo' },
         { id: 'col-custo', key: 'custo' },
+        { id: 'col-tokens-input', key: 'tokens_input' },
+        { id: 'col-tokens-output', key: 'tokens_output' },
         { id: 'col-prompt-completo', key: 'prompt_completo' },
         { id: 'col-resposta-ia', key: 'resposta_ia' }
     ];
@@ -1373,7 +1438,9 @@ function selecionarTodasColunas() {
         status: true,
         configuracoes: true,
         tempo: true,
-        custo: true
+        custo: true,
+        tokens_input: true,
+        tokens_output: true
     };
     
     localStorage.setItem('configuracaoColunasRelatorios', JSON.stringify(configuracaoColunas));
@@ -1399,7 +1466,9 @@ function limparSelecaoColunas() {
         status: false,
         configuracoes: false,
         tempo: false,
-        custo: false
+        custo: false,
+        tokens_input: false,
+        tokens_output: false
     };
     
     localStorage.setItem('configuracaoColunasRelatorios', JSON.stringify(configuracaoColunas));
@@ -1519,8 +1588,10 @@ function aplicarConfiguracaoColunas() {
                 { index: 8, key: 'configuracoes' },
                 { index: 9, key: 'tempo' },
                 { index: 10, key: 'custo' },
-                { index: 11, key: 'prompt_completo' },
-                { index: 12, key: 'resposta_ia' }
+                { index: 11, key: 'tokens_input' },
+                { index: 12, key: 'tokens_output' },
+                { index: 13, key: 'prompt_completo' },
+                { index: 14, key: 'resposta_ia' }
             ];
             
             colunasConfig.forEach(({ index, key }) => {
@@ -1557,10 +1628,179 @@ function aplicarConfiguracaoColunas() {
         console.log('Tabela não encontrada!');
     }
     
+    // Controle adicional por classes CSS
+    const classesColunas = {
+        'tokens_input': '.col-tokens-input',
+        'tokens_output': '.col-tokens-output'
+    };
+    
+    Object.keys(classesColunas).forEach(key => {
+        const elementos = document.querySelectorAll(classesColunas[key]);
+        const visivel = configuracaoColunas[key];
+        elementos.forEach(elemento => {
+            if (visivel) {
+                elemento.style.display = '';
+            } else {
+                elemento.style.display = 'none';
+            }
+        });
+        console.log(`Coluna ${key}: ${elementos.length} elementos, visível = ${visivel}`);
+    });
+    
     console.log('=== DEBUG: Configuração aplicada ===');
 }
 
 
+
+// Preços dos modelos (carregados dinamicamente)
+let PRECOS_MODELOS = {
+    'openai': {},
+    'azure': {}
+};
+
+// Carregar preços dos modelos do backend
+async function carregarPrecosModelos() {
+    try {
+        const response = await fetch('/api/precos-modelos');
+        const data = await response.json();
+        
+        if (data.success) {
+            PRECOS_MODELOS.openai = data.precos.openai;
+            PRECOS_MODELOS.azure = data.precos.azure;
+        } else {
+            console.error('Erro ao carregar preços:', data.message);
+            // Usar preços padrão em caso de erro
+            PRECOS_MODELOS.openai = {
+                'gpt-4o': { input: 2.50, output: 10.00 },
+                'gpt-4o-mini': { input: 0.15, output: 0.60 },
+                'gpt-4-turbo': { input: 10.00, output: 30.00 },
+                'gpt-3.5-turbo': { input: 0.50, output: 1.50 }
+            };
+            PRECOS_MODELOS.azure = {
+                'gpt-4o': { input: 5.00, output: 15.00 },
+                'gpt-4o-mini': { input: 0.165, output: 0.66 },
+                'gpt-4-turbo': { input: 10.00, output: 30.00 },
+                'gpt-3.5-turbo': { input: 0.50, output: 1.50 }
+            };
+        }
+    } catch (error) {
+        console.error('Erro ao buscar preços dos modelos:', error);
+        // Usar preços padrão em caso de erro
+        PRECOS_MODELOS.openai = {
+            'gpt-4o': { input: 2.50, output: 10.00 },
+            'gpt-4o-mini': { input: 0.15, output: 0.60 },
+            'gpt-4-turbo': { input: 10.00, output: 30.00 },
+            'gpt-3.5-turbo': { input: 0.50, output: 1.50 }
+        };
+        PRECOS_MODELOS.azure = {
+            'gpt-4o': { input: 5.00, output: 15.00 },
+            'gpt-4o-mini': { input: 0.165, output: 0.66 },
+            'gpt-4-turbo': { input: 10.00, output: 30.00 },
+            'gpt-3.5-turbo': { input: 0.50, output: 1.50 }
+        };
+    }
+}
+
+// Função para obter preços do modelo baseado no provedor
+function obterPrecosModelo(modelo, provider = 'OpenAI') {
+    const modeloLower = modelo.toLowerCase();
+    
+    // Mapeamento de nomes de modelos para as chaves usadas na API
+    const mapeamento = {
+        'gpt4o': 'gpt-4o',
+        'gpt-4o': 'gpt-4o',
+        'gpt4o-mini': 'gpt-4o-mini',
+        'gpt-4o-mini': 'gpt-4o-mini',
+        'gpt4-turbo': 'gpt-4-turbo',
+        'gpt-4-turbo': 'gpt-4-turbo',
+        'gpt-4-turbo-preview': 'gpt-4-turbo',
+        'gpt35-turbo': 'gpt-3.5-turbo',
+        'gpt-35-turbo': 'gpt-3.5-turbo',
+        'gpt-3.5-turbo': 'gpt-3.5-turbo',
+        'gpt-4': 'gpt-4-turbo' // Mapear gpt-4 para gpt-4-turbo
+    };
+    
+    const chaveModelo = mapeamento[modeloLower] || 'gpt-4o'; // Default para gpt-4o
+    
+    // Determinar qual conjunto de preços usar baseado no provedor
+    const providerKey = provider.toLowerCase().includes('azure') ? 'azure' : 'openai';
+    const precosProvider = PRECOS_MODELOS[providerKey];
+    
+    // Tentar obter preços do modelo específico usando o formato aninhado
+    if (precosProvider && typeof precosProvider === 'object') {
+        const modeloPrecos = precosProvider[chaveModelo];
+        
+        if (modeloPrecos && typeof modeloPrecos === 'object' && 
+            modeloPrecos.input !== undefined && modeloPrecos.output !== undefined) {
+            return {
+                input: parseFloat(modeloPrecos.input),
+                output: parseFloat(modeloPrecos.output)
+            };
+        }
+    }
+    
+    // Fallback para preços padrão se não encontrar
+    console.warn(`Preços não encontrados para modelo ${modelo} (${provider}), usando padrão`);
+    return { input: 2.50, output: 10.00 };
+}
+
+// Função para gerar tooltip de memória de cálculo
+function gerarTooltipMemoriaCalculo(elemento) {
+    const modelo = elemento.dataset.modelo || 'gpt-4o';
+    const tokensInput = parseInt(elemento.dataset.tokensInput) || 0;
+    const tokensOutput = parseInt(elemento.dataset.tokensOutput) || 0;
+    const custoReal = parseFloat(elemento.dataset.custoReal) || 0;
+    const provider = elemento.dataset.provider || 'OpenAI'; // Obter provider dos dados
+    
+    const precos = obterPrecosModelo(modelo, provider);
+    
+    // Calcular custos individuais (preços são por 1M tokens)
+    const custoInput = (tokensInput / 1000000) * precos.input;
+    const custoOutput = (tokensOutput / 1000000) * precos.output;
+    
+    return `<strong>Memória de Cálculo:</strong><br>
+            Provider: ${provider}<br>
+            Modelo: ${modelo}<br>
+            Tokens Input: ${tokensInput.toLocaleString()}<br>
+            Tokens Output: ${tokensOutput.toLocaleString()}<br>
+            <hr style='margin: 4px 0;'>
+            Preço Input: $${precos.input.toFixed(3)}/1M tokens<br>
+            Preço Output: $${precos.output.toFixed(3)}/1M tokens<br>
+            <hr style='margin: 4px 0;'>
+            Custo Input: $${custoInput.toFixed(6)}<br>
+            Custo Output: $${custoOutput.toFixed(6)}<br>
+            <strong>Total: $${custoReal.toFixed(6)}</strong>`;
+}
+
+// Função para inicializar tooltips
+function inicializarTooltips() {
+    // Destruir tooltips existentes para evitar duplicação
+    const tooltipsExistentes = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipsExistentes.forEach(element => {
+        const tooltip = bootstrap.Tooltip.getInstance(element);
+        if (tooltip) {
+            tooltip.dispose();
+        }
+    });
+    
+    // Configurar tooltips de custo com memória de cálculo dinâmica
+    const custoIcons = document.querySelectorAll('.custo-info-icon');
+    custoIcons.forEach(icon => {
+        const tooltipContent = gerarTooltipMemoriaCalculo(icon);
+        icon.setAttribute('title', tooltipContent);
+    });
+    
+    // Inicializar novos tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            delay: { show: 300, hide: 100 }
+        });
+    });
+    
+    console.log(`Inicializados ${tooltipList.length} tooltips`);
+}
 
 // Atalhos de teclado
 document.addEventListener('keydown', function(e) {
@@ -1581,6 +1821,14 @@ document.addEventListener('keydown', function(e) {
         e.preventDefault();
         configurarFiltros();
     }
+});
+
+// Inicializar tooltips quando a página carrega
+document.addEventListener('DOMContentLoaded', async function() {
+    // Carregar preços dos modelos primeiro
+    await carregarPrecosModelos();
+    // Depois inicializar tooltips
+    inicializarTooltips();
 });
 </script>
 {% endblock %}

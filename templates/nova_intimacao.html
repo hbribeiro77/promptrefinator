@@ -112,6 +112,42 @@
                             <input type="text" class="form-control" id="prazo" name="prazo" 
                                    placeholder="Prazo da intimação" value="{{ dados.prazo or '' }}">
                         </div>
+                        <div class="col-md-6">
+                            <label for="defensor" class="form-label">
+                                Nome do Defensor
+                            </label>
+                            <select class="form-select" id="defensor" name="defensor">
+                                <option value="">Selecione o defensor...</option>
+                                {% for defensor in defensores %}
+                                    <option value="{{ defensor }}" {% if dados.defensor == defensor %}selected{% endif %}>{{ defensor }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="id_tarefa" class="form-label">
+                                ID da Tarefa
+                            </label>
+                            <input type="text" class="form-control" id="id_tarefa" name="id_tarefa" 
+                                   placeholder="Identificador da tarefa" value="{{ dados.id_tarefa or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cor_etiqueta" class="form-label">
+                                Cor da Etiqueta
+                            </label>
+                            <select class="form-select" id="cor_etiqueta" name="cor_etiqueta">
+                                <option value="">Selecione uma cor...</option>
+                                <option value="#ffe500" style="background-color: #ffe500; color: #000;" {% if dados.cor_etiqueta == '#ffe500' %}selected{% endif %}>🟡 Amarela</option>
+                                <option value="#80ff00" style="background-color: #80ff00; color: #000;" {% if dados.cor_etiqueta == '#80ff00' %}selected{% endif %}>🟢 Verde</option>
+                                <option value="#00ffff" style="background-color: #00ffff; color: #000;" {% if dados.cor_etiqueta == '#00ffff' %}selected{% endif %}>🔵 Azul</option>
+                            </select>
+                            <div class="form-text">
+                                <i class="bi bi-tag"></i>
+                                Selecione uma cor para categorizar a intimação
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">

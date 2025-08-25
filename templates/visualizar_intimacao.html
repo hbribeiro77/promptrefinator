@@ -79,9 +79,152 @@
                             'OCULTAR': 'dark',
                             'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
                         } %}
-                        <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }} fs-6">
+                        <span id="classificacao_manual-display" class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }} fs-6">
                             {{ intimacao.classificacao_manual }}
                         </span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('classificacao_manual')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Processo:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="processo-display">{{ intimacao.processo or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('processo')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Órgão Julgador:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="orgao_julgador-display">{{ intimacao.orgao_julgador or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('orgao_julgador')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Classe:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="classe-display">{{ intimacao.classe or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('classe')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Disponibilização:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="disponibilizacao-display">{{ intimacao.disponibilizacao or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('disponibilizacao')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Intimado:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="intimado-display">{{ intimacao.intimado or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('intimado')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Status:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="status-display">{{ intimacao.status or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('status')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Prazo:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="prazo-display">{{ intimacao.prazo or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('prazo')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Defensor:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <span id="defensor-display">{{ intimacao.defensor or 'Não informado' }}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('defensor')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>ID da Tarefa:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <div class="d-flex align-items-center">
+                            <span id="id_tarefa-display">{{ intimacao.id_tarefa or 'Não informado' }}</span>
+                            {% if intimacao.id_tarefa and config.get('portal_defensoria_link') %}
+                                {% set portal_link = config.get('portal_defensoria_link') %}
+                                {% if '?' in portal_link %}
+                                    {% set tarefa_url = portal_link + intimacao.id_tarefa %}
+                                {% else %}
+                                    {% set tarefa_url = portal_link.rstrip('/') + '/' + intimacao.id_tarefa %}
+                                {% endif %}
+                                <a href="{{ tarefa_url }}" target="_blank" class="btn btn-sm btn-outline-primary ms-2" title="Abrir no Portal da Defensoria">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('id_tarefa')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Cor da Etiqueta:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <div class="d-flex align-items-center">
+                            {% if intimacao.cor_etiqueta %}
+                                <div class="color-indicator me-2" style="background-color: {{ intimacao.cor_etiqueta }}; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc;" title="Cor: {{ intimacao.cor_etiqueta }}"></div>
+                                <span id="cor_etiqueta-display">{{ intimacao.cor_etiqueta }}</span>
+                            {% else %}
+                                <span id="cor_etiqueta-display">Não informado</span>
+                            {% endif %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="editarCampo('cor_etiqueta')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -468,6 +611,235 @@ function toggleWrap(elementId) {
 function confirmarExclusao() {
     const modal = new bootstrap.Modal(document.getElementById('modalExclusao'));
     modal.show();
+}
+
+// Função para editar campo inline
+function editarCampo(campo) {
+    const displayElement = document.getElementById(campo + '-display');
+    const currentValue = displayElement.textContent.trim();
+    
+    // Se o valor é "Não informado", usar string vazia
+    const valueToEdit = currentValue === 'Não informado' ? '' : currentValue;
+    
+    // Criar input de edição
+    let inputHtml = '';
+    if (campo === 'cor_etiqueta') {
+        // Para cor da etiqueta, criar select
+        inputHtml = `
+            <select class="form-select form-select-sm" id="${campo}-edit">
+                <option value="">Selecione uma cor...</option>
+                <option value="#ffe500" style="background-color: #ffe500; color: #000;" ${valueToEdit === '#ffe500' ? 'selected' : ''}>🟡 Amarela</option>
+                <option value="#80ff00" style="background-color: #80ff00; color: #000;" ${valueToEdit === '#80ff00' ? 'selected' : ''}>🟢 Verde</option>
+                <option value="#00ffff" style="background-color: #00ffff; color: #000;" ${valueToEdit === '#00ffff' ? 'selected' : ''}>🔵 Azul</option>
+            </select>
+        `;
+    } else if (campo === 'defensor') {
+        // Para defensor, criar select com lista de defensores
+        const defensores = ['Rodrigo Ahlert Weirich', 'André Iglésias e Silva Borges', 'Walter Luchese Willig'];
+        inputHtml = `
+            <select class="form-select form-select-sm" id="${campo}-edit">
+                <option value="">Selecione o defensor...</option>
+                ${defensores.map(defensor => 
+                    `<option value="${defensor}" ${valueToEdit === defensor ? 'selected' : ''}>${defensor}</option>`
+                ).join('')}
+            </select>
+        `;
+    } else if (campo === 'classificacao_manual') {
+        // Para classificação manual, criar select com tipos de ação
+        const classificacoes = ['RENUNCIAR PRAZO', 'OCULTAR', 'ELABORAR PEÇA', 'CONTATAR ASSISTIDO', 'ANALISAR PROCESSO', 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR', 'URGÊNCIA'];
+        inputHtml = `
+            <select class="form-select form-select-sm" id="${campo}-edit">
+                <option value="">Selecione a classificação...</option>
+                ${classificacoes.map(classificacao => 
+                    `<option value="${classificacao}" ${valueToEdit === classificacao ? 'selected' : ''}>${classificacao}</option>`
+                ).join('')}
+            </select>
+        `;
+    } else {
+        // Para outros campos, criar input text
+        inputHtml = `<input type="text" class="form-control form-control-sm" id="${campo}-edit" value="${valueToEdit}">`;
+    }
+    
+    // Substituir o display pelo input
+    displayElement.innerHTML = inputHtml;
+    
+    // Adicionar botões de salvar/cancelar
+    const buttonContainer = displayElement.parentElement;
+    const editButton = buttonContainer.querySelector('button');
+    editButton.style.display = 'none';
+    
+    const actionButtons = document.createElement('div');
+    actionButtons.className = 'mt-2';
+    actionButtons.innerHTML = `
+        <button type="button" class="btn btn-sm btn-success me-1" onclick="salvarCampo('${campo}')">
+            <i class="bi bi-check"></i> Salvar
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="cancelarEdicao('${campo}')">
+            <i class="bi bi-x"></i> Cancelar
+        </button>
+    `;
+    
+    buttonContainer.appendChild(actionButtons);
+    
+    // Focar no input
+    const input = document.getElementById(campo + '-edit');
+    if (input) {
+        input.focus();
+        input.select();
+    }
+}
+
+// Função para salvar campo editado
+function salvarCampo(campo) {
+    const input = document.getElementById(campo + '-edit');
+    const newValue = input ? input.value.trim() : '';
+    
+    // Enviar para o servidor
+    fetch(`/api/intimacoes/{{ intimacao.id }}/editar`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            campo: campo,
+            valor: newValue
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Atualizar display
+            atualizarDisplay(campo, newValue);
+            showToast('Campo atualizado com sucesso!', 'success');
+        } else {
+            showToast('Erro ao atualizar campo: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao atualizar campo', 'error');
+    });
+}
+
+// Função para cancelar edição
+function cancelarEdicao(campo) {
+    const displayElement = document.getElementById(campo + '-display');
+    const buttonContainer = displayElement.parentElement;
+    const editButton = buttonContainer.querySelector('button');
+    const actionButtons = buttonContainer.querySelector('.mt-2');
+    
+    // Restaurar display original - usar valores específicos para cada campo
+    let originalValue = 'Não informado';
+    
+    // Mapear campos para valores específicos
+    const campoValues = {
+        'processo': '{{ intimacao.processo or "Não informado" }}',
+        'orgao_julgador': '{{ intimacao.orgao_julgador or "Não informado" }}',
+        'classe': '{{ intimacao.classe or "Não informado" }}',
+        'disponibilizacao': '{{ intimacao.disponibilizacao or "Não informado" }}',
+        'intimado': '{{ intimacao.intimado or "Não informado" }}',
+        'status': '{{ intimacao.status or "Não informado" }}',
+        'prazo': '{{ intimacao.prazo or "Não informado" }}',
+        'defensor': '{{ intimacao.defensor or "Não informado" }}',
+        'id_tarefa': '{{ intimacao.id_tarefa or "Não informado" }}',
+        'cor_etiqueta': '{{ intimacao.cor_etiqueta or "Não informado" }}',
+        'classificacao_manual': '{{ intimacao.classificacao_manual or "Não informado" }}'
+    };
+    
+    originalValue = campoValues[campo] || 'Não informado';
+    displayElement.innerHTML = originalValue;
+    
+    // Mostrar botão de edição
+    editButton.style.display = 'inline-block';
+    
+    // Remover botões de ação
+    if (actionButtons) {
+        actionButtons.remove();
+    }
+    
+    // Restaurar cor da etiqueta se necessário
+    if (campo === 'cor_etiqueta') {
+        const corValue = '{{ intimacao.cor_etiqueta or "" }}';
+        if (corValue && corValue !== 'Não informado') {
+            displayElement.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="color-indicator me-2" style="background-color: ${corValue}; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc;" title="Cor: ${corValue}"></div>
+                    <span>${corValue}</span>
+                </div>
+            `;
+        } else {
+            displayElement.innerHTML = 'Não informado';
+        }
+    }
+    
+    // Restaurar classificação manual se necessário
+    if (campo === 'classificacao_manual') {
+        const classificacaoValue = '{{ intimacao.classificacao_manual or "" }}';
+        if (classificacaoValue && classificacaoValue !== 'Não informado') {
+            const badgeClass = {
+                'URGÊNCIA': 'danger',
+                'ELABORAR PEÇA': 'success',
+                'ANALISAR PROCESSO': 'info',
+                'CONTATAR ASSISTIDO': 'warning',
+                'RENUNCIAR PRAZO': 'secondary',
+                'OCULTAR': 'dark',
+                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+            };
+            const bgClass = badgeClass[classificacaoValue] || 'secondary';
+            displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${classificacaoValue}</span>`;
+        } else {
+            displayElement.innerHTML = 'Não informado';
+        }
+    }
+}
+
+// Função para atualizar display após salvar
+function atualizarDisplay(campo, valor) {
+    const displayElement = document.getElementById(campo + '-display');
+    const buttonContainer = displayElement.parentElement;
+    const editButton = buttonContainer.querySelector('button');
+    const actionButtons = buttonContainer.querySelector('.mt-2');
+    
+    // Atualizar valor
+    if (campo === 'cor_etiqueta') {
+        if (valor) {
+            displayElement.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <div class="color-indicator me-2" style="background-color: ${valor}; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc;" title="Cor: ${valor}"></div>
+                    <span>${valor}</span>
+                </div>
+            `;
+        } else {
+            displayElement.innerHTML = 'Não informado';
+        }
+    } else if (campo === 'classificacao_manual') {
+        // Para classificação manual, criar badge com cor apropriada
+        if (valor) {
+            const badgeClass = {
+                'URGÊNCIA': 'danger',
+                'ELABORAR PEÇA': 'success',
+                'ANALISAR PROCESSO': 'info',
+                'CONTATAR ASSISTIDO': 'warning',
+                'RENUNCIAR PRAZO': 'secondary',
+                'OCULTAR': 'dark',
+                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+            };
+            const bgClass = badgeClass[valor] || 'secondary';
+            displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${valor}</span>`;
+        } else {
+            displayElement.innerHTML = 'Não informado';
+        }
+    } else {
+        displayElement.innerHTML = valor || 'Não informado';
+    }
+    
+    // Mostrar botão de edição
+    editButton.style.display = 'inline-block';
+    
+    // Remover botões de ação
+    if (actionButtons) {
+        actionButtons.remove();
+    }
 }
 
 // Função para exportar intimação

@@ -1,0 +1,17 @@
+{
+  "intimacoes": [
+    {
+      "contexto": "Teste de exclusão simultânea",
+      "classificacao_manual": "TESTE_SIMULTANEA",
+      "informacoes_adicionais": "Intimação criada para teste de exclusão simultânea",
+      "processo": "88888888888888888888",
+      "orgao_julgador": "Teste Simultâneo",
+      "classe": "Teste",
+      "intimado": "TESTE SIMULTANEO",
+      "status": "prazo_em_curso",
+      "prazo": "15 dias",
+      "analises": [],
+      "id": "913e9f91-6ae8-48ed-99bb-c9e78f926872"
+    }
+  ]
+}

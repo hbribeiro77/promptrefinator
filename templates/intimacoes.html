@@ -107,112 +107,7 @@
     </div>
 </div>
 
-<!-- Lista de Intimações -->
-{% if intimacoes %}
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span>
-            <i class="bi bi-list"></i>
-            Lista de Intimações ({{ intimacoes | length }} encontradas)
-        </span>
-        <div>
-            <span id="contador-selecionadas" class="badge bg-primary">0 selecionadas</span>
-            <button type="button" class="btn btn-sm btn-success" onclick="analisarSelecionadas()" id="btn-analisar" disabled>
-                <i class="bi bi-cpu"></i>
-                Analisar Selecionadas
-            </button>
-        </div>
-    </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th width="50">
-                            <input type="checkbox" id="select-all" onchange="toggleSelectAll()">
-                        </th>
-                        <th>Contexto</th>
-                        <th width="200">Classificação Manual</th>
-                        <th width="150">Data de Criação</th>
-                        <th width="120">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for intimacao in intimacoes %}
-                    <tr>
-                        <td>
-                            <input type="checkbox" class="intimacao-checkbox" 
-                                   value="{{ intimacao.id }}" 
-                                   onchange="updateSelectionCounter()">
-                        </td>
-                        <td>
-                            <div class="text-truncate-custom" title="{{ intimacao.contexto }}">
-                                {{ intimacao.contexto }}
-                            </div>
-                            {% if intimacao.informacao_adicional %}
-                                <small class="text-muted">
-                                    <i class="bi bi-info-circle"></i>
-                                    {{ intimacao.informacao_adicional[:100] }}{% if intimacao.informacao_adicional | length > 100 %}...{% endif %}
-                                </small>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% set badge_class = {
-                                'URGÊNCIA': 'danger',
-                                'ELABORAR PEÇA': 'success',
-                                'ANALISAR PROCESSO': 'info',
-                                'CONTATAR ASSISTIDO': 'warning',
-                                'RENUNCIAR PRAZO': 'secondary',
-                                'OCULTAR': 'dark',
-                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
-                            } %}
-                            <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
-                                {{ intimacao.classificacao_manual }}
-                            </span>
-                        </td>
-                        <td>
-                            <small class="text-muted">
-                                {% if intimacao.data_criacao %}
-                                    {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
-                                    {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
-                                    {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </small>
-                        </td>
-                        <td>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" 
-                                   class="btn btn-outline-primary" title="Visualizar">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <button type="button" class="btn btn-outline-danger" 
-                                        onclick="confirmarExclusao('{{ intimacao.id }}')" title="Excluir">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-{% else %}
-<div class="card">
-    <div class="card-body text-center py-5">
-        <i class="bi bi-file-text fa-3x text-muted mb-3"></i>
-        <h5 class="text-muted">Nenhuma intimação encontrada</h5>
-        <p class="text-muted">Comece cadastrando sua primeira intimação para análise.</p>
-        <a href="{{ url_for('nova_intimacao') }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i>
-            Cadastrar Primeira Intimação
-        </a>
-    </div>
-</div>
-{% endif %}
+
 
 <!-- Modal de confirmação de exclusão -->
 <div class="modal fade" id="modalExclusao" tabindex="-1">
@@ -240,7 +135,40 @@
     </div>
 </div>
 
+<!-- Modal para visualizar contexto da intimação -->
+<div class="modal fade" id="modalContextoIntimacao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text text-primary"></i>
+                    Contexto da Intimação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Intimação ID:</label>
+                    <span id="contexto-intimacao-id" class="badge bg-secondary"></span>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Contexto Completo:</label>
+                    <pre id="contexto-intimacao-conteudo" class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarContexto()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Visualização em Tabela com Cards -->
+{% if intimacoes %}
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">
@@ -255,11 +183,14 @@
                     <table class="table table-hover intimacoes-cards-table">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 40%;">Card da Intimação</th>
-                                <th style="width: 15%;">Classificação Manual</th>
-                                <th style="width: 20%;">Informações Adicionais</th>
-                                <th style="width: 15%;">Data de Criação</th>
-                                <th style="width: 10%;">Ações</th>
+                                <th style="width: 25%;">Card da Intimação</th>
+                                <th style="width: 12%;">Classificação Manual</th>
+                                <th style="width: 15%;">Informações Adicionais</th>
+                                <th style="width: 12%;">Defensor</th>
+                                <th style="width: 10%;">ID Tarefa</th>
+                                <th style="width: 8%;">Cor</th>
+                                <th style="width: 10%;">Data de Criação</th>
+                                <th style="width: 8%;">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -276,10 +207,46 @@
                                     {% endif %}
                                 </td>
                                 <td class="info-cell">
-                                    {% if intimacao.informacoes_adicionais %}
-                                    <div class="info-adicional-text" title="{{ intimacao.informacoes_adicionais }}">
-                                        {{ intimacao.informacoes_adicionais[:50] }}{% if intimacao.informacoes_adicionais|length > 50 %}...{% endif %}
+                                    {% if intimacao.informacao_adicional %}
+                                    <div class="info-adicional-text" title="{{ intimacao.informacao_adicional }}">
+                                        {{ intimacao.informacao_adicional[:50] }}{% if intimacao.informacao_adicional|length > 50 %}...{% endif %}
                                     </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="defensor-cell">
+                                    {% if intimacao.defensor %}
+                                    <span class="badge bg-info text-dark">{{ intimacao.defensor }}</span>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="tarefa-cell">
+                                    {% if intimacao.id_tarefa %}
+                                        {% set portal_link = config.get('portal_defensoria_link', '') %}
+                                        {% if portal_link %}
+                                            {% if '?' in portal_link %}
+                                                {% set tarefa_url = portal_link + intimacao.id_tarefa %}
+                                            {% else %}
+                                                {% set tarefa_url = portal_link.rstrip('/') + '/' + intimacao.id_tarefa %}
+                                            {% endif %}
+                                            <div class="d-flex align-items-center">
+                                                <code class="small me-2">{{ intimacao.id_tarefa }}</code>
+                                                <a href="{{ tarefa_url }}" target="_blank" class="btn btn-sm btn-outline-primary" title="Abrir no Portal da Defensoria">
+                                                    <i class="bi bi-box-arrow-up-right"></i>
+                                                </a>
+                                            </div>
+                                        {% else %}
+                                            <code class="small">{{ intimacao.id_tarefa }}</code>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="cor-cell">
+                                    {% if intimacao.cor_etiqueta %}
+                                    <div class="color-indicator" style="background-color: {{ intimacao.cor_etiqueta }}; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc; margin: 0 auto;" title="Cor: {{ intimacao.cor_etiqueta }}"></div>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -302,7 +269,8 @@
                                         </a>
                                         <button type="button" 
                                                 class="btn btn-outline-danger btn-sm" 
-                                                onclick="excluirIntimacaoTabela('{{ intimacao.id }}')"
+                                                data-intimacao-id="{{ intimacao.id }}"
+                                                onclick="excluirIntimacaoTabela(this.dataset.intimacaoId)"
                                                 title="Excluir">
                                             <i class="bi bi-trash"></i>
                                         </button>
@@ -317,6 +285,23 @@
         </div>
     </div>
 </div>
+{% else %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-file-text fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">Nenhuma intimação encontrada</h5>
+                <p class="text-muted">Comece cadastrando sua primeira intimação para análise.</p>
+                <a href="{{ url_for('nova_intimacao') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Cadastrar Primeira Intimação
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}
 
@@ -324,77 +309,7 @@
 <script>
 let intimacaoParaExcluir = null;
 
-// Função para selecionar/deselecionar todas
-function toggleSelectAll() {
-    const selectAll = document.getElementById('select-all');
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    
-    checkboxes.forEach(checkbox => {
-        checkbox.checked = selectAll.checked;
-    });
-    
-    updateSelectionCounter();
-}
 
-// Função para selecionar todas
-function selecionarTodas() {
-    document.getElementById('select-all').checked = true;
-    toggleSelectAll();
-}
-
-// Função para limpar seleção
-function limparSelecao() {
-    document.getElementById('select-all').checked = false;
-    toggleSelectAll();
-}
-
-// Função para atualizar contador de selecionadas
-function updateSelectionCounter() {
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
-    const counter = document.getElementById('contador-selecionadas');
-    const btnAnalisar = document.getElementById('btn-analisar');
-    
-    if (counter) {
-        counter.textContent = `${checkboxes.length} selecionadas`;
-    }
-    
-    if (btnAnalisar) {
-        btnAnalisar.disabled = checkboxes.length === 0;
-    }
-    
-    // Atualizar estado do checkbox "selecionar todas"
-    const allCheckboxes = document.querySelectorAll('.intimacao-checkbox');
-    const selectAll = document.getElementById('select-all');
-    
-    if (selectAll) {
-        if (checkboxes.length === 0) {
-            selectAll.indeterminate = false;
-            selectAll.checked = false;
-        } else if (checkboxes.length === allCheckboxes.length) {
-            selectAll.indeterminate = false;
-            selectAll.checked = true;
-        } else {
-            selectAll.indeterminate = true;
-        }
-    }
-}
-
-// Função para analisar intimações selecionadas
-function analisarSelecionadas() {
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
-    const intimacaoIds = Array.from(checkboxes).map(cb => cb.value);
-    
-    if (intimacaoIds.length === 0) {
-        showToast('Selecione pelo menos uma intimação para analisar.', 'warning');
-        return;
-    }
-    
-    // Redirecionar para página de análise com intimações pré-selecionadas
-    const params = new URLSearchParams();
-    intimacaoIds.forEach(id => params.append('intimacao_ids', id));
-    
-    window.location.href = `{{ url_for('analise') }}?${params.toString()}`;
-}
 
 // Função para excluir intimação da tabela
 function excluirIntimacaoTabela(intimacaoId) {
@@ -502,30 +417,30 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DEBUG: PÁGINA DE LISTA CARREGADA (FRONTEND) ===');
     console.log('Página de intimações carregada!');
     console.log('URL atual:', window.location.href);
-    
-    // Atualizar contador inicial
-    updateSelectionCounter();
 });
 
-// Atalhos de teclado
-document.addEventListener('keydown', function(e) {
-    // Ctrl+A para selecionar todas
-    if (e.ctrlKey && e.key === 'a') {
-        e.preventDefault();
-        selecionarTodas();
-    }
+// Função para visualizar contexto da intimação
+function visualizarContexto(intimacaoId, contexto) {
+    document.getElementById('contexto-intimacao-id').textContent = intimacaoId;
+    document.getElementById('contexto-intimacao-conteudo').textContent = contexto;
     
-    // Escape para limpar seleção
-    if (e.key === 'Escape') {
-        limparSelecao();
-    }
+    const modal = new bootstrap.Modal(document.getElementById('modalContextoIntimacao'));
+    modal.show();
+}
+
+// Função para copiar contexto
+function copiarContexto() {
+    const contexto = document.getElementById('contexto-intimacao-conteudo').textContent;
     
-    // Enter para analisar selecionadas
-    if (e.key === 'Enter' && e.ctrlKey) {
-        e.preventDefault();
-        analisarSelecionadas();
-    }
-});
+    navigator.clipboard.writeText(contexto).then(function() {
+        showToast('Contexto copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar contexto:', err);
+        showToast('Erro ao copiar contexto!', 'error');
+    });
+}
+
+
 </script>
 
 <style>

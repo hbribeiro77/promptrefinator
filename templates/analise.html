@@ -37,6 +37,26 @@
 </div>
 
 <div class="row">
+    <div class="col-12">
+        <!-- Informação do Provedor Atual -->
+        <div class="alert alert-info mb-3" role="alert">
+            <i class="bi bi-info-circle"></i>
+            <strong>Provedor de IA Ativo:</strong> 
+            <span id="provedor-info">
+                {% if provedor_atual == 'azure' %}
+                    Azure OpenAI
+                {% else %}
+                    OpenAI
+                {% endif %}
+            </span>
+            <small class="text-muted ms-2">
+                (Para alterar o provedor, acesse as <a href="{{ url_for('configuracoes') }}" class="alert-link">Configurações do Sistema</a>)
+            </small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
             <div class="col-12">
         <!-- Formulário de Análise -->
         <div class="card mb-4">
@@ -54,7 +74,13 @@
                             <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleOpenAIConfig()">
                                 <h6 class="mb-0">
                                     <i class="bi bi-sliders"></i>
-                                    Configurações da OpenAI
+                                    <span id="config-provider-title">
+                                        {% if provedor_atual == 'azure' %}
+                                            Configurações do Azure OpenAI
+                                        {% else %}
+                                            Configurações da OpenAI
+                                        {% endif %}
+                                    </span>
                                 </h6>
                                 <div>
                                     <span class="badge bg-primary me-2" id="config-summary">GPT-4, Temp: 0</span>
@@ -76,10 +102,10 @@
                                     <div class="col-md-6">
                                         <label for="temperatura" class="form-label">
                                             Temperatura 
-                                            <span class="text-muted">(<span id="temp-value">0</span>)</span>
+                                            <span class="text-muted">(<span id="temp-value">{{ temperatura_padrao }}</span>)</span>
                                         </label>
                                         <input type="range" class="form-range" id="temperatura" name="temperatura" 
-                                               min="0" max="2" step="0.1" value="0" 
+                                               min="0" max="2" step="0.1" value="{{ temperatura_padrao }}" 
                                                oninput="document.getElementById('temp-value').textContent = this.value; atualizarConfigSummary()">
                                         <div class="form-text">
                                             0 = Mais determinístico, 2 = Mais criativo
@@ -196,42 +222,36 @@
                         </div>
                     </div>
 
-                        <!-- Lista de Intimações -->
+                        <!-- Lista de Intimações com Cards Compactos -->
                         <div class="card">
                             <div class="card-body p-0">
                                 <div class="table-responsive">
-                                    <table class="table table-hover mb-0">
+                                    <table class="table table-hover intimacoes-cards-table mb-0">
                                         <thead class="table-light">
                                             <tr>
-                                                <th width="50">
+                                                <th style="width: 50px;">
                                                     <input type="checkbox" id="select-all-intimacoes" onchange="toggleSelectAllIntimacoes()">
                                                 </th>
-                                                <th>Contexto</th>
-                                                <th width="200">Classificação Manual</th>
-                                                <th width="150">Data de Criação</th>
+                                                <th style="width: 35%;">Card da Intimação</th>
+                                                <th style="width: 15%;">Classificação Manual</th>
+                                                <th style="width: 20%;">Informações Adicionais</th>
+                                                <th style="width: 15%;">Data de Criação</th>
+                                                <th style="width: 15%;">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr>
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
                                                            data-classificacao="{{ intimacao.classificacao_manual or '' }}"
                                                            onchange="updateIntimacoesSelection()">
                                                 </td>
-                                                <td>
-                                                    <div class="text-truncate-custom" title="{{ intimacao.contexto }}">
-                                                        {{ intimacao.contexto }}
-                                                    </div>
-                                                    {% if intimacao.informacoes_adicionais %}
-                                                        <small class="text-muted">
-                                                            <i class="bi bi-info-circle"></i>
-                                                            {{ intimacao.informacoes_adicionais[:100] }}{% if intimacao.informacoes_adicionais | length > 100 %}...{% endif %}
-                                                        </small>
-                                                    {% endif %}
+                                                <td class="card-cell">
+                                                    {% include 'partials/card_intimacao_compact.html' %}
                                                 </td>
-                                                <td>
+                                                <td class="classificacao-cell">
                                                     {% set badge_class = {
                                                         'URGÊNCIA': 'danger',
                                                         'ELABORAR PEÇA': 'success',
@@ -241,23 +261,59 @@
                                                         'OCULTAR': 'dark',
                                                         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
                                                     } %}
+                                                    {% if intimacao.classificacao_manual %}
                                                     <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
-                                                        {{ intimacao.classificacao_manual or 'N/A' }}
+                                                        {{ intimacao.classificacao_manual }}
                                                     </span>
+                                                    {% else %}
+                                                    <span class="text-muted">-</span>
+                                                    {% endif %}
                                                 </td>
-                                                <td>
-                                                    <small class="text-muted">
-                                                        {% if intimacao.data_criacao %}
-                                                            {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
-                                                            {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
-                                                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
-                                                        {% else %}
-                                                            N/A
-                                                        {% endif %}
-                                                    </small>
+                                                <td class="info-cell">
+                                                    {% if intimacao.informacoes_adicionais %}
+                                                    <div class="info-adicional-text" title="{{ intimacao.informacoes_adicionais }}">
+                                                        {{ intimacao.informacoes_adicionais[:80] }}{% if intimacao.informacoes_adicionais|length > 80 %}...{% endif %}
+                                                    </div>
+                                                    {% else %}
+                                                    <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="data-cell">
+                                                    {% if intimacao.data_criacao %}
+                                                        {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
+                                                        {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
+                                                        <small class="text-muted">
+                                                            {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %}<br>{{ hora }}{% endif %}
+                                                        </small>
+                                                    {% else %}
+                                                        <small class="text-muted">N/A</small>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="acoes-cell">
+                                                    <div class="btn-group btn-group-sm" role="group">
+                                                        <button type="button" class="btn btn-outline-primary btn-sm" 
+                                                                data-intimacao-id="{{ intimacao.id }}" 
+                                                                data-contexto="{{ intimacao.contexto|replace('`', '\\`')|replace('\n', '\\n')|replace('\r', '') }}"
+                                                                onclick="visualizarContexto(this.dataset.intimacaoId, this.dataset.contexto)"
+                                                                title="Visualizar Contexto">
+                                                            <i class="bi bi-eye"></i>
+                                                        </button>
+                                                        <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" 
+                                                           class="btn btn-outline-info btn-sm" 
+                                                           title="Página Completa">
+                                                            <i class="bi bi-file-text"></i>
+                                                        </a>
+                                                        <button type="button" 
+                                                                class="btn btn-outline-danger btn-sm" 
+                                                                data-intimacao-id="{{ intimacao.id }}"
+                                                                onclick="excluirIntimacaoTabela(this.dataset.intimacaoId)"
+                                                                title="Excluir">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                    {% endfor %}
+                                            {% endfor %}
                                         </tbody>
                                     </table>
                                 </div>
@@ -363,6 +419,18 @@
                                             Custo
                                         </label>
                         </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="col-tokens-input" checked>
+                                        <label class="form-check-label" for="col-tokens-input">
+                                            Tokens Input
+                                        </label>
+                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="col-tokens-output" checked>
+                                        <label class="form-check-label" for="col-tokens-output">
+                                            Tokens Output
+                                        </label>
+                    </div>
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="col-prompt" checked>
                                         <label class="form-check-label" for="col-prompt">
@@ -509,6 +577,36 @@
     </div>
 </div>
 
+<!-- Modal de Contexto da Intimação -->
+<div class="modal fade" id="modalContextoIntimacao" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-file-text text-primary"></i>
+                    Contexto da Intimação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Contexto:</label>
+                    <div class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                        <pre id="modal-contexto-content" class="mb-0" style="white-space: pre-wrap; font-family: inherit;"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarContexto()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Contexto
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_css %}
@@ -523,8 +621,30 @@
             </div>
         </div>
         <div class="loading-text">
-            <h4 class="text-white mb-3">🤖 IA Analisando...</h4>
-            <p class="text-white-50 mb-0">Processando intimações com inteligência artificial</p>
+            <h4 class="text-white mb-3" id="loading-title">🤖 IA Analisando...</h4>
+            <p class="text-white-50 mb-0" id="loading-description">Processando intimações com inteligência artificial</p>
+            
+            <!-- Progress Bar -->
+            <div class="progress mt-3" style="width: 300px; background: rgba(255,255,255,0.2);">
+                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" style="width: 0%; background: #28a745;" 
+                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    0%
+                </div>
+            </div>
+            
+            <!-- Progress Details -->
+            <div class="mt-3">
+                <small class="text-white-50" id="progress-details">Iniciando...</small>
+            </div>
+            
+            <!-- Cancel Button -->
+            <div class="mt-4">
+                <button id="cancel-analysis-btn" class="btn btn-outline-light btn-sm" onclick="cancelarAnalise()">
+                    <i class="bi bi-x-circle"></i> Cancelar Análise
+                </button>
+            </div>
+            
             <div class="loading-dots">
                 <span></span>
                 <span></span>
@@ -547,6 +667,54 @@
     
     .intimacao-checkbox:checked + td {
         background-color: rgba(40, 167, 69, 0.1);
+    }
+
+    /* Estilos para a tabela de cards compactos */
+    .intimacoes-cards-table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .intimacoes-cards-table th {
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        color: #495057;
+        padding: 12px 8px;
+        background: #f8f9fa;
+    }
+
+    .intimacoes-cards-table td {
+        padding: 8px;
+        vertical-align: top;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .intimacao-row:hover {
+        background-color: #f8f9fa;
+    }
+
+    /* Células da tabela */
+    .classificacao-cell {
+        text-align: center;
+    }
+
+    .info-cell {
+        max-width: 200px;
+    }
+
+    .info-adicional-text {
+        font-size: 12px;
+        line-height: 1.3;
+        color: #495057;
+        cursor: help;
+    }
+
+    .data-cell {
+        text-align: center;
+    }
+
+    .acoes-cell {
+        text-align: center;
     }
 
     /* Loading Overlay */
@@ -676,13 +844,15 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Dados do servidor -->
+<script type="application/json" id="prompts-data">{{ prompts | tojson | safe }}</script>
 <script>
 console.log('=== DEBUG: Script de análise carregado ===');
 
 // Variáveis globais
 let analiseAtual = null;
 let resultadosAnalise = [];
-const promptsData = {{ prompts | tojson | safe }};
+const promptsData = JSON.parse(document.getElementById('prompts-data').textContent);
 let dadosCompletos = {}; // Objeto para armazenar prompt e resposta completos
 
 // Configuração de colunas
@@ -695,9 +865,18 @@ let configuracaoColunas = {
     configuracoes: true,
     tempo: true,
     custo: true,
+    tokens_input: true,
+    tokens_output: true,
     prompt: true,
     resposta: true
 };
+
+// Variáveis para controle de progresso
+let analiseEmAndamento = false;
+let totalIntimacoes = 0;
+let intimacoesProcessadas = 0;
+let eventoSource = null;
+let sessionId = null;  // ID da sessão para cancelamento
 
 // Função para alternar configurações da OpenAI
 function toggleOpenAIConfig() {
@@ -832,6 +1011,83 @@ function mostrarLoading() {
         console.log('=== DEBUG: Loading overlay ativado ===');
     } else {
         console.error('=== ERRO: Loading overlay não encontrado ===');
+    }
+}
+
+// Função para atualizar progresso
+function atualizarProgresso(atual, total, descricao = '') {
+    const progressBar = document.getElementById('progress-bar');
+    const progressDetails = document.getElementById('progress-details');
+    const loadingTitle = document.getElementById('loading-title');
+    
+    if (progressBar && progressDetails) {
+        const percentual = total > 0 ? Math.round((atual / total) * 100) : 0;
+        
+        progressBar.style.width = percentual + '%';
+        progressBar.setAttribute('aria-valuenow', percentual);
+        progressBar.textContent = percentual + '%';
+        
+        progressDetails.textContent = descricao || `Analisando ${atual} de ${total} intimações...`;
+        
+        if (loadingTitle) {
+            loadingTitle.textContent = `🤖 IA Analisando... (${atual}/${total})`;
+        }
+    }
+}
+
+// Função para cancelar análise
+async function cancelarAnalise() {
+    if (analiseEmAndamento && sessionId) {
+        if (confirm('Tem certeza que deseja cancelar a análise em andamento?')) {
+            console.log('=== DEBUG: Cancelando análise ===');
+            
+            try {
+                // Enviar requisição para cancelar no backend
+                const response = await fetch('/api/cancelar-analise', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log('=== DEBUG: Análise cancelada no backend ===');
+                } else {
+                    console.warn('=== DEBUG: Erro ao cancelar no backend:', data.message);
+                }
+            } catch (error) {
+                console.error('=== ERRO ao cancelar análise:', error);
+            }
+            
+            // Fechar conexão SSE
+            if (eventoSource) {
+                eventoSource.close();
+                eventoSource = null;
+            }
+            
+            // Resetar variáveis
+            analiseEmAndamento = false;
+            totalIntimacoes = 0;
+            intimacoesProcessadas = 0;
+            sessionId = null;
+            
+            // Esconder loading
+            esconderLoading();
+            
+            // Reabilitar botão
+            const btnExecutar = document.getElementById('btn-executar');
+            if (btnExecutar) {
+                btnExecutar.disabled = false;
+                btnExecutar.innerHTML = '<i class="bi bi-play-circle"></i> Executar Análise';
+            }
+            
+            showToast('Análise cancelada pelo usuário', 'warning');
+        }
     }
 }
 
@@ -1036,19 +1292,36 @@ function carregarConfiguracaoColunas() {
     const configSalva = localStorage.getItem('configuracaoColunas');
     if (configSalva) {
         configuracaoColunas = JSON.parse(configSalva);
+        console.log('=== DEBUG: Configuração carregada:', configuracaoColunas);
+    } else {
+        console.log('=== DEBUG: Nenhuma configuração salva encontrada, usando padrão');
     }
     
     // Aplicar configuração aos checkboxes
-            document.getElementById('col-intimacao').checked = configuracaoColunas.intimacao;
-        document.getElementById('col-classificacao-manual').checked = configuracaoColunas.classificacao_manual;
-        document.getElementById('col-informacao-adicional').checked = configuracaoColunas.informacao_adicional;
-        document.getElementById('col-resultado-ia').checked = configuracaoColunas.resultado_ia;
-    document.getElementById('col-status').checked = configuracaoColunas.status;
-    document.getElementById('col-configuracoes').checked = configuracaoColunas.configuracoes;
-    document.getElementById('col-tempo').checked = configuracaoColunas.tempo;
-    document.getElementById('col-custo').checked = configuracaoColunas.custo;
-    document.getElementById('col-prompt').checked = configuracaoColunas.prompt;
-    document.getElementById('col-resposta').checked = configuracaoColunas.resposta;
+    const elementos = {
+        'col-intimacao': 'intimacao',
+        'col-classificacao-manual': 'classificacao_manual',
+        'col-informacao-adicional': 'informacao_adicional',
+        'col-resultado-ia': 'resultado_ia',
+        'col-status': 'status',
+        'col-configuracoes': 'configuracoes',
+        'col-tempo': 'tempo',
+        'col-custo': 'custo',
+        'col-tokens-input': 'tokens_input',
+        'col-tokens-output': 'tokens_output',
+        'col-prompt': 'prompt',
+        'col-resposta': 'resposta'
+    };
+    
+    Object.entries(elementos).forEach(([elementId, configKey]) => {
+        const elemento = document.getElementById(elementId);
+        if (elemento) {
+            elemento.checked = configuracaoColunas[configKey];
+            console.log(`=== DEBUG: ${elementId} = ${configuracaoColunas[configKey]}`);
+        } else {
+            console.warn(`=== DEBUG: Elemento ${elementId} não encontrado`);
+        }
+    });
 }
 
 // Função para selecionar todas as colunas
@@ -1074,6 +1347,8 @@ function salvarConfiguracaoColunas() {
         configuracoes: document.getElementById('col-configuracoes').checked,
         tempo: document.getElementById('col-tempo').checked,
         custo: document.getElementById('col-custo').checked,
+        tokens_input: document.getElementById('col-tokens-input').checked,
+        tokens_output: document.getElementById('col-tokens-output').checked,
         prompt: document.getElementById('col-prompt').checked,
         resposta: document.getElementById('col-resposta').checked
     };
@@ -1251,6 +1526,24 @@ function iniciarAnalise(dados) {
 function executarAnaliseReal(dados) {
     console.log('=== DEBUG: executarAnaliseReal chamada com dados:', dados);
     
+    // Gerar session ID único para cancelamento
+    sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    console.log('=== DEBUG: Session ID gerado:', sessionId);
+    
+    // Adicionar session ID aos dados
+    dados.session_id = sessionId;
+    
+    // Configurar variáveis de progresso
+    analiseEmAndamento = true;
+    totalIntimacoes = dados.intimacao_ids.length;
+    intimacoesProcessadas = 0;
+    
+    // Inicializar progresso
+    atualizarProgresso(0, totalIntimacoes, 'Iniciando análise...');
+    
+    // Iniciar Server-Sent Events para progresso
+    iniciarSSEProgresso();
+    
     // Fazer chamada real para o backend
     fetch('/executar-analise', {
         method: 'POST',
@@ -1271,26 +1564,50 @@ function executarAnaliseReal(dados) {
             resultadosAnalise = data.resultados.map(resultado => ({
                 prompt_id: resultado.prompt_id,
                 prompt_nome: resultado.prompt_nome,
+                regra_negocio: resultado.regra_negocio,
                 intimacao_id: resultado.intimacao_id,
                 resultado_ia: resultado.resultado_ia,
                 classificacao_manual: resultado.classificacao_manual,
                 informacao_adicional: resultado.informacao_adicional,
                 tempo_processamento: resultado.tempo_processamento,
                 acertou: resultado.acertou,
-                custo_estimado: resultado.custo_estimado,
                 prompt_completo: resultado.prompt_completo,
                 resposta_completa: resultado.resposta_completa,
                 modelo: resultado.modelo,
-                temperatura: resultado.temperatura
+                temperatura: resultado.temperatura,
+                tokens_input: resultado.tokens_input,
+                tokens_output: resultado.tokens_output,
+                custo_real: resultado.custo_real,
+                provider: resultado.provider,
+                // Incluir dados completos da intimação para o card
+                intimacao: resultado.intimacao || {}
             }));
             
-            finalizarAnalise();
+            // Aguardar um pouco para mostrar o progresso final
+            setTimeout(() => {
+                finalizarAnalise();
+            }, 1000);
+        } else if (data.cancelado) {
+            // Análise foi cancelada
+            console.log('=== DEBUG: Análise cancelada pelo usuário ===');
+            finalizarAnaliseCancelada();
         } else {
             throw new Error(data.error || 'Erro desconhecido');
         }
     })
     .catch(error => {
         console.error('=== ERRO na análise:', error);
+        
+        // Resetar variáveis
+        analiseEmAndamento = false;
+        totalIntimacoes = 0;
+        intimacoesProcessadas = 0;
+        
+        // Fechar SSE
+        if (eventoSource) {
+            eventoSource.close();
+            eventoSource = null;
+        }
         
         // Esconder loading
         esconderLoading();
@@ -1304,11 +1621,99 @@ function executarAnaliseReal(dados) {
     });
 }
 
+// Função para iniciar Server-Sent Events
+function iniciarSSEProgresso() {
+    if (eventoSource) {
+        eventoSource.close();
+    }
+    
+    // Passar o total real de intimações para o endpoint
+    eventoSource = new EventSource(`/api/analise-progresso?total=${totalIntimacoes}`);
+    
+    eventoSource.onmessage = function(event) {
+        try {
+            console.log('=== SSE Raw message:', event.data);
+            const data = JSON.parse(event.data);
+            console.log('=== SSE Progresso:', data);
+            
+            switch(data.tipo) {
+                case 'inicio':
+                    console.log('=== SSE: Início recebido');
+                    atualizarProgresso(0, data.total, 'Iniciando análise...');
+                    break;
+                    
+                case 'progresso':
+                    console.log('=== SSE: Progresso recebido -', data.atual, 'de', data.total);
+                    intimacoesProcessadas = data.atual;
+                    atualizarProgresso(data.atual, data.total, data.descricao);
+                    break;
+                    
+                case 'conclusao':
+                    console.log('=== SSE: Conclusão recebida');
+                    atualizarProgresso(data.total, data.total, 'Análise concluída!');
+                    break;
+                    
+                case 'erro':
+                    console.error('=== ERRO SSE:', data.mensagem);
+                    showToast('Erro no progresso: ' + data.mensagem, 'error');
+                    break;
+            }
+        } catch (error) {
+            console.error('=== ERRO ao processar SSE:', error);
+        }
+    };
+    
+    eventoSource.onerror = function(error) {
+        console.error('=== ERRO SSE:', error);
+        if (eventoSource) {
+            eventoSource.close();
+            eventoSource = null;
+        }
+    };
+}
+
+// Função para finalizar análise cancelada
+function finalizarAnaliseCancelada() {
+    // Fechar SSE
+    if (eventoSource) {
+        eventoSource.close();
+        eventoSource = null;
+    }
+    
+    // Resetar variáveis de progresso
+    analiseEmAndamento = false;
+    totalIntimacoes = 0;
+    intimacoesProcessadas = 0;
+    sessionId = null;
+    
+    // Esconder loading
+    esconderLoading();
+    
+    // Reabilitar botão
+    const btnExecutar = document.getElementById('btn-executar');
+    btnExecutar.disabled = false;
+    btnExecutar.innerHTML = '<i class="bi bi-play-circle"></i> Executar Análise';
+    
+    showToast('Análise cancelada com sucesso', 'warning');
+}
+
 // Função para finalizar análise
 function finalizarAnalise() {
     const totalAnalises = resultadosAnalise.length;
     const acertos = resultadosAnalise.filter(r => r.acertou).length;
     const acuracia = totalAnalises > 0 ? (acertos / totalAnalises * 100).toFixed(1) : 0;
+    
+    // Fechar SSE
+    if (eventoSource) {
+        eventoSource.close();
+        eventoSource = null;
+    }
+    
+    // Resetar variáveis de progresso
+    analiseEmAndamento = false;
+    totalIntimacoes = 0;
+    intimacoesProcessadas = 0;
+    sessionId = null;
     
     // Esconder loading
     esconderLoading();
@@ -1345,7 +1750,9 @@ function exibirResultados() {
     const erros = totalAnalises - acertos;
     const acuracia = totalAnalises > 0 ? (acertos / totalAnalises * 100).toFixed(1) : 0;
     const tempoMedio = (resultadosAnalise.reduce((sum, r) => sum + r.tempo_processamento, 0) / totalAnalises).toFixed(2);
-    const custoTotal = resultadosAnalise.reduce((sum, r) => sum + r.custo_estimado, 0).toFixed(4);
+    const custoTotal = resultadosAnalise.reduce((sum, r) => sum + (r.custo_real || 0), 0);
+    
+
     
     // Atualizar resumo geral
     document.getElementById('resumo-geral').style.display = 'block';
@@ -1358,6 +1765,9 @@ function exibirResultados() {
     const configSalva = localStorage.getItem('configuracaoColunas');
     if (configSalva) {
         configuracaoColunas = JSON.parse(configSalva);
+        console.log('=== DEBUG: Configuração aplicada na tabela:', configuracaoColunas);
+    } else {
+        console.log('=== DEBUG: Usando configuração padrão na tabela');
     }
     
     let html = `
@@ -1374,6 +1784,8 @@ function exibirResultados() {
                         ${configuracaoColunas.configuracoes ? '<th>Configurações</th>' : ''}
                         ${configuracaoColunas.tempo ? '<th>Tempo</th>' : ''}
                         ${configuracaoColunas.custo ? '<th>Custo</th>' : ''}
+                        ${configuracaoColunas.tokens_input ? '<th>Tokens Input</th>' : ''}
+                        ${configuracaoColunas.tokens_output ? '<th>Tokens Output</th>' : ''}
                         ${configuracaoColunas.prompt ? '<th>Prompt</th>' : ''}
                         ${configuracaoColunas.resposta ? '<th>Resposta</th>' : ''}
                     </tr>
@@ -1399,7 +1811,7 @@ function exibirResultados() {
         
         html += `
             <tr>
-                ${configuracaoColunas.intimacao ? `<td>#${resultado.intimacao_id.substring(0, 8)}...</td>` : ''}
+                ${configuracaoColunas.intimacao ? `<td>${gerarCardCompactoIntimacao(resultado)}</td>` : ''}
                 ${configuracaoColunas.classificacao_manual ? `<td><span class="badge bg-secondary">${resultado.classificacao_manual || 'N/A'}</span></td>` : ''}
                 ${configuracaoColunas.informacao_adicional ? `<td>
                     ${resultado.informacao_adicional ? 
@@ -1412,7 +1824,7 @@ function exibirResultados() {
                         '<small class="text-muted">N/A</small>'
                     }
                 </td>` : ''}
-                ${configuracaoColunas.resultado_ia ? `<td><span class="badge bg-primary">${resultado.resultado_ia || 'N/A'}</span></td>` : ''}
+                ${configuracaoColunas.resultado_ia ? `<td><span class="badge ${getBadgeClass(resultado.resultado_ia)}">${resultado.resultado_ia || 'N/A'}</span></td>` : ''}
                 ${configuracaoColunas.status ? `<td><i class="bi ${statusIcon} ${statusClass}"></i> ${statusText}</td>` : ''}
                 ${configuracaoColunas.configuracoes ? `<td>
                     <small>
@@ -1420,16 +1832,18 @@ function exibirResultados() {
                         <div><strong>Temp:</strong> ${resultado.temperatura !== undefined && resultado.temperatura !== null ? parseFloat(resultado.temperatura).toFixed(1) : 'N/A'}</div>
                     </small>
                 </td>` : ''}
-                ${configuracaoColunas.tempo ? `<td>${(resultado.tempo_processamento || 0).toFixed(2)}s</td>` : ''}
-                ${configuracaoColunas.custo ? `<td>$${(resultado.custo_estimado || 0).toFixed(4)}</td>` : ''}
+                ${configuracaoColunas.tempo ? `<td><small>${(resultado.tempo_processamento || 0).toFixed(2)}s</small></td>` : ''}
+                ${configuracaoColunas.custo ? `<td><small>${formatarCusto(resultado)}</small></td>` : ''}
+                ${configuracaoColunas.tokens_input ? `<td><small>${resultado.tokens_input || 0}</small></td>` : ''}
+                ${configuracaoColunas.tokens_output ? `<td><small>${resultado.tokens_output || 0}</small></td>` : ''}
                 ${configuracaoColunas.prompt ? `<td>
-                    <button type="button" class="btn btn-sm btn-outline-info" onclick="mostrarPromptCompleto('${resultado.intimacao_id}')">
-                        <i class="bi bi-eye"></i>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="mostrarPromptCompleto('${resultado.intimacao_id}')" title="Ver prompt completo">
+                        <i class="bi bi-code-square"></i>
                     </button>
                 </td>` : ''}
                 ${configuracaoColunas.resposta ? `<td>
-                    <button type="button" class="btn btn-sm btn-outline-success" onclick="mostrarRespostaCompleta('${resultado.intimacao_id}')">
-                        <i class="bi bi-eye"></i>
+                    <button type="button" class="btn btn-sm btn-outline-success" onclick="mostrarRespostaCompleta('${resultado.intimacao_id}')" title="Ver resposta completa">
+                        <i class="bi bi-chat-dots"></i>
                     </button>
                 </td>` : ''}
             </tr>
@@ -1454,15 +1868,20 @@ function exibirResultados() {
             <div class="col-md-3">
                 <div class="card bg-info text-white">
                     <div class="card-body text-center">
-                        <h4>$${custoTotal}</h4>
+                        <h4>$${custoTotal > 0 ? custoTotal.toFixed(6) : '0.000000'}</h4>
                         <small>Custo Total</small>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-warning text-white">
+                <div class="card bg-warning text-white prompt-card" style="cursor: pointer;" 
+                     data-prompt-id="${resultadosAnalise[0].prompt_id}"
+                     data-bs-toggle="tooltip" 
+                     data-bs-placement="top" 
+                     data-bs-html="true"
+                     title="<strong>Regra de Negócio:</strong><br>${resultadosAnalise[0].regra_negocio || 'N/A'}">
                     <div class="card-body text-center">
-                        <h4>${resultadosAnalise[0].prompt_nome}</h4>
+                        <h4>${truncarTexto(resultadosAnalise[0].prompt_nome, 20)}</h4>
                         <small>Prompt Testado</small>
                     </div>
                 </div>
@@ -1480,6 +1899,22 @@ function exibirResultados() {
     
     container.innerHTML = html;
     cardResultados.style.display = 'block';
+    
+
+    
+    // Inicializar tooltips após renderizar a tabela
+    setTimeout(async () => {
+        await inicializarTooltips();
+        
+        // Adicionar event listener para o card de prompt
+        const promptCard = document.querySelector('.prompt-card');
+        if (promptCard) {
+            promptCard.addEventListener('click', function() {
+                const promptId = this.getAttribute('data-prompt-id');
+                navegarParaPrompt(promptId);
+            });
+        }
+    }, 100);
 }
 
 // Função para limpar resultados
@@ -1503,7 +1938,7 @@ function exportarResultados() {
         total_analises: resultadosAnalise.length,
         acuracia_geral: (resultadosAnalise.filter(r => r.acertou).length / resultadosAnalise.length * 100).toFixed(1),
         tempo_medio: (resultadosAnalise.reduce((sum, r) => sum + r.tempo_processamento, 0) / resultadosAnalise.length).toFixed(2),
-        custo_total: resultadosAnalise.reduce((sum, r) => sum + r.custo_estimado, 0).toFixed(4),
+        custo_total: 'N/A', // Cálculo de custo removido
         resultados: resultadosAnalise
     };
     
@@ -1620,9 +2055,67 @@ function copiarResposta() {
     });
 }
 
+// Função para excluir intimação da tabela
+function excluirIntimacaoTabela(intimacaoId) {
+    if (confirm('Tem certeza que deseja excluir esta intimação?')) {
+        console.log('=== DEBUG: EXCLUINDO INTIMAÇÃO DA TABELA ===');
+        console.log('ID da intimação:', intimacaoId);
+        
+        // Fazer requisição para excluir
+        fetch(`/api/intimacoes/${intimacaoId}/excluir`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            console.log('Resposta da exclusão:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Dados da resposta:', data);
+            
+            if (data.success) {
+                showToast('Intimação excluída com sucesso!', 'success');
+                
+                // Remover a linha da tabela
+                const row = document.querySelector(`tr[data-intimacao-id="${intimacaoId}"]`);
+                if (row) {
+                    row.remove();
+                }
+                
+                // Atualizar contador de intimações
+                updateIntimacoesSelection();
+            } else {
+                showToast(`Erro ao excluir: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro na exclusão:', error);
+            showToast('Erro ao excluir intimação!', 'error');
+        });
+    }
+}
+
+// Função para determinar a classe da badge baseada na classificação
+function getBadgeClass(classificacao) {
+    const badgeClasses = {
+        'ELABORAR PEÇA': 'bg-primary',
+        'CONTATAR ASSISTIDO': 'bg-info',
+        'ANALISAR PROCESSO': 'bg-warning',
+        'RENUNCIAR PRAZO': 'bg-success',
+        'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'bg-secondary',
+        'URGÊNCIA': 'bg-danger',
+        'OCULTAR': 'bg-dark'
+    };
+    
+    return badgeClasses[classificacao] || 'bg-secondary';
+}
+
 // Inicializar resumo
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DOMContentLoaded executado ===');
+    
     atualizarResumo();
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
@@ -1648,5 +2141,340 @@ document.addEventListener('keydown', function(e) {
     }
 });
 });
+
+// Função para visualizar contexto da intimação
+function visualizarContexto(intimacaoId, contexto) {
+    console.log('=== Visualizando contexto da intimação:', intimacaoId);
+    
+    const modalElement = document.getElementById('modalContextoIntimacao');
+    const contextoContent = document.getElementById('modal-contexto-content');
+    
+    // Definir o conteúdo do contexto
+    contextoContent.textContent = contexto || 'Contexto não disponível';
+    
+    // Mostrar a modal
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+}
+
+// Função para copiar contexto
+function copiarContexto() {
+    const contextoContent = document.getElementById('modal-contexto-content');
+    const texto = contextoContent.textContent;
+    
+    navigator.clipboard.writeText(texto).then(() => {
+        showToast('Contexto copiado para a área de transferência!', 'success');
+    }).catch(err => {
+        console.error('Erro ao copiar contexto:', err);
+        showToast('Erro ao copiar contexto!', 'error');
+    });
+}
+
+// Função para formatar custo com ícone (i) e tooltip
+function formatarCusto(resultado) {
+    const custoReal = resultado.custo_real || 0;
+    const tokensInput = resultado.tokens_input || 0;
+    const tokensOutput = resultado.tokens_output || 0;
+    const modelo = resultado.modelo || 'gpt-4o-mini';
+    const provider = resultado.provider || 'azure'; // Usar provider real da análise
+    
+    const custoFormatado = custoReal > 0 ? `$${custoReal.toFixed(6)}` : '$0.000000';
+    
+    return `${custoFormatado}
+            <i class="bi bi-info-circle text-muted ms-1 custo-info-icon" 
+               style="cursor: pointer; font-size: 0.8em;" 
+               data-bs-toggle="tooltip" 
+               data-bs-placement="top" 
+               data-bs-html="true"
+               data-modelo="${modelo}"
+               data-tokens-input="${tokensInput}"
+               data-tokens-output="${tokensOutput}"
+               data-custo-real="${custoReal}"
+               data-provider="${provider}"></i>`;
+}
+
+// Preços dos modelos (carregados dinamicamente)
+// REMOVIDO: Todas as funções de preços duplicadas - usando apenas o serviço isolado costCalculationFrontend
+
+// FUNÇÃO PARA TOOLTIP DE CUSTO (USANDO SERVIÇO DO BACKEND)
+async function criarTooltipCusto(elemento) {
+    const modelo = elemento.dataset.modelo;
+    const tokensInput = parseInt(elemento.dataset.tokensInput);
+    const tokensOutput = parseInt(elemento.dataset.tokensOutput);
+    const custoReal = parseFloat(elemento.dataset.custoReal);
+    const provider = elemento.dataset.provider;
+
+    try {
+        // Usar o serviço de custo do backend
+        const response = await fetch(`/api/tooltip-custo?modelo=${modelo}&tokens_input=${tokensInput}&tokens_output=${tokensOutput}&provider=${provider}&custo_real=${custoReal}`);
+        const data = await response.json();
+        if (data.success) {
+            return data.tooltip_html;
+        }
+    } catch (error) {
+        console.error('Erro ao gerar tooltip:', error);
+    }
+    
+    // Fallback simples se der erro
+    return `<strong>Memória de Cálculo:</strong><br>
+            Provider: ${provider}<br>
+            Modelo: ${modelo}<br>
+            Tokens: ${tokensInput} + ${tokensOutput}<br>
+            <strong>Total: $${custoReal.toFixed(6)}</strong>`;
+}
+
+// Função para inicializar tooltips
+async function inicializarTooltips() {
+    // Destruir tooltips existentes
+    const tooltipsExistentes = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipsExistentes.forEach(element => {
+        const tooltip = bootstrap.Tooltip.getInstance(element);
+        if (tooltip) {
+            tooltip.dispose();
+        }
+    });
+    
+    // Configurar tooltips de custo
+    const custoIcons = document.querySelectorAll('.custo-info-icon');
+    for (const icon of custoIcons) {
+        const tooltipContent = await criarTooltipCusto(icon);
+        icon.setAttribute('title', tooltipContent);
+    }
+    
+    // Inicializar tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            delay: { show: 300, hide: 100 }
+        });
+    });
+}
+
+// Função para gerar card compacto de intimação
+function gerarCardCompactoIntimacao(resultado) {
+    // Buscar dados completos da intimação
+    const intimacao = resultado.intimacao || {};
+    const intimacaoId = resultado.intimacao_id;
+    
+    return `
+        <a href="/intimacoes/${intimacaoId}" class="card-link-wrapper" style="text-decoration: none; color: inherit;">
+            <div class="intimacao-card-compact">
+                <div class="card-intimacao-header-compact">
+                    <div class="card-intimacao-processo-compact">
+                        <i class="bi bi-hourglass"></i>
+                        <span class="processo-numero-compact">${intimacao.processo || 'N/A'}</span>
+                    </div>
+                </div>
+                <div class="card-intimacao-content-compact">
+                    <div class="card-intimacao-row-compact">
+                        <div class="card-intimacao-field-compact">
+                            <span class="field-label-compact">Órgão:</span>
+                            <span class="field-value-compact">${intimacao.orgao_julgador || 'N/A'}</span>
+                        </div>
+                        <div class="card-intimacao-field-compact">
+                            <span class="field-label-compact">Status:</span>
+                            <span class="field-value-compact status-${(intimacao.status || 'pendente').toLowerCase().replace(/\s+/g, '-')}">
+                                ${intimacao.status || 'Pendente'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-intimacao-row-compact">
+                        <div class="card-intimacao-field-compact">
+                            <span class="field-label-compact">Prazo:</span>
+                            <span class="field-value-compact">${intimacao.prazo || 'N/A'}</span>
+                        </div>
+                        <div class="card-intimacao-field-compact">
+                            <span class="field-label-compact">Intimado:</span>
+                            <span class="field-value-compact">${intimacao.intimado || 'N/A'}</span>
+                        </div>
+                    </div>
+                    <div class="card-intimacao-row-compact">
+                        <div class="card-intimacao-field-compact">
+                            <span class="field-label-compact">Disponibilização:</span>
+                            <span class="field-value-compact">${intimacao.disponibilizacao || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    `;
+}
 </script>
+
+<!-- CSS do Card Compacto -->
+<style>
+/* Link wrapper para card clicável */
+.card-link-wrapper {
+    display: block;
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+.card-link-wrapper:hover {
+    text-decoration: none !important;
+    color: inherit !important;
+}
+
+/* Card compacto dentro da tabela */
+.intimacao-card-compact {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.intimacao-card-compact::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(135deg, #dc3545, #fd7e14);
+    transition: width 0.2s ease;
+}
+
+.card-link-wrapper:hover .intimacao-card-compact {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transform: translateY(-2px);
+    border-color: #007bff;
+}
+
+.card-link-wrapper:hover .intimacao-card-compact::before {
+    width: 5px;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+}
+
+/* Header compacto */
+.card-intimacao-header-compact {
+    background: #f8f9fa;
+    padding: 6px 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.card-intimacao-processo-compact {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: #495057;
+}
+
+.processo-numero-compact {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.card-intimacao-processo-compact i {
+    color: #6c757d;
+    font-size: 12px;
+}
+
+/* Conteúdo compacto */
+.card-intimacao-content-compact {
+    padding: 8px 10px;
+}
+
+.card-intimacao-row-compact {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.card-intimacao-row-compact:last-child {
+    margin-bottom: 0;
+}
+
+.card-intimacao-field-compact {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.field-label-compact {
+    font-weight: 600;
+    font-size: 10px;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.field-value-compact {
+    font-size: 11px;
+    color: #212529;
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+/* Status específicos */
+.status-pendente {
+    color: #fd7e14;
+    font-weight: 600;
+}
+
+.status-concluido {
+    color: #28a745;
+    font-weight: 600;
+}
+
+.status-urgente {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .card-intimacao-row-compact {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .card-intimacao-field-compact {
+        flex: none;
+    }
+}
+
+/* Estilo para o card de prompt clicável */
+.prompt-card {
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.prompt-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.prompt-card:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+</style>
+
+<script>
+// Função para truncar texto
+function truncarTexto(texto, maxCaracteres) {
+    if (!texto) return 'N/A';
+    if (texto.length <= maxCaracteres) return texto;
+    return texto.substring(0, maxCaracteres) + '...';
+}
+
+// Função para navegar para a página do prompt
+function navegarParaPrompt(promptId) {
+    if (promptId) {
+        window.open(`/prompts/${promptId}`, '_blank');
+    } else {
+        showToast('ID do prompt não disponível', 'warning');
+    }
+}
+</script>
+
 {% endblock %}

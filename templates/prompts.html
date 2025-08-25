@@ -201,11 +201,13 @@
                                     <i class="bi bi-eye"></i>
                                 </a>
                                 <button type="button" class="btn btn-outline-success" 
-                                        onclick="testarPrompt('{{ prompt.id }}')" title="Testar">
+                                        data-prompt-id="{{ prompt.id }}"
+                                        onclick="testarPrompt(this.dataset.promptId)" title="Testar">
                                     <i class="bi bi-play-circle"></i>
                                 </button>
                                 <button type="button" class="btn btn-outline-danger" 
-                                        onclick="confirmarExclusao('{{ prompt.id }}')" title="Excluir">
+                                        data-prompt-id="{{ prompt.id }}"
+                                        onclick="confirmarExclusao(this.dataset.promptId)" title="Excluir">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </div>

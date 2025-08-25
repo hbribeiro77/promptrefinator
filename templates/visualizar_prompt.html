@@ -68,6 +68,24 @@
                 </div>
                 {% endif %}
                 
+                {% if prompt.regra_negocio %}
+                <div class="row mb-3">
+                    <div class="col-sm-3">
+                        <strong>Regra de Negócio:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <div class="d-flex align-items-start">
+                            <div id="regra-negocio" class="bg-light p-2 rounded flex-grow-1 me-2">
+                                {{ prompt.regra_negocio }}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('regra-negocio').textContent && navigator.clipboard.writeText(document.getElementById('regra-negocio').textContent.trim().replace(/\s+/g, ' ')).then(() => showToast('Regra de negócio copiada!', 'success')).catch(() => showToast('Erro ao copiar', 'error'))" title="Copiar">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
                 <div class="row mb-3">
                     <div class="col-sm-3">
                         <strong>Data de Criação:</strong>
@@ -126,14 +144,26 @@
                 <!-- Verificação de variáveis -->
                 <div class="mt-3">
                     {% if '{CONTEXTO}' in prompt.conteudo %}
-                        <span class="badge bg-success">
+                        <span class="badge bg-success me-2">
                             <i class="bi bi-check-circle"></i>
                             Variável {CONTEXTO} encontrada
                         </span>
                     {% else %}
-                        <span class="badge bg-warning">
+                        <span class="badge bg-warning me-2">
                             <i class="bi bi-exclamation-triangle"></i>
                             Variável {CONTEXTO} não encontrada
+                        </span>
+                    {% endif %}
+                    
+                    {% if '{REGRADENEGOCIO}' in prompt.conteudo %}
+                        <span class="badge bg-success me-2">
+                            <i class="bi bi-gear"></i>
+                            Variável {REGRADENEGOCIO} encontrada
+                        </span>
+                    {% else %}
+                        <span class="badge bg-info me-2">
+                            <i class="bi bi-gear"></i>
+                            Variável {REGRADENEGOCIO} não encontrada
                         </span>
                     {% endif %}
                 </div>
@@ -315,7 +345,7 @@
                         </div>
                         <div class="col-6">
                             <h6 class="text-warning mb-0">
-                                {% set custo_total = analises | map(attribute='custo_estimado') | sum %}
+                                {% set custo_total = 0 %} {# Cálculo de custo removido - simulação desabilitada #}
                                 ${{ '%.4f'|format(custo_total) }}
                             </h6>
                             <small class="text-muted">Custo Total</small>
@@ -550,6 +580,8 @@ function copiarTexto(elementId) {
     });
 }
 
+
+
 // Função para alternar quebra de linha
 function toggleWrap(elementId) {
     const elemento = document.getElementById(elementId);
@@ -764,6 +796,8 @@ document.addEventListener('keydown', function(e) {
         window.location.href = '{{ url_for("listar_prompts") }}';
     }
 });
+
+
 
 // Aplicar formatação de data após carregamento da página
 document.addEventListener('DOMContentLoaded', function() {

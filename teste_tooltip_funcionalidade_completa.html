@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Tooltip Funcionalidade Completa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .tooltip-test {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .custo-badge {
+            cursor: pointer;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>Teste de Tooltip - Funcionalidade Completa</h1>
+        
+        <div class="tooltip-test">
+            <h3>Teste 1: OpenAI GPT-4o-mini</h3>
+            <span class="badge bg-success custo-badge" 
+                  data-bs-toggle="tooltip" 
+                  data-bs-placement="top" 
+                  data-bs-html="true"
+                  data-modelo="gpt-4o-mini"
+                  data-tokens-input="2028"
+                  data-tokens-output="73"
+                  data-custo-real="0.000383"
+                  data-provider="OpenAI">
+                $0.000383
+            </span>
+        </div>
+        
+        <div class="tooltip-test">
+            <h3>Teste 2: Azure OpenAI GPT-4o-mini</h3>
+            <span class="badge bg-info custo-badge" 
+                  data-bs-toggle="tooltip" 
+                  data-bs-placement="top" 
+                  data-bs-html="true"
+                  data-modelo="gpt-4o-mini"
+                  data-tokens-input="1500"
+                  data-tokens-output="120"
+                  data-custo-real="0.000327"
+                  data-provider="Azure OpenAI">
+                $0.000327
+            </span>
+        </div>
+        
+        <div class="tooltip-test">
+            <h3>Teste 3: OpenAI GPT-4o</h3>
+            <span class="badge bg-warning custo-badge" 
+                  data-bs-toggle="tooltip" 
+                  data-bs-placement="top" 
+                  data-bs-html="true"
+                  data-modelo="gpt-4o"
+                  data-tokens-input="1000"
+                  data-tokens-output="200"
+                  data-custo-real="0.004500"
+                  data-provider="OpenAI">
+                $0.004500
+            </span>
+        </div>
+        
+        <div class="mt-4">
+            <h4>Status dos Preços:</h4>
+            <div id="status-precos">Carregando...</div>
+        </div>
+        
+        <div class="mt-4">
+            <h4>Log de Debug:</h4>
+            <div id="debug-log" class="border p-3" style="height: 200px; overflow-y: auto; background-color: #f8f9fa;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Variável global para armazenar preços
+        let precosModelos = {};
+        
+        // Função para log de debug
+        function debugLog(message) {
+            const logDiv = document.getElementById('debug-log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Função para carregar preços dos modelos
+        async function carregarPrecosModelos() {
+            try {
+                debugLog('Iniciando carregamento de preços...');
+                const response = await fetch('/api/precos-modelos');
+                const data = await response.json();
+                
+                if (data.success) {
+                    precosModelos = data.precos;
+                    debugLog('Preços carregados com sucesso!');
+                    debugLog(`OpenAI modelos: ${Object.keys(precosModelos.openai || {}).join(', ')}`);
+                    debugLog(`Azure modelos: ${Object.keys(precosModelos.azure || {}).join(', ')}`);
+                    
+                    document.getElementById('status-precos').innerHTML = 
+                        `<span class="text-success">✓ Preços carregados com sucesso</span>`;
+                } else {
+                    throw new Error('Falha ao carregar preços');
+                }
+            } catch (error) {
+                debugLog(`Erro ao carregar preços: ${error.message}`);
+                document.getElementById('status-precos').innerHTML = 
+                    `<span class="text-danger">✗ Erro ao carregar preços: ${error.message}</span>`;
+            }
+        }
+        
+        // Função para obter preços do modelo
+        function obterPrecosModelo(modelo, provider = 'OpenAI') {
+            debugLog(`Obtendo preços para modelo: ${modelo}, provider: ${provider}`);
+            
+            const providerKey = provider.toLowerCase().includes('azure') ? 'azure' : 'openai';
+            const modeloPrecos = precosModelos[providerKey]?.[modelo];
+            
+            if (modeloPrecos) {
+                debugLog(`Preços encontrados: input=${modeloPrecos.input}, output=${modeloPrecos.output}`);
+                return modeloPrecos;
+            } else {
+                debugLog(`Preços não encontrados para ${modelo} (${provider}), usando padrão`);
+                return { input: 0.001, output: 0.002 };
+            }
+        }
+        
+        // Função para gerar tooltip de memória de cálculo
+        function gerarTooltipMemoriaCalculo(elemento) {
+            const modelo = elemento.dataset.modelo;
+            const tokensInput = parseInt(elemento.dataset.tokensInput);
+            const tokensOutput = parseInt(elemento.dataset.tokensOutput);
+            const custoReal = parseFloat(elemento.dataset.custoReal);
+            const provider = elemento.dataset.provider || 'OpenAI';
+            
+            debugLog(`Gerando tooltip para: ${modelo}, tokens: ${tokensInput}/${tokensOutput}, provider: ${provider}`);
+            
+            const precos = obterPrecosModelo(modelo, provider);
+            
+            // Calcular custos
+            const custoInput = (tokensInput / 1000000) * precos.input;
+            const custoOutput = (tokensOutput / 1000000) * precos.output;
+            const custoTotal = custoInput + custoOutput;
+            
+            debugLog(`Custos calculados: input=${custoInput.toFixed(6)}, output=${custoOutput.toFixed(6)}, total=${custoTotal.toFixed(6)}`);
+            
+            return `
+                <div style="text-align: left; font-size: 12px; line-height: 1.4;">
+                    <strong>Memória de Cálculo:</strong><br>
+                    Provedor: ${provider}<br>
+                    Modelo: ${modelo}<br>
+                    Tokens Input: ${tokensInput.toLocaleString()}<br>
+                    Tokens Output: ${tokensOutput.toLocaleString()}<br><br>
+                    
+                    Preço Input: $${precos.input.toFixed(3)}/1M tokens<br>
+                    Preço Output: $${precos.output.toFixed(3)}/1M tokens<br><br>
+                    
+                    Custo Input: $${custoInput.toFixed(6)}<br>
+                    Custo Output: $${custoOutput.toFixed(6)}<br>
+                    <strong>Total: $${custoTotal.toFixed(6)}</strong>
+                </div>
+            `;
+        }
+        
+        // Função para inicializar tooltips
+        function inicializarTooltips() {
+            debugLog('Inicializando tooltips...');
+            
+            const elementos = document.querySelectorAll('.custo-badge[data-modelo]');
+            debugLog(`Encontrados ${elementos.length} elementos com tooltip`);
+            
+            elementos.forEach(elemento => {
+                const tooltipContent = gerarTooltipMemoriaCalculo(elemento);
+                elemento.setAttribute('data-bs-original-title', tooltipContent);
+                
+                // Inicializar tooltip do Bootstrap
+                new bootstrap.Tooltip(elemento);
+            });
+            
+            debugLog('Tooltips inicializados com sucesso!');
+        }
+        
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', async function() {
+            debugLog('Página carregada, iniciando processo...');
+            await carregarPrecosModelos();
+            inicializarTooltips();
+            debugLog('Processo completo!');
+        });
+    </script>
+</body>
+</html>

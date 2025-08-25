@@ -16,6 +16,8 @@
                 <th class="col-configuracoes">Configurações</th>
                 <th class="col-tempo">Tempo</th>
                 <th class="col-custo">Custo</th>
+                <th class="col-tokens-input">Tokens Input</th>
+                <th class="col-tokens-output">Tokens Output</th>
                 <th class="col-prompt-completo">Prompt Completo</th>
                 <th class="col-resposta-ia">Resposta IA</th>
                 <th>Ações</th>
@@ -98,7 +100,19 @@
                     <small>{{ analise.tempo_processamento or 0 }}s</small>
                 </td>
                 <td class="col-custo">
-                    <small>${{ analise.custo_estimado or 0 }}</small>
+                    <small>
+                        {% if analise.custo_real is defined and analise.custo_real > 0 %}
+                            ${{ "%.6f"|format(analise.custo_real) }}
+                        {% else %}
+                            $0.000000
+                        {% endif %}
+                    </small>
+                </td>
+                <td class="col-tokens-input">
+                    <small>{{ analise.tokens_input or 'N/A' }}</small>
+                </td>
+                <td class="col-tokens-output">
+                    <small>{{ analise.tokens_output or 'N/A' }}</small>
                 </td>
                 <td class="col-prompt-completo">
                     <button type="button" class="btn btn-sm btn-outline-info" 
@@ -120,8 +134,10 @@
                 </td>
                 <td>
                     <button type="button" class="btn btn-sm btn-outline-danger" 
-                            onclick="excluirAnalise('{{ analise.intimacao_id }}', '{{ analise.id }}')"
-                            title="Excluir análise">
+                                data-intimacao-id="{{ analise.intimacao_id }}" 
+                                data-analise-id="{{ analise.id }}"
+                                onclick="excluirAnalise(this.dataset.intimacaoId, this.dataset.analiseId)"
+                                title="Excluir análise">
                         <i class="bi bi-trash"></i>
                     </button>
                 </td>
@@ -141,8 +157,9 @@
         </li>
         
         <!-- Página anterior -->
+        {% set pagina_anterior = paginacao.pagina_atual - 1 %}
         <li class="page-item {% if paginacao.pagina_atual == 1 %}disabled{% endif %}">
-            <button class="page-link" onclick="carregarPagina({{ paginacao.pagina_atual-1 }})" {% if paginacao.pagina_atual == 1 %}disabled{% endif %}>Anterior</button>
+            <button class="page-link" data-pagina="{{ pagina_anterior }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.pagina_atual == 1 %}disabled{% endif %}>Anterior</button>
         </li>
         
         <!-- Páginas numeradas -->
@@ -150,18 +167,19 @@
         {% set fim_paginas = [paginacao.total_paginas+1, paginacao.pagina_atual+3] | min %}
         {% for p in range(inicio_paginas, fim_paginas) %}
         <li class="page-item {% if p == paginacao.pagina_atual %}active{% endif %}">
-            <button class="page-link" onclick="carregarPagina({{ p }})" {% if p == paginacao.pagina_atual %}disabled{% endif %}>{{ p }}</button>
+            <button class="page-link" data-pagina="{{ p }}" onclick="carregarPagina(this.dataset.pagina)" {% if p == paginacao.pagina_atual %}disabled{% endif %}>{{ p }}</button>
         </li>
         {% endfor %}
         
         <!-- Próxima página -->
+        {% set proxima_pagina = paginacao.pagina_atual + 1 %}
         <li class="page-item {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}">
-            <button class="page-link" onclick="carregarPagina({{ paginacao.pagina_atual+1 }})" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Próxima</button>
+            <button class="page-link" data-pagina="{{ proxima_pagina }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Próxima</button>
         </li>
         
         <!-- Última página -->
         <li class="page-item {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}">
-            <button class="page-link" onclick="carregarPagina({{ paginacao.total_paginas }})" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Última</button>
+            <button class="page-link" data-pagina="{{ paginacao.total_paginas }}" onclick="carregarPagina(this.dataset.pagina)" {% if paginacao.pagina_atual == paginacao.total_paginas %}disabled{% endif %}>Última</button>
         </li>
     </ul>
 </nav>

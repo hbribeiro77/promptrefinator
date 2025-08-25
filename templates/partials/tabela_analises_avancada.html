@@ -12,6 +12,10 @@
                 <small class="text-muted">{{ subtitulo or 'Visualize e configure as análises realizadas' }}</small>
             </div>
             <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-warning" onclick="restaurarDadosMockados()" title="Restaura os dados de exemplo para demonstração">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                    Restaurar Dados
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="atualizarTabelaAnalises()">
                     <i class="bi bi-arrow-clockwise"></i>
                     Atualizar
@@ -78,6 +82,14 @@
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="col-custo" checked>
                     <label class="form-check-label" for="col-custo">Custo</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-tokens-input" checked>
+                    <label class="form-check-label" for="col-tokens-input">Tokens Input</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="col-tokens-output" checked>
+                    <label class="form-check-label" for="col-tokens-output">Tokens Output</label>
                 </div>
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" id="col-prompt-completo" checked>
@@ -203,6 +215,8 @@
                             <th class="col-configuracoes">Configurações</th>
                             <th class="col-tempo">Tempo</th>
                             <th class="col-custo">Custo</th>
+                            <th class="col-tokens-input">Tokens Input</th>
+                            <th class="col-tokens-output">Tokens Output</th>
                             <th class="col-prompt-completo">Prompt Completo</th>
                             <th class="col-resposta-ia">Resposta IA</th>
                             <th>Ações</th>
@@ -285,18 +299,34 @@
                                 <small>{{ analise.tempo_processamento or 0 }}s</small>
                             </td>
                             <td class="col-custo">
-                                <small>${{ "%.4f"|format(analise.custo_estimado or 0) }}</small>
+                                <small>
+                                    {% if analise.custo_real is defined and analise.custo_real > 0 %}
+                                        ${{ "%.6f"|format(analise.custo_real) }}
+                                    {% else %}
+                                        $0.000000
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td class="col-tokens-input">
+                                <small>{{ analise.tokens_input or 0 }}</small>
+                            </td>
+                            <td class="col-tokens-output">
+                                <small>{{ analise.tokens_output or 0 }}</small>
                             </td>
                             <td class="col-prompt-completo">
                                 <button class="btn btn-sm btn-outline-info" 
-                                        onclick="mostrarPromptCompletoRelatorios('{{ analise.intimacao_id }}', '{{ analise.prompt_completo or 'N/A' }}')"
+                                        data-intimacao-id="{{ analise.intimacao_id }}" 
+                                        data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
+                                        onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
                                         title="Ver prompt completo">
                                     <i class="bi bi-code-square"></i>
                                 </button>
                             </td>
                             <td class="col-resposta-ia">
                                 <button class="btn btn-sm btn-outline-success" 
-                                        onclick="mostrarRespostaCompletaRelatorios('{{ analise.intimacao_id }}', '{{ analise.resposta_completa or 'N/A' }}')"
+                                        data-intimacao-id="{{ analise.intimacao_id }}"
+                                        data-resposta-completa="{{ analise.resposta_completa or 'N/A' }}"
+                                        onclick="mostrarRespostaCompletaRelatorios(this.dataset.intimacaoId, this.dataset.respostaCompleta)"
                                         title="Ver resposta completa">
                                     <i class="bi bi-chat-dots"></i>
                                 </button>
@@ -304,13 +334,15 @@
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button class="btn btn-outline-primary" 
-                                            onclick="visualizarAnalise('{{ analise.id }}')"
-                                            title="Visualizar">
+                                            data-analise-id="{{ analise.id }}"
+                                            onclick="visualizarAnalise(this.dataset.analiseId)"
+                                            title="Visualizar análise">
                                         <i class="bi bi-eye"></i>
                                     </button>
                                     <button class="btn btn-outline-danger" 
-                                            onclick="excluirAnalise('{{ analise.id }}')"
-                                            title="Excluir">
+                                            data-analise-id="{{ analise.id }}"
+                                            onclick="excluirAnalise(this.dataset.analiseId)"
+                                            title="Excluir análise">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </div>
@@ -335,7 +367,8 @@
 /* Estilos para configuração de colunas */
 .col-data, .col-intimacao, .col-prompt, .col-classificacao-manual, 
 .col-informacao-adicional, .col-resultado-ia, .col-status, 
-.col-configuracoes, .col-tempo, .col-custo, .col-prompt-completo, .col-resposta-ia {
+.col-configuracoes, .col-tempo, .col-custo, .col-tokens-input, .col-tokens-output, 
+.col-prompt-completo, .col-resposta-ia {
     transition: all 0.3s ease;
 }
 
@@ -350,6 +383,8 @@
 .col-configuracoes[style*="display: none"], 
 .col-tempo[style*="display: none"], 
 .col-custo[style*="display: none"],
+.col-tokens-input[style*="display: none"],
+.col-tokens-output[style*="display: none"],
 .col-prompt-completo[style*="display: none"],
 .col-resposta-ia[style*="display: none"] {
     width: 0 !important;
@@ -410,6 +445,8 @@ function carregarConfiguracaoColunas() {
             configuracoes: true,
             tempo: true,
             custo: true,
+            tokens_input: true,
+            tokens_output: true,
             prompt_completo: true,
             resposta_ia: true
         };
@@ -440,6 +477,8 @@ function aplicarConfiguracaoColunas() {
             configuracoes: true,
             tempo: true,
             custo: true,
+            tokens_input: true,
+            tokens_output: true,
             prompt_completo: true,
             resposta_ia: true
         };
@@ -457,6 +496,8 @@ function aplicarConfiguracaoColunas() {
         'configuracoes': '.col-configuracoes',
         'tempo': '.col-tempo',
         'custo': '.col-custo',
+        'tokens_input': '.col-tokens-input',
+        'tokens_output': '.col-tokens-output',
         'prompt_completo': '.col-prompt-completo',
         'resposta_ia': '.col-resposta-ia'
     };
@@ -498,6 +539,8 @@ function selecionarTodasColunas() {
         configuracoes: true,
         tempo: true,
         custo: true,
+        tokens_input: true,
+        tokens_output: true,
         prompt_completo: true,
         resposta_ia: true
     };
@@ -525,6 +568,8 @@ function limparSelecaoColunas() {
         configuracoes: false,
         tempo: false,
         custo: false,
+        tokens_input: false,
+        tokens_output: false,
         prompt_completo: false,
         resposta_ia: false
     };
@@ -662,5 +707,48 @@ function atualizarContadores() {
     document.getElementById('contador-analises').textContent = totalAnalises;
     document.getElementById('contador-acertos').textContent = acertos;
     document.getElementById('contador-erros').textContent = erros;
+}
+
+function restaurarDadosMockados() {
+    if (confirm('Tem certeza que deseja restaurar os dados de exemplo? Isso irá adicionar análises de demonstração ao sistema.')) {
+        // Mostrar loading
+        const botao = event.target;
+        const textoOriginal = botao.innerHTML;
+        botao.innerHTML = '<i class="bi bi-hourglass-split"></i> Restaurando...';
+        botao.disabled = true;
+        
+        // Fazer requisição para restaurar dados
+        fetch('/api/restaurar-dados-demo', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarToast('Dados de demonstração restaurados com sucesso!', 'success');
+                // Limpar filtros
+                document.getElementById('filtro-rapido-status').value = '';
+                document.getElementById('filtro-rapido-prompt').value = '';
+                document.getElementById('filtro-rapido-data').value = '';
+                // Recarregar página após delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                mostrarToast('Erro ao restaurar dados: ' + (data.message || 'Erro desconhecido'), 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            mostrarToast('Erro ao restaurar dados. Verifique o console.', 'error');
+        })
+        .finally(() => {
+            // Restaurar botão
+            botao.innerHTML = textoOriginal;
+            botao.disabled = false;
+        });
+    }
 }
 </script>

@@ -1,5 +1,9 @@
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente do arquivo .env
+load_dotenv()
 
 class Config:
     """Configurações base da aplicação"""
@@ -24,6 +28,15 @@ class Config:
     OPENAI_DEFAULT_MAX_TOKENS = 500
     OPENAI_DEFAULT_TOP_P = 1.0
     
+    # Configurações Azure OpenAI
+    AZURE_OPENAI_API_KEY = os.environ.get('AZURE_OPENAI_API_KEY')
+    AZURE_OPENAI_ENDPOINT = os.environ.get('AZURE_OPENAI_ENDPOINT')
+    AZURE_OPENAI_API_VERSION = os.environ.get('AZURE_OPENAI_API_VERSION', '2024-02-15-preview')
+    AZURE_OPENAI_DEFAULT_DEPLOYMENT = os.environ.get('AZURE_OPENAI_DEFAULT_DEPLOYMENT', 'gpt-4')
+    AZURE_OPENAI_DEFAULT_TEMPERATURE = 0.7
+    AZURE_OPENAI_DEFAULT_MAX_TOKENS = 500
+    AZURE_OPENAI_DEFAULT_TOP_P = 1.0
+    
     # Configurações de backup
     MAX_BACKUPS = 10
     BACKUP_ON_SAVE = True
@@ -45,12 +58,126 @@ class Config:
         'URGÊNCIA'
     ]
     
-    # Modelos OpenAI disponíveis
+    # Lista de defensores disponíveis
+    DEFENSORES = [
+        'Rodrigo Ahlert Weirich',
+        'André Iglésias e Silva Borges',
+        'Walter Luchese Willig'
+    ]
+    
+    @staticmethod
+    def get_portal_tarefa_link(tarefa_id: str, config_data: dict = None) -> str:
+        """
+        Gera o link completo para uma tarefa no Portal da Defensoria
+        
+        Args:
+            tarefa_id: ID da tarefa
+            config_data: Dados de configuração (opcional)
+            
+        Returns:
+            Link completo para a tarefa ou string vazia se não configurado
+        """
+        if not config_data:
+            return ''
+            
+        portal_link = config_data.get('portal_defensoria_link', '')
+        if not portal_link or not tarefa_id:
+            return ''
+            
+        # Verificar se o link já tem parâmetro (contém ?)
+        if '?' in portal_link:
+            # Se já tem parâmetro, apenas concatenar o ID
+            return f"{portal_link}{tarefa_id}"
+        else:
+            # Se não tem parâmetro, adicionar / antes do ID
+            if not portal_link.endswith('/'):
+                portal_link += '/'
+            return f"{portal_link}{tarefa_id}"
+    
+    # Modelos OpenAI disponíveis (2025)
     OPENAI_MODELS = [
+        # GPT-5 Series (Flagship models - 2025)
+        'gpt-5',
+        'gpt-5-mini',
+        'gpt-5-nano',
+        'gpt-5-chat',
+        
+        # GPT-4.1 Series (April 2025)
+        'gpt-4.1',
+        'gpt-4.1-mini',
+        'gpt-4.1-nano',
+        
+        # GPT-4o Series (Multimodal)
+        'gpt-4o',
+        'gpt-4o-mini',
+        'chatgpt-4o-latest',
+        
+        # o-Series (Reasoning models)
+        'o3',
+        'o3-pro',
+        'o3-mini',
+        'o4-mini',
+        
+        # GPT-4 Series (Legacy but still supported)
         'gpt-4',
+        'gpt-4-turbo',
         'gpt-4-turbo-preview',
+        
+        # GPT-3.5 Series (Cost-effective)
         'gpt-3.5-turbo',
         'gpt-3.5-turbo-16k'
+    ]
+    
+    # Preços padrão da API OpenAI (por 1M tokens)
+    PRECOS_OPENAI_PADRAO = {
+        'gpt-4o': {'input': 2.50, 'output': 10.00},
+        'gpt-4o-mini': {'input': 0.15, 'output': 0.60},
+        'gpt-4-turbo': {'input': 10.00, 'output': 30.00},
+        'gpt-3.5-turbo': {'input': 0.50, 'output': 1.50},
+        'data_atualizacao': '2025-01-23'
+    }
+    
+    # Preços padrão da API Azure OpenAI (por 1M tokens)
+    PRECOS_AZURE_PADRAO = {
+        'gpt-4o': {'input': 5.00, 'output': 15.00},
+        'gpt-4o-mini': {'input': 0.165, 'output': 0.66},
+        'gpt-4-turbo': {'input': 10.00, 'output': 30.00},
+        'gpt-3.5-turbo': {'input': 0.50, 'output': 1.50},
+        'data_atualizacao': '2025-01-23'
+    }
+    
+    # Modelos Azure OpenAI disponíveis (deployments) - 2025
+    AZURE_OPENAI_MODELS = [
+        # GPT-5 Series (Limited access required)
+        'gpt-5',
+        'gpt-5-mini',
+        'gpt-5-nano',
+        'gpt-5-chat',
+        
+        # GPT-4.1 Series
+        'gpt-4.1',
+        'gpt-4.1-mini',
+        'gpt-4.1-nano',
+        
+        # GPT-4o Series
+        'gpt-4o',
+        'gpt-4o-mini',
+        
+        # o-Series (Reasoning)
+        'o3-mini',
+        'o4-mini',
+        
+        # Open Source Reasoning Models
+        'gpt-oss-120b',
+        'gpt-oss-20b',
+        
+        # GPT-4 Series (Stable)
+        'gpt-4',
+        'gpt-4-turbo',
+        
+        # GPT-3.5 Series (Azure naming convention)
+        'gpt-35-turbo',
+        'gpt-35-turbo-16k'
     ]
     
     @staticmethod

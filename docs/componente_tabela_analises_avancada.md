@@ -75,7 +75,7 @@ analises = [
         'modelo': 'gpt-4',
         'temperatura': 0.1,
         'tempo_processamento': 2.5,
-        'custo_estimado': 0.002,
+        
         'resposta_completa': 'Resposta da IA...'
     }
 ]
@@ -115,7 +115,7 @@ return render_template('sua_pagina.html', analises=analises, prompts=prompts)
     modelo: 'string',                // Modelo usado (ex: gpt-4)
     temperatura: number,             // Temperatura usada
     tempo_processamento: number,     // Tempo em segundos
-    custo_estimado: number,          // Custo estimado
+    
     resposta_completa: 'string'      // Resposta completa da IA
 }
 ```

@@ -9,6 +9,7 @@ class Prompt:
                  nome: str,
                  conteudo: str,
                  descricao: Optional[str] = None,
+                 regra_negocio: Optional[str] = None,
                  id: Optional[str] = None,
                  data_criacao: Optional[datetime] = None):
         """
@@ -18,12 +19,14 @@ class Prompt:
             nome: Nome identificador do prompt
             conteudo: Texto do prompt
             descricao: Descrição opcional do prompt
+            regra_negocio: Regra de negócio opcional do prompt
             id: ID único do prompt (gerado automaticamente se não fornecido)
             data_criacao: Data de criação (atual se não fornecida)
         """
         self.id = id or str(uuid.uuid4())
         self.nome = nome
         self.descricao = descricao or ""
+        self.regra_negocio = regra_negocio or ""
         self.conteudo = conteudo
         self.data_criacao = data_criacao or datetime.now()
     
@@ -33,6 +36,7 @@ class Prompt:
             'id': self.id,
             'nome': self.nome,
             'descricao': self.descricao,
+            'regra_negocio': self.regra_negocio,
             'conteudo': self.conteudo,
             'data_criacao': self.data_criacao.isoformat() if isinstance(self.data_criacao, datetime) else self.data_criacao
         }
@@ -53,6 +57,7 @@ class Prompt:
             id=data.get('id'),
             nome=data.get('nome', ''),
             descricao=data.get('descricao', ''),
+            regra_negocio=data.get('regra_negocio', ''),
             conteudo=data.get('conteudo', ''),
             data_criacao=data_criacao
         )

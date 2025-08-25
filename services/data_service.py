@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import threading
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from config import Config
@@ -11,7 +12,17 @@ class DataService:
     def __init__(self):
         """Inicializar o serviço de dados"""
         self.config = Config()
+        # Locks para evitar condição de corrida ao salvar arquivos
+        self._file_locks = {}
+        self._locks_lock = threading.Lock()
         self._ensure_data_files_exist()
+    def _get_file_lock(self, file_path: str) -> threading.Lock:
+        """Obter lock específico para um arquivo"""
+        with self._locks_lock:
+            if file_path not in self._file_locks:
+                self._file_locks[file_path] = threading.Lock()
+            return self._file_locks[file_path]
+
     
     def _ensure_data_files_exist(self):
         """Garantir que os arquivos de dados existam"""
@@ -49,21 +60,23 @@ class DataService:
             return {}
     
     def _save_json(self, file_path: str, data: Dict[str, Any]):
-        """Salvar dados em um arquivo JSON"""
-        try:
-            # Fazer backup se configurado (exceto para config.json)
-            if self.config.BACKUP_ON_SAVE and os.path.exists(file_path):
-                # Não fazer backup de arquivos sensíveis
-                if 'config.json' not in file_path:
-                    self._create_backup(file_path)
-                else:
-                    print("🔒 Proteção: Backup de config.json desabilitado por segurança")
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"Erro ao salvar {file_path}: {e}")
-            raise
+        """Salvar dados em um arquivo JSON com proteção contra condição de corrida"""
+        # Usar lock específico do arquivo para evitar condição de corrida
+        with self._get_file_lock(file_path):
+            try:
+                # Fazer backup se configurado (exceto para config.json)
+                if self.config.BACKUP_ON_SAVE and os.path.exists(file_path):
+                    # Não fazer backup de arquivos sensíveis
+                    if 'config.json' not in file_path:
+                        self._create_backup(file_path)
+                    else:
+                        print("🔒 Proteção: Backup de config.json desabilitado por segurança")
+
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Erro ao salvar {file_path}: {e}")
+                raise
     
     def _create_backup(self, file_path: str):
         """Criar backup de um arquivo"""
@@ -338,7 +351,7 @@ class DataService:
             total_usos = len(prompt['historico_uso'])
             acertos = sum(1 for uso in prompt['historico_uso'] if uso.get('acuracia') == 1)
             tempo_total = sum(uso.get('tempo_processamento', 0) for uso in prompt['historico_uso'])
-            custo_total = sum(uso.get('custo_estimado', 0) for uso in prompt['historico_uso'])
+            custo_total = 0.0  # Cálculo de custo removido - simulação desabilitada
             
             prompt['total_usos'] = total_usos
             prompt['acuracia_media'] = (acertos / total_usos * 100) if total_usos > 0 else 0
@@ -430,3 +443,79 @@ class DataService:
             'distribuicao_classificacao': distribuicao_classificacao,
             'stats_por_prompt': stats_por_prompt
         }
+    
+    def calculate_real_cost(self, tokens_input: int, tokens_output: int, model: str, provider: str = None) -> float:
+        """Calcular custo real baseado nos tokens de entrada e saída usando preços configurados"""
+        try:
+            config = self.get_config() or {}
+            
+            # Determinar o provedor se não especificado
+            if not provider:
+                provider = config.get('ai_provider', 'openai')
+            
+            # Obter preços configurados
+            if provider.lower() == 'azure':
+                precos = config.get('precos_azure', self.config.PRECOS_AZURE_PADRAO)
+            else:
+                precos = config.get('precos_openai', self.config.PRECOS_OPENAI_PADRAO)
+            
+            # Mapear nomes de modelos para chaves de preços (formato aninhado)
+            model_mapping = {
+                # OpenAI/Azure GPT-4o
+                'gpt-4o': 'gpt-4o',
+                'gpt4o': 'gpt-4o',
+                
+                # OpenAI/Azure GPT-4o-mini
+                'gpt-4o-mini': 'gpt-4o-mini',
+                'gpt4o-mini': 'gpt-4o-mini',
+                
+                # OpenAI/Azure GPT-4-turbo
+                'gpt-4-turbo': 'gpt-4-turbo',
+                'gpt4-turbo': 'gpt-4-turbo',
+                'gpt-4-turbo-preview': 'gpt-4-turbo',
+                
+                # OpenAI/Azure GPT-3.5-turbo
+                'gpt-3.5-turbo': 'gpt-3.5-turbo',
+                'gpt35-turbo': 'gpt-3.5-turbo',
+                'gpt-35-turbo': 'gpt-3.5-turbo',  # Azure naming
+                
+                # GPT-4 (usar preços do GPT-4-turbo como fallback)
+                'gpt-4': 'gpt-4-turbo'
+            }
+            
+            # Encontrar a chave de preço para o modelo
+            model_key = model_mapping.get(model.lower(), 'gpt-4o')  # Default para gpt-4o
+            
+            # Obter preços do modelo (estrutura aninhada)
+            input_price = 0
+            output_price = 0
+            
+            if model_key in precos and isinstance(precos[model_key], dict):
+                model_prices = precos[model_key]
+                input_price = model_prices.get('input', 0)
+                output_price = model_prices.get('output', 0)
+            
+            # Se não encontrou preços configurados, usar preços padrão
+            if input_price == 0 and output_price == 0:
+                # Usar preços padrão do Config
+                if provider.lower() == 'azure':
+                    default_precos = self.config.PRECOS_AZURE_PADRAO
+                else:
+                    default_precos = self.config.PRECOS_OPENAI_PADRAO
+                
+                if model_key in default_precos and isinstance(default_precos[model_key], dict):
+                    model_prices = default_precos[model_key]
+                    input_price = model_prices.get('input', 0)
+                    output_price = model_prices.get('output', 0)
+            
+            # Calcular custo (preços são por 1M tokens, converter para por token)
+            input_cost = (tokens_input / 1_000_000) * input_price
+            output_cost = (tokens_output / 1_000_000) * output_price
+            
+            total_cost = input_cost + output_cost
+            
+            return round(total_cost, 6)  # Arredondar para 6 casas decimais
+            
+        except Exception as e:
+            print(f"⚠️  Erro ao calcular custo real: {e}")
+            return 0.0

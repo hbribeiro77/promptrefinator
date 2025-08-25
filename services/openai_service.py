@@ -1,11 +1,12 @@
 import openai
 import time
 import re
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any, Optional, List
 from config import Config
 from services.data_service import DataService
+from services.ai_service_interface import AIServiceInterface
 
-class OpenAIService:
+class OpenAIService(AIServiceInterface):
     """Serviço para integração com a API da OpenAI"""
     
     def __init__(self):
@@ -15,7 +16,11 @@ class OpenAIService:
         self.client = None
         self._initialize_client()
     
-    def _initialize_client(self):
+    def initialize_client(self) -> bool:
+        """Inicializar cliente OpenAI com a chave da API"""
+        return self._initialize_client()
+    
+    def _initialize_client(self) -> bool:
         """Inicializar cliente OpenAI com a chave da API"""
         try:
             # Priorizar variável de ambiente sobre arquivo de configuração
@@ -29,13 +34,16 @@ class OpenAIService:
             if api_key:
                 self.client = openai.OpenAI(api_key=api_key)
                 print("✅ Cliente OpenAI inicializado com sucesso")
+                return True
             else:
                 print("⚠️  Aviso: Chave da API OpenAI não configurada.")
                 print("   Configure a variável de ambiente OPENAI_API_KEY ou use a interface de configurações.")
                 self.client = None
+                return False
         except Exception as e:
             print(f"❌ Erro ao inicializar cliente OpenAI: {e}")
             self.client = None
+            return False
     
     def update_api_key(self, api_key: str):
         """Atualizar chave da API"""
@@ -78,7 +86,7 @@ class OpenAIService:
     def analisar_intimacao(self, 
                           contexto: str, 
                           prompt_template: str, 
-                          parametros: Dict[str, Any]) -> Tuple[str, str]:
+                          parametros: Dict[str, Any]) -> Tuple[str, str, Dict[str, int]]:
         """Analisar intimação usando OpenAI"""
         if not self.client:
             raise Exception("Cliente OpenAI não inicializado. Configure a chave da API.")
@@ -90,7 +98,7 @@ class OpenAIService:
         parametros_validados = self._validar_parametros(parametros)
         
         # Fazer chamada para OpenAI com retry
-        resposta_completa = self._fazer_chamada_com_retry(
+        resposta_completa, tokens_info = self._fazer_chamada_com_retry(
             prompt_completo, 
             parametros_validados
         )
@@ -98,7 +106,7 @@ class OpenAIService:
         # Extrair classificação da resposta
         classificacao = self._extrair_classificacao(resposta_completa)
         
-        return classificacao, resposta_completa
+        return classificacao, resposta_completa, tokens_info
     
     def _construir_prompt(self, template: str, contexto: str) -> str:
         """Construir prompt completo substituindo variáveis"""
@@ -143,7 +151,7 @@ class OpenAIService:
     def _fazer_chamada_com_retry(self, 
                                 prompt: str, 
                                 parametros: Dict[str, Any], 
-                                max_retries: int = 3) -> str:
+                                max_retries: int = 3) -> Tuple[str, Dict[str, int]]:
         """Fazer chamada para OpenAI com retry e backoff exponencial"""
         for tentativa in range(max_retries):
             try:
@@ -164,7 +172,14 @@ class OpenAIService:
                     top_p=parametros['top_p']
                 )
                 
-                return response.choices[0].message.content.strip()
+                # Extrair informações de tokens
+                tokens_info = {
+                    'input': response.usage.prompt_tokens if response.usage else 0,
+                    'output': response.usage.completion_tokens if response.usage else 0,
+                    'total': response.usage.total_tokens if response.usage else 0
+                }
+                
+                return response.choices[0].message.content.strip(), tokens_info
                 
             except openai.RateLimitError:
                 if tentativa < max_retries - 1:
@@ -269,30 +284,7 @@ class OpenAIService:
         """Obter lista de modelos disponíveis"""
         return self.config.OPENAI_MODELS
     
-    def estimate_cost(self, 
-                     prompt_length: int, 
-                     response_length: int, 
-                     model: str) -> float:
-        """Estimar custo de uma chamada"""
-        # Estimativas de custo por 1K tokens (valores aproximados em USD)
-        costs_per_1k = {
-            'gpt-4': {'input': 0.03, 'output': 0.06},
-            'gpt-4-turbo-preview': {'input': 0.01, 'output': 0.03},
-            'gpt-3.5-turbo': {'input': 0.0015, 'output': 0.002},
-            'gpt-3.5-turbo-16k': {'input': 0.003, 'output': 0.004}
-        }
-        
-        if model not in costs_per_1k:
-            model = 'gpt-4'  # Usar gpt-4 como padrão para estimativa
-        
-        # Estimativa simples: ~4 caracteres por token
-        input_tokens = prompt_length / 4
-        output_tokens = response_length / 4
-        
-        input_cost = (input_tokens / 1000) * costs_per_1k[model]['input']
-        output_cost = (output_tokens / 1000) * costs_per_1k[model]['output']
-        
-        return input_cost + output_cost
+    # Função estimate_cost removida - simulação de custos desabilitada
     
     def analyze_text(self, 
                     prompt: str, 
@@ -311,3 +303,20 @@ class OpenAIService:
         }
         
         return self._fazer_chamada_com_retry(prompt, parametros)
+    
+    def get_provider_name(self) -> str:
+        """Obter nome do provedor"""
+        return "OpenAI"
+    
+    def get_default_parameters(self) -> Dict[str, Any]:
+        """Obter parâmetros padrão do OpenAI"""
+        return {
+            'model': self.config.OPENAI_DEFAULT_MODEL,
+            'temperature': self.config.OPENAI_DEFAULT_TEMPERATURE,
+            'max_tokens': self.config.OPENAI_DEFAULT_MAX_TOKENS,
+            'top_p': self.config.OPENAI_DEFAULT_TOP_P
+        }
+    
+    def validate_parameters(self, parametros: Dict[str, Any]) -> Dict[str, Any]:
+        """Validar e ajustar parâmetros (reutiliza método existente)"""
+        return self._validar_parametros(parametros)

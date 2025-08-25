@@ -60,13 +60,13 @@
     <!-- Footer do Card (opcional) -->
     {% if show_actions %}
     <div class="card-intimacao-footer">
-        <button class="btn btn-sm btn-outline-primary" onclick="visualizarIntimacao('{{ intimacao.id }}')">
+        <button class="btn btn-sm btn-outline-primary" data-intimacao-id="{{ intimacao.id }}" onclick="visualizarIntimacao(this.dataset.intimacaoId)">
             <i class="bi bi-eye"></i> Visualizar
         </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="editarIntimacao('{{ intimacao.id }}')">
+        <button class="btn btn-sm btn-outline-secondary" data-intimacao-id="{{ intimacao.id }}" onclick="editarIntimacao(this.dataset.intimacaoId)">
             <i class="bi bi-pencil"></i> Editar
         </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="excluirIntimacao('{{ intimacao.id }}')">
+        <button class="btn btn-sm btn-outline-danger" data-intimacao-id="{{ intimacao.id }}" onclick="excluirIntimacao(this.dataset.intimacaoId)">
             <i class="bi bi-trash"></i> Excluir
         </button>
     </div>

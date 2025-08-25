@@ -30,8 +30,41 @@
 
 <div class="row">
     <div class="col-lg-8">
-        <!-- Configurações da OpenAI -->
+        <!-- Seletor de Provedor de IA -->
         <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-cpu"></i>
+                    Provedor de Inteligência Artificial
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="ai-provider" class="form-label">
+                        Provedor Atual
+                        <span class="text-danger">*</span>
+                    </label>
+                    <select class="form-select" id="ai-provider" name="ai_provider" onchange="alterarProvedor()">
+                        <option value="openai" {% if provedor_atual == 'openai' %}selected{% endif %}>OpenAI (GPT-3.5, GPT-4)</option>
+                        <option value="azure" {% if provedor_atual == 'azure' %}selected{% endif %}>Azure OpenAI</option>
+                        <option value="anthropic" disabled>Anthropic Claude (Em breve)</option>
+                        <option value="google" disabled>Google Gemini (Em breve)</option>
+                        <option value="local" disabled>Modelo Local (Em breve)</option>
+                    </select>
+                    <div class="form-text">
+                        <i class="bi bi-info-circle"></i>
+                        Selecione o provedor de IA que será usado para análise das intimações.
+                        <br>
+                        <strong>Provedor ativo:</strong> <span id="provider-status" class="badge {% if provedor_atual == 'openai' or provedor_atual == 'azure' %}bg-success{% else %}bg-warning{% endif %}">
+                            {% if provedor_atual == 'openai' %}OpenAI{% elif provedor_atual == 'azure' %}Azure OpenAI{% else %}{{ provedor_atual|title }}{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Configurações da OpenAI -->
+        <div class="card mb-4" id="openai-config">
             <div class="card-header">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-key"></i>
@@ -135,6 +168,377 @@
             </div>
         </div>
 
+        <!-- Configurações do Azure OpenAI -->
+        <div class="card mb-4" id="azure-config" style="display: none;">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-cloud"></i>
+                    Configurações do Azure OpenAI
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="form-azure">
+                    <div class="mb-3">
+                        <label for="azure-api-key" class="form-label">
+                            Chave da API
+                            <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="azure-api-key" name="azure_api_key" 
+                                   placeholder="Chave da API do Azure OpenAI" value="***CONFIGURADO VIA .ENV***" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('azure-api-key')">
+                                <i class="bi bi-eye" id="azure-api-key-icon"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Chave configurada via variável de ambiente</strong>
+                                <br>
+                                A chave da API está sendo carregada do arquivo <code>.env</code> ou variável de ambiente <code>AZURE_OPENAI_API_KEY</code>.
+                                <br>
+                                Para alterar, edite o arquivo <code>.env</code> na raiz do projeto.
+                                <br><br>
+                                <strong>Status:</strong> <code>Configurada via variável de ambiente</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="azure-endpoint" class="form-label">
+                            Endpoint
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="url" class="form-control" id="azure-endpoint" name="azure_endpoint" 
+                               placeholder="https://seu-recurso.openai.azure.com/" value="***CONFIGURADO VIA .ENV***" readonly>
+                        <div class="form-text">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Endpoint configurado via variável de ambiente</strong>
+                                <br>
+                                O endpoint está sendo carregado do arquivo <code>.env</code> ou variável de ambiente <code>AZURE_OPENAI_ENDPOINT</code>.
+                                <br>
+                                Para alterar, edite o arquivo <code>.env</code> na raiz do projeto.
+                                <br><br>
+                                <strong>Valor atual:</strong> <code>https://rdm.openai.azure.com/</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="azure-api-version" class="form-label">Versão da API</label>
+                        <select class="form-select" id="azure-api-version" name="azure_api_version">
+                            <option value="2024-02-15-preview" {% if config.azure_api_version == '2024-02-15-preview' %}selected{% endif %}>2024-02-15-preview</option>
+                            <option value="2023-12-01-preview" {% if config.azure_api_version == '2023-12-01-preview' %}selected{% endif %}>2023-12-01-preview</option>
+                            <option value="2023-05-15" {% if config.azure_api_version == '2023-05-15' %}selected{% endif %}>2023-05-15</option>
+                        </select>
+                        <div class="form-text">
+                            Versão da API do Azure OpenAI a ser utilizada
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="azure-deployment" class="form-label">Deployment Padrão</label>
+                        <select class="form-select" id="azure-deployment" name="azure_deployment">
+                            {% for modelo in modelos_disponiveis %}
+                            <option value="{{ modelo }}" {% if modelo == config.azure_deployment %}selected{% endif %}>
+                                {{ modelo }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                                   placeholder="gpt-4" value="{{ config.azure_deployment or 'gpt-4' }}">
+                            <div class="form-text">
+                                Nome do deployment configurado no Azure
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="azure-temperatura" class="form-label">
+                                Temperatura Padrão
+                                <span class="text-muted">(<span id="azure-temp-value">{{ config.azure_temperatura if config.azure_temperatura is not none else 0.7 }}</span>)</span>
+                            </label>
+                            <input type="range" class="form-range" id="azure-temperatura" name="azure_temperatura" 
+                                   min="0" max="2" step="0.1" value="{{ config.azure_temperatura if config.azure_temperatura is not none else 0.7 }}" 
+                                   oninput="document.getElementById('azure-temp-value').textContent = this.value">
+                            <div class="form-text">
+                                0 = Mais determinístico, 2 = Mais criativo
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="azure-max-tokens" class="form-label">Máximo de Tokens Padrão</label>
+                            <input type="number" class="form-control" id="azure-max-tokens" name="azure_max_tokens" 
+                                   value="{{ config.azure_max_tokens or 500 }}" min="1" max="4000">
+                            <div class="form-text">
+                                Limite padrão de tokens para respostas
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="azure-timeout" class="form-label">Timeout Padrão (segundos)</label>
+                            <input type="number" class="form-control" id="azure-timeout" name="azure_timeout" 
+                                   value="{{ config.azure_timeout or 30 }}" min="5" max="120">
+                            <div class="form-text">
+                                Tempo limite padrão para chamadas da API
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-primary" onclick="testarConexaoAzure()">
+                            <i class="bi bi-wifi"></i>
+                            Testar Conexão
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="salvarConfiguracaoAzure()">
+                            <i class="bi bi-check-lg"></i>
+                            Salvar Configurações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Configurações de Preços da API -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-currency-dollar"></i>
+                    Preços da API
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Informação:</strong> Configure os preços por milhão de tokens para calcular o custo real das análises.
+                    Os valores são em USD e devem ser atualizados conforme as tabelas oficiais dos provedores.
+                </div>
+                
+                <!-- Preços OpenAI -->
+                <div class="mb-4">
+                    <h6 class="text-primary">
+                        <i class="bi bi-robot"></i>
+                        Preços OpenAI (USD por 1M tokens)
+                    </h6>
+                    <form id="form-precos-openai">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="openai-gpt4o-input" class="form-label">GPT-4o - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4o-input" name="openai_gpt4o_input" 
+                                           value="{{ precos_openai['gpt-4o'].input or 2.50 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="openai-gpt4o-output" class="form-label">GPT-4o - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4o-output" name="openai_gpt4o_output" 
+                                           value="{{ precos_openai['gpt-4o'].output or 10.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="openai-gpt4o-mini-input" class="form-label">GPT-4o-mini - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4o-mini-input" name="openai_gpt4o_mini_input" 
+                                           value="{{ precos_openai['gpt-4o-mini'].input or 0.15 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label for="openai-gpt4o-mini-output" class="form-label">GPT-4o-mini - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4o-mini-output" name="openai_gpt4o_mini_output" 
+                                           value="{{ precos_openai['gpt-4o-mini'].output or 0.60 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="openai-gpt4-turbo-input" class="form-label">GPT-4 Turbo - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4-turbo-input" name="openai_gpt4_turbo_input" 
+                                           value="{{ precos_openai['gpt-4-turbo'].input or 10.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="openai-gpt4-turbo-output" class="form-label">GPT-4 Turbo - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt4-turbo-output" name="openai_gpt4_turbo_output" 
+                                           value="{{ precos_openai['gpt-4-turbo'].output or 30.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label for="openai-gpt35-turbo-input" class="form-label">GPT-3.5 Turbo - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt35-turbo-input" name="openai_gpt35_turbo_input" 
+                                           value="{{ precos_openai['gpt-3.5-turbo'].input or 0.50 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="openai-gpt35-turbo-output" class="form-label">GPT-3.5 Turbo - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="openai-gpt35-turbo-output" name="openai_gpt35_turbo_output" 
+                                           value="{{ precos_openai['gpt-3.5-turbo'].output or 1.50 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="data-atualizacao-openai" class="form-label">Última Atualização</label>
+                                <input type="date" class="form-control" id="data-atualizacao-openai" name="data_atualizacao_openai" 
+                                       value="{{ precos_openai.data_atualizacao or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-success" onclick="salvarPrecosOpenAI()">
+                                <i class="bi bi-check-lg"></i>
+                                Salvar Preços OpenAI
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="restaurarPrecosOpenAI()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                Restaurar Padrões
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <hr>
+                
+                <!-- Preços Azure OpenAI -->
+                <div class="mb-4">
+                    <h6 class="text-primary">
+                        <i class="bi bi-microsoft"></i>
+                        Preços Azure OpenAI (USD por 1M tokens)
+                    </h6>
+                    <form id="form-precos-azure">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="azure-gpt4o-input" class="form-label">GPT-4o - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4o-input" name="azure_gpt4o_input" 
+                                           value="{{ precos_azure['gpt-4o'].input or 5.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="azure-gpt4o-output" class="form-label">GPT-4o - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4o-output" name="azure_gpt4o_output" 
+                                           value="{{ precos_azure['gpt-4o'].output or 15.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="azure-gpt4o-mini-input" class="form-label">GPT-4o-mini - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4o-mini-input" name="azure_gpt4o_mini_input" 
+                                           value="{{ precos_azure['gpt-4o-mini'].input or 0.165 }}" step="0.001" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label for="azure-gpt4o-mini-output" class="form-label">GPT-4o-mini - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4o-mini-output" name="azure_gpt4o_mini_output" 
+                                           value="{{ precos_azure['gpt-4o-mini'].output or 0.66 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="azure-gpt4-turbo-input" class="form-label">GPT-4 Turbo - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4-turbo-input" name="azure_gpt4_turbo_input" 
+                                           value="{{ precos_azure['gpt-4-turbo'].input or 10.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="azure-gpt4-turbo-output" class="form-label">GPT-4 Turbo - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt4-turbo-output" name="azure_gpt4_turbo_output" 
+                                           value="{{ precos_azure['gpt-4-turbo'].output or 30.00 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-4">
+                                <label for="azure-gpt35-turbo-input" class="form-label">GPT-3.5 Turbo - Input</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt35-turbo-input" name="azure_gpt35_turbo_input" 
+                                           value="{{ precos_azure['gpt-3.5-turbo'].input or 0.50 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="azure-gpt35-turbo-output" class="form-label">GPT-3.5 Turbo - Output</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="azure-gpt35-turbo-output" name="azure_gpt35_turbo_output" 
+                                           value="{{ precos_azure['gpt-3.5-turbo'].output or 1.50 }}" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="data-atualizacao-azure" class="form-label">Última Atualização</label>
+                                <input type="date" class="form-control" id="data-atualizacao-azure" name="data_atualizacao_azure" 
+                                       value="{{ precos_azure.data_atualizacao or '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-success" onclick="salvarPrecosAzure()">
+                                <i class="bi bi-check-lg"></i>
+                                Salvar Preços Azure
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="restaurarPrecosAzure()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                                Restaurar Padrões
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Informações de Custo -->
+                <div class="alert alert-light border">
+                    <h6 class="alert-heading">
+                        <i class="bi bi-calculator"></i>
+                        Calculadora de Custos
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                <strong>Exemplo de cálculo:</strong><br>
+                                • 1.000 tokens de entrada × $2.50 = $0.0025<br>
+                                • 500 tokens de saída × $10.00 = $0.005<br>
+                                • <strong>Custo total: $0.0075</strong>
+                            </small>
+                        </div>
+                        <div class="col-md-6">
+                            <small class="text-muted">
+                                <strong>Dica:</strong> Mantenha os preços atualizados consultando:<br>
+                                • <a href="https://openai.com/pricing" target="_blank">OpenAI Pricing</a><br>
+                                • <a href="https://azure.microsoft.com/pricing/details/cognitive-services/openai-service/" target="_blank">Azure OpenAI Pricing</a>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Configurações do Sistema -->
         <div class="card mb-4">
             <div class="card-header">
@@ -192,6 +596,28 @@
                             </select>
                             <div class="form-text">
                                 Idioma da interface do sistema
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <label for="portal-defensoria-link" class="form-label">
+                                <i class="bi bi-link-45deg"></i>
+                                Link Base do Portal da Defensoria
+                            </label>
+                            <input type="url" class="form-control" id="portal-defensoria-link" name="portal_defensoria_link" 
+                                   placeholder="https://portal.defensoria.rs.gov.br/tarefas/" 
+                                   value="{{ config.portal_defensoria_link or '' }}">
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Link base para localizar tarefas no Portal da Defensoria</strong>
+                                <br>
+                                Este link será combinado com o ID da tarefa para criar links diretos.
+                                <br>
+                                <strong>Exemplo:</strong> Se o link for <code>https://portal.defensoria.rs.gov.br/tarefas/</code> 
+                                e o ID da tarefa for <code>12345</code>, o link final será: 
+                                <code>https://portal.defensoria.rs.gov.br/tarefas/12345</code>
                             </div>
                         </div>
                     </div>
@@ -436,9 +862,15 @@
                         <div class="border-end">
                             <div class="d-flex align-items-center justify-content-center">
                                 <i class="bi bi-circle-fill text-success me-1"></i>
-                                <small>OpenAI API</small>
+                                <small id="provider-api-status">
+                                    {% if provedor_atual == 'azure' %}
+                                        Azure OpenAI
+                                    {% else %}
+                                        OpenAI API
+                                    {% endif %}
+                                </small>
                             </div>
-                            <small class="text-muted" id="status-openai">Conectado</small>
+                            <small class="text-muted" id="status-provider">Conectado</small>
                         </div>
                     </div>
                     <div class="col-6">
@@ -645,45 +1077,101 @@
 <script>
 // Função para salvar configurações
 function salvarConfiguracoes() {
-    const dados = {
-        // OpenAI (chave vem da variável de ambiente)
-        modelo_padrao: document.getElementById('modelo-padrao').value,
-        temperatura_padrao: parseFloat(document.getElementById('temperatura-padrao').value),
-        max_tokens_padrao: parseInt(document.getElementById('max-tokens-padrao').value),
-        timeout_padrao: parseInt(document.getElementById('timeout-padrao').value),
-        max_retries: parseInt(document.getElementById('max-retries').value),
-        retry_delay: parseInt(document.getElementById('retry-delay').value),
-        
-        // Configurações Gerais
-        itens_por_pagina: parseInt(document.getElementById('itens-por-pagina').value),
-        formato_data: document.getElementById('formato-data').value,
-        tema: document.getElementById('tema').value,
-        idioma: document.getElementById('idioma').value,
-        mostrar_tooltips: document.getElementById('mostrar-tooltips').checked,
-        animacoes: document.getElementById('animacoes').checked,
-        sons_notificacao: document.getElementById('sons-notificacao').checked,
-        auto_save: document.getElementById('auto-save').checked,
-        
-        // Backup
-        backup_automatico: document.getElementById('backup-automatico').value,
-        max_backups: parseInt(document.getElementById('max-backups').value),
-        diretorio_backup: document.getElementById('diretorio-backup').value,
-        compressao_backup: document.getElementById('compressao-backup').value,
-        
-        // Avançado
-        log_level: document.getElementById('log-level').value,
-        cache_size: parseInt(document.getElementById('cache-size').value),
-        max_concurrent: parseInt(document.getElementById('max-concurrent').value),
-        session_timeout: parseInt(document.getElementById('session-timeout').value),
-        debug_mode: document.getElementById('debug-mode').checked,
-        log_requests: document.getElementById('log-requests').checked,
-        cache_enabled: document.getElementById('cache-enabled').checked
-    };
+    console.log('=== DEBUG: SALVANDO CONFIGURAÇÕES ===');
     
-    // Aqui você faria a chamada para o backend
-    console.log('Salvando configurações:', dados);
+    const dados = {};
     
-    showToast('Configurações salvas com sucesso!', 'success');
+    // Função auxiliar para obter valor com segurança
+    function getValue(id, type = 'value') {
+        const element = document.getElementById(id);
+        if (!element) {
+            console.warn(`Elemento não encontrado: ${id}`);
+            return type === 'checked' ? false : '';
+        }
+        
+        if (type === 'checked') {
+            return element.checked;
+        } else if (type === 'int') {
+            const value = parseInt(element.value) || 0;
+            return value;
+        } else if (type === 'float') {
+            const value = parseFloat(element.value) || 0;
+            return value;
+        } else {
+            return element.value || '';
+        }
+    }
+    
+    // OpenAI (chave vem da variável de ambiente)
+    dados.modelo_padrao = getValue('modelo-padrao');
+    dados.temperatura_padrao = getValue('temperatura-padrao', 'float');
+    dados.max_tokens_padrao = getValue('max-tokens-padrao', 'int');
+    dados.timeout_padrao = getValue('timeout-padrao', 'int');
+    dados.max_retries = getValue('max-retries', 'int');
+    dados.retry_delay = getValue('retry-delay', 'int');
+    
+    // Configurações Gerais
+    dados.itens_por_pagina = getValue('itens-por-pagina', 'int');
+    dados.formato_data = getValue('formato-data');
+    dados.tema = getValue('tema');
+    dados.idioma = getValue('idioma');
+    dados.portal_defensoria_link = getValue('portal-defensoria-link');
+    dados.mostrar_tooltips = getValue('mostrar-tooltips', 'checked');
+    dados.animacoes = getValue('animacoes', 'checked');
+    dados.sons_notificacao = getValue('sons-notificacao', 'checked');
+    dados.auto_save = getValue('auto-save', 'checked');
+    
+    // Backup
+    dados.backup_automatico = getValue('backup-automatico');
+    dados.max_backups = getValue('max-backups', 'int');
+    dados.diretorio_backup = getValue('diretorio-backup');
+    dados.compressao_backup = getValue('compressao-backup');
+    
+    // Avançado
+    dados.log_level = getValue('log-level');
+    dados.cache_size = getValue('cache-size', 'int');
+    dados.max_concurrent = getValue('max-concurrent', 'int');
+    dados.session_timeout = getValue('session-timeout', 'int');
+    dados.debug_mode = getValue('debug-mode', 'checked');
+    dados.log_requests = getValue('log-requests', 'checked');
+    dados.cache_enabled = getValue('cache-enabled', 'checked');
+    
+    console.log('Dados coletados:', dados);
+    
+    // Fazer a chamada para o backend
+    console.log('Iniciando chamada para o backend...');
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+    button.disabled = true;
+    
+    fetch('/configuracoes', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(dados)
+    })
+    .then(response => {
+        if (response.ok) {
+            showToast('Configurações salvas com sucesso!', 'success');
+            // Recarregar a página para atualizar os valores
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            throw new Error('Erro ao salvar configurações');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar configurações: ' + error.message, 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
 }
 
 // Função para testar conexão
@@ -739,6 +1227,7 @@ function confirmarReset() {
     document.getElementById('formato-data').value = 'DD/MM/YYYY';
     document.getElementById('tema').value = 'light';
     document.getElementById('idioma').value = 'pt-BR';
+    document.getElementById('portal-defensoria-link').value = '';
     document.getElementById('mostrar-tooltips').checked = true;
     document.getElementById('animacoes').checked = true;
     document.getElementById('sons-notificacao').checked = false;
@@ -860,6 +1349,7 @@ function importarConfiguracoes() {
                         }
                         if (cfg.max_tokens_padrao) document.getElementById('max-tokens-padrao').value = cfg.max_tokens_padrao;
                         if (cfg.itens_por_pagina) document.getElementById('itens-por-pagina').value = cfg.itens_por_pagina;
+                        if (cfg.portal_defensoria_link) document.getElementById('portal-defensoria-link').value = cfg.portal_defensoria_link;
                         if (cfg.tema) document.getElementById('tema').value = cfg.tema;
                         if (cfg.idioma) document.getElementById('idioma').value = cfg.idioma;
                     }
@@ -889,6 +1379,120 @@ function verificarAtualizacoes() {
             showToast('Sistema está atualizado!', 'success');
         }
     }, 2000);
+}
+
+// Função para salvar preços OpenAI
+function salvarPrecosOpenAI() {
+    const formData = new FormData(document.getElementById('form-precos-openai'));
+    const data = Object.fromEntries(formData.entries());
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+    button.disabled = true;
+    
+    fetch('/api/configuracoes/precos-openai', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Preços da OpenAI salvos com sucesso!', 'success');
+            // Recarregar a página para atualizar os valores exibidos
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Erro ao salvar preços: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar preços', 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Função para salvar preços Azure
+function salvarPrecosAzure() {
+    const formData = new FormData(document.getElementById('form-precos-azure'));
+    const data = Object.fromEntries(formData.entries());
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+    button.disabled = true;
+    
+    fetch('/api/configuracoes/precos-azure', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Preços do Azure OpenAI salvos com sucesso!', 'success');
+            // Recarregar a página para atualizar os valores exibidos
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Erro ao salvar preços: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar preços', 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Função para restaurar preços padrão OpenAI
+function restaurarPrecosOpenAI() {
+    if (confirm('Tem certeza que deseja restaurar os preços padrão da OpenAI?')) {
+        // Preços padrão baseados na tabela oficial da OpenAI (Janeiro 2025)
+        document.getElementById('openai-gpt4o-input').value = '2.50';
+        document.getElementById('openai-gpt4o-output').value = '10.00';
+        document.getElementById('openai-gpt4o-mini-input').value = '0.15';
+        document.getElementById('openai-gpt4o-mini-output').value = '0.60';
+        document.getElementById('openai-gpt4-turbo-input').value = '10.00';
+        document.getElementById('openai-gpt4-turbo-output').value = '30.00';
+        document.getElementById('openai-gpt35-turbo-input').value = '0.50';
+        document.getElementById('openai-gpt35-turbo-output').value = '1.50';
+        document.getElementById('data-atualizacao-openai').value = new Date().toISOString().split('T')[0];
+        
+        showToast('Preços padrão da OpenAI restaurados!', 'success');
+    }
+}
+
+// Função para restaurar preços padrão Azure
+function restaurarPrecosAzure() {
+    if (confirm('Tem certeza que deseja restaurar os preços padrão do Azure OpenAI?')) {
+        // Preços padrão baseados na tabela oficial do Azure OpenAI (Janeiro 2025)
+        document.getElementById('azure-gpt4o-input').value = '5.00';
+        document.getElementById('azure-gpt4o-output').value = '15.00';
+        document.getElementById('azure-gpt4o-mini-input').value = '0.165';
+        document.getElementById('azure-gpt4o-mini-output').value = '0.66';
+        document.getElementById('azure-gpt4-turbo-input').value = '10.00';
+        document.getElementById('azure-gpt4-turbo-output').value = '30.00';
+        document.getElementById('azure-gpt35-turbo-input').value = '0.50';
+        document.getElementById('azure-gpt35-turbo-output').value = '1.50';
+        document.getElementById('data-atualizacao-azure').value = new Date().toISOString().split('T')[0];
+        
+        showToast('Preços padrão do Azure OpenAI restaurados!', 'success');
+    }
 }
 
 // Função para resetar sistema
@@ -977,6 +1581,67 @@ document.getElementById('api-key').addEventListener('input', function() {
     }
 });
 
+// Função para alterar provedor de IA
+function alterarProvedor() {
+    const select = document.getElementById('ai-provider');
+    const provedor = select.value;
+    const status = document.getElementById('provider-status');
+    const providerApiStatus = document.getElementById('provider-api-status');
+    
+    // Atualizar status visual
+    status.textContent = select.options[select.selectedIndex].text.split(' (')[0];
+    
+    // Atualizar status do provedor na seção Status do Sistema
+    if (providerApiStatus) {
+        if (provedor === 'azure') {
+            providerApiStatus.textContent = 'Azure OpenAI';
+        } else {
+            providerApiStatus.textContent = 'OpenAI API';
+        }
+    }
+    
+    // Mostrar/ocultar seções de configuração baseado no provedor
+    const openaiConfig = document.getElementById('openai-config');
+    const azureConfig = document.getElementById('azure-config');
+    
+    // Ocultar todas as seções primeiro
+    openaiConfig.style.display = 'none';
+    azureConfig.style.display = 'none';
+    
+    if (provedor === 'openai') {
+        openaiConfig.style.display = 'block';
+        status.className = 'badge bg-success';
+    } else if (provedor === 'azure') {
+        azureConfig.style.display = 'block';
+        status.className = 'badge bg-success';
+    } else {
+        status.className = 'badge bg-warning';
+    }
+    
+    // Salvar configuração do provedor
+    fetch('/api/configuracoes/provedor', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            provider: provedor
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Provedor alterado com sucesso!', 'success');
+        } else {
+            showToast('Erro ao alterar provedor: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao alterar provedor', 'error');
+    });
+}
+
 // Função para alternar visibilidade da senha
 function togglePasswordVisibility(inputId) {
     const input = document.getElementById(inputId);
@@ -1010,5 +1675,136 @@ document.getElementById('tema').addEventListener('change', function() {
         }
     }
 });
+
+// Função para testar conexão Azure
+function testarConexaoAzure() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Testando...';
+    button.disabled = true;
+    
+    // Como as credenciais estão no .env, enviamos uma requisição sem dados
+    // O backend usará as variáveis de ambiente diretamente
+    fetch('/api/configuracoes/testar-azure', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            use_env_credentials: true
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Conexão com Azure OpenAI estabelecida com sucesso!', 'success');
+        } else {
+            showToast('Erro na conexão: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao testar conexão', 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Função para salvar configurações Azure
+function salvarConfiguracaoAzure() {
+    const formData = new FormData(document.getElementById('form-azure'));
+    const data = Object.fromEntries(formData.entries());
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+    button.disabled = true;
+    
+    fetch('/api/configuracoes/azure', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Configurações do Azure salvas com sucesso!', 'success');
+        } else {
+            showToast('Erro ao salvar configurações: ' + data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro ao salvar configurações', 'error');
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Carregar preços da API nos campos
+function carregarPrecosAPI() {
+    // Função auxiliar para definir valor se o elemento existir
+    function setValueIfExists(id, value) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.value = value || '';
+        }
+    }
+    
+    // Carregar preços OpenAI
+    const precosOpenai = {{ precos_openai | tojson }};
+    if (precosOpenai) {
+        setValueIfExists('openai-gpt4o-input', precosOpenai['gpt-4o']?.input);
+        setValueIfExists('openai-gpt4o-output', precosOpenai['gpt-4o']?.output);
+        setValueIfExists('openai-gpt4o-mini-input', precosOpenai['gpt-4o-mini']?.input);
+        setValueIfExists('openai-gpt4o-mini-output', precosOpenai['gpt-4o-mini']?.output);
+        setValueIfExists('openai-gpt4-turbo-input', precosOpenai['gpt-4-turbo']?.input);
+        setValueIfExists('openai-gpt4-turbo-output', precosOpenai['gpt-4-turbo']?.output);
+        setValueIfExists('openai-gpt35-turbo-input', precosOpenai['gpt-3.5-turbo']?.input);
+        setValueIfExists('openai-gpt35-turbo-output', precosOpenai['gpt-3.5-turbo']?.output);
+        setValueIfExists('openai-data-atualizacao', precosOpenai.data_atualizacao);
+    }
+    
+    // Carregar preços Azure
+    const precosAzure = {{ precos_azure | tojson }};
+    if (precosAzure) {
+        setValueIfExists('azure-gpt4o-input', precosAzure['gpt-4o']?.input);
+        setValueIfExists('azure-gpt4o-output', precosAzure['gpt-4o']?.output);
+        setValueIfExists('azure-gpt4o-mini-input', precosAzure['gpt-4o-mini']?.input);
+        setValueIfExists('azure-gpt4o-mini-output', precosAzure['gpt-4o-mini']?.output);
+        setValueIfExists('azure-gpt4-turbo-input', precosAzure['gpt-4-turbo']?.input);
+        setValueIfExists('azure-gpt4-turbo-output', precosAzure['gpt-4-turbo']?.output);
+        setValueIfExists('azure-gpt35-turbo-input', precosAzure['gpt-3.5-turbo']?.input);
+        setValueIfExists('azure-gpt35-turbo-output', precosAzure['gpt-3.5-turbo']?.output);
+        setValueIfExists('azure-data-atualizacao', precosAzure.data_atualizacao);
+    }
+}
+
+// Inicializar configurações do provedor na carga da página
+document.addEventListener('DOMContentLoaded', function() {
+    const provedor = '{{ provedor_atual }}';
+    const openaiConfig = document.getElementById('openai-config');
+    const azureConfig = document.getElementById('azure-config');
+    
+    // Ocultar todas as seções primeiro
+    openaiConfig.style.display = 'none';
+    azureConfig.style.display = 'none';
+    
+    // Mostrar/ocultar seções baseado no provedor atual
+    if (provedor === 'openai') {
+        openaiConfig.style.display = 'block';
+    } else if (provedor === 'azure') {
+        azureConfig.style.display = 'block';
+    }
+    
+    // Carregar preços da API
+    carregarPrecosAPI();
+})
 </script>
 {% endblock %}

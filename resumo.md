@@ -77,16 +77,21 @@ promptrefinator2/
 - `/relatorios` - Relatórios e estatísticas
 - `/configuracoes` - Configurações do sistema
 - `/exportar` - Exportação de dados
-- `/api/relatorios/pagina/<int:pagina>` - Paginação AJAX (NOVO)
-- `/api/analises/excluir` - Exclusão de análises (NOVO)
+- `/api/relatorios/pagina/<int:pagina>` - Paginação AJAX
+- `/api/analises/excluir` - Exclusão de análises
+- `/api/analise-progresso` - Server-Sent Events para progresso em tempo real (NOVO)
+- `/api/precos-modelos` - API para obter preços dos modelos (NOVO)
 
 **Funcionalidades Especiais:**
 - Paginação AJAX para relatórios
 - Sistema de backup automático
 - Exportação em múltiplos formatos
 - API REST para operações CRUD
-- **NOVO**: Sistema de variáveis de ambiente para chaves de API
-- **NOVO**: Persistência de configurações de colunas via localStorage
+- Sistema de variáveis de ambiente para chaves de API
+- Persistência de configurações de colunas via localStorage
+- **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
+- **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
+- **NOVO**: Tooltips de memória de cálculo com soma automática
 
 ### **2. Configurações (`config.py`)**
 
@@ -162,10 +167,14 @@ promptrefinator2/
 - Interface para execução de análises
 - Seleção de prompts e intimações
 - Configurações de IA (modelo, temperatura)
+- **NOVO**: Sistema de progresso em tempo real com Server-Sent Events (SSE)
+- **NOVO**: Barra de progresso dinâmica com cancelamento
+- **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
+- **NOVO**: Tooltips de memória de cálculo com soma automática
 - Exibição de resultados em tempo real
 - Modais para visualização completa de prompts/respostas
-- **NOVO**: Coluna "Informação Adicional" configurável
-- **NOVO**: Persistência de configurações de colunas
+- Coluna "Informação Adicional" configurável
+- Persistência de configurações de colunas
 
 #### **Relatórios (`templates/relatorios.html`)**
 - Gráficos de acurácia por período
@@ -228,7 +237,7 @@ promptrefinator2/
       "modelo": "Modelo usado",
       "temperatura": float,
       "tokens_usados": int,
-      "custo_estimado": float,
+
       "prompt_completo": "Prompt enviado",
       "resposta_completa": "Resposta da IA"
     }
@@ -291,10 +300,14 @@ promptrefinator2/
 1. Usuário acessa `/analise`
 2. Seleciona prompt e intimações
 3. Configura parâmetros de IA
-4. Sistema envia para OpenAI
-5. Recebe e processa resposta
-6. Salva análise no banco (incluindo prompt_completo e resposta_completa)
-7. Exibe resultados em tempo real
+4. **NOVO**: Sistema inicia progresso em tempo real via Server-Sent Events
+5. **NOVO**: Barra de progresso mostra "X de Y intimações" em tempo real
+6. Sistema envia para OpenAI
+7. Recebe e processa resposta
+8. **NOVO**: Calcula custo real baseado em tokens e preços configurados
+9. Salva análise no banco (incluindo prompt_completo, resposta_completa e custo_real)
+10. Exibe resultados em tempo real
+11. **NOVO**: Tooltips mostram memória de cálculo com soma automática
 
 ### **4. Relatórios e Estatísticas**
 1. Usuário acessa `/relatorios`
@@ -335,10 +348,24 @@ promptrefinator2/
 - Modais reutilizáveis para conteúdo longo
 - Funcionalidade de cópia para clipboard
 - Escape adequado de caracteres especiais
-- **NOVO**: Componente centralizado para reutilização
-- **NOVO**: Uso de data-attributes para evitar problemas de escape
+- Componente centralizado para reutilização
+- Uso de data-attributes para evitar problemas de escape
 
-### **Sistema de Variáveis de Ambiente (NOVO)**
+### **Sistema de Progresso em Tempo Real (NOVO)**
+- Server-Sent Events (SSE) para atualizações em tempo real
+- Barra de progresso dinâmica com percentual
+- Descrições variadas durante o processamento
+- Funcionalidade de cancelamento
+- Integração com análise real de intimações
+
+### **Sistema de Cálculo de Custos (NOVO)**
+- Cálculo real baseado em tokens de entrada e saída
+- Preços configuráveis por modelo e provedor
+- Tooltips de memória de cálculo com soma automática
+- Integração com preços do Azure OpenAI e OpenAI
+- Exibição de custo total e individual
+
+### **Sistema de Variáveis de Ambiente**
 - Carregamento automático de `.env`
 - Substituição de placeholders `${VARIABLE}`
 - Priorização de variáveis de ambiente sobre config.json
@@ -379,8 +406,9 @@ promptrefinator2/
 - Distribuição de resultados da IA
 - Performance por prompt
 - Tempo de processamento
-- Tokens utilizados
-- Custo estimado
+- Tokens utilizados (entrada e saída)
+- **NOVO**: Custo real baseado em tokens e preços configurados
+- **NOVO**: Memória de cálculo detalhada por análise
 
 ### **Otimizações Implementadas**
 - Sistema de cache para dados
@@ -448,10 +476,13 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - ✅ Relatórios detalhados e gráficos
 - ✅ Configuração flexível
 - ✅ Exportação de dados completa
-- ✅ **NOVO**: Segurança aprimorada com variáveis de ambiente
-- ✅ **NOVO**: Persistência de configurações do usuário
-- ✅ **NOVO**: Sistema de modais reutilizáveis
-- ✅ **NOVO**: Paginação AJAX otimizada
+- ✅ Segurança aprimorada com variáveis de ambiente
+- ✅ Persistência de configurações do usuário
+- ✅ Sistema de modais reutilizáveis
+- ✅ Paginação AJAX otimizada
+- ✅ **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
+- ✅ **NOVO**: Cálculo de custo real baseado em tokens e preços
+- ✅ **NOVO**: Tooltips de memória de cálculo com soma automática
 
 **Tecnologias Utilizadas:**
 - Python + Flask (Backend)
@@ -468,5 +499,9 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - 📊 Paginação AJAX sem mudança de URL
 - 🗂️ Componentes modulares para melhor manutenibilidade
 - 📝 Documentação completa com README.md
+- ⚡ **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
+- 💰 **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
+- 🧮 **NOVO**: Tooltips de memória de cálculo com soma automática
+- 🎯 **NOVO**: Barra de progresso dinâmica com cancelamento
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.

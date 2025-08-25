@@ -127,23 +127,7 @@ class Analise:
         else:
             return f"{self.tempo_processamento:.2f}s"
     
-    def estimate_cost(self) -> float:
-        """Estimativa de custo baseada no modelo usado"""
-        model = self.parametros_openai.get('model', 'gpt-4')
-        max_tokens = self.parametros_openai.get('max_tokens', 500)
-        
-        # Estimativas de custo por 1K tokens (valores aproximados)
-        costs_per_1k = {
-            'gpt-4': 0.03,
-            'gpt-4-turbo-preview': 0.01,
-            'gpt-3.5-turbo': 0.002,
-            'gpt-3.5-turbo-16k': 0.004
-        }
-        
-        cost_per_1k = costs_per_1k.get(model, 0.03)
-        estimated_tokens = max_tokens + len(self.resposta_completa_ia) // 4  # Estimativa simples
-        
-        return (estimated_tokens / 1000) * cost_per_1k
+    # Função estimate_cost removida - simulação de custos desabilitada
     
     def __str__(self) -> str:
         """Representação string da análise"""

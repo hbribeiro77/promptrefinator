@@ -1,13 +1,15 @@
 import os
+import time
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, Response
 from werkzeug.utils import secure_filename
 import json
 import uuid
 from config import config
 from services.data_service import DataService
-from services.openai_service import OpenAIService
+from services.ai_manager_service import AIManagerService
 from services.export_service import ExportService
+from services.cost_calculation_service import cost_service
 
 # Carregar variáveis de ambiente do arquivo .env
 from dotenv import load_dotenv
@@ -28,9 +30,52 @@ if not os.environ.get('OPENAI_API_KEY'):
         pass
 
 # Inicializar serviços
-data_service = DataService()
-openai_service = OpenAIService()
+from services.sqlite_service import SQLiteService
+data_service = SQLiteService()  # Mudança para SQLite
+ai_manager_service = AIManagerService()
 export_service = ExportService()
+
+# Sistema de controle de cancelamento de análises
+analises_em_andamento = {}  # {session_id: {'cancelado': bool, 'total': int, 'atual': int}}
+
+def criar_session_id():
+    """Cria um ID único para a sessão de análise"""
+    return str(uuid.uuid4())
+
+def registrar_analise(session_id, total_intimacoes):
+    """Registra uma nova análise em andamento"""
+    analises_em_andamento[session_id] = {
+        'cancelado': False,
+        'total': total_intimacoes,
+        'atual': 0,
+        'inicio': time.time()
+    }
+    print(f"=== DEBUG: Análise registrada - Session ID: {session_id}, Total: {total_intimacoes} ===")
+
+def cancelar_analise(session_id):
+    """Marca uma análise para cancelamento"""
+    if session_id in analises_em_andamento:
+        analises_em_andamento[session_id]['cancelado'] = True
+        print(f"=== DEBUG: Análise cancelada - Session ID: {session_id} ===")
+        return True
+    return False
+
+def verificar_cancelamento(session_id):
+    """Verifica se uma análise foi cancelada"""
+    if session_id in analises_em_andamento:
+        return analises_em_andamento[session_id]['cancelado']
+    return False
+
+def atualizar_progresso_analise(session_id, atual):
+    """Atualiza o progresso de uma análise"""
+    if session_id in analises_em_andamento:
+        analises_em_andamento[session_id]['atual'] = atual
+
+def finalizar_analise(session_id):
+    """Remove uma análise do controle"""
+    if session_id in analises_em_andamento:
+        del analises_em_andamento[session_id]
+        print(f"=== DEBUG: Análise finalizada - Session ID: {session_id} ===")
 
 # Criar aplicação Flask
 app = Flask(__name__)
@@ -215,13 +260,27 @@ def listar_intimacoes():
         
         print("DEBUG: Carregando todas as intimações...")
         intimacoes = data_service.get_all_intimacoes()
+        
+        # Validação defensiva
+        if intimacoes is None:
+            intimacoes = []
+        
         print(f"DEBUG: Total de intimações carregadas: {len(intimacoes)}")
         for i, intimacao in enumerate(intimacoes):
-            print(f"  {i+1}. ID: {intimacao.get('id')} | Contexto: {intimacao.get('contexto')[:50]}...")
+            if intimacao is None:
+                print(f"  {i+1}. ❌ Intimação None encontrada")
+                continue
+            contexto = intimacao.get('contexto', '')
+            if contexto is None:
+                contexto = ''
+            print(f"  {i+1}. ID: {intimacao.get('id')} | Contexto: {contexto[:50]}...")
+        
+        # Filtrar intimações None
+        intimacoes = [i for i in intimacoes if i is not None]
         
         # Aplicar filtros
         if busca:
-            intimacoes = [i for i in intimacoes if busca.lower() in i.get('contexto', '').lower()]
+            intimacoes = [i for i in intimacoes if busca.lower() in (i.get('contexto', '') or '').lower()]
             print(f"DEBUG: Após filtro de busca: {len(intimacoes)}")
         
         if classificacao:
@@ -263,6 +322,7 @@ def listar_intimacoes():
                              total_paginas=total_paginas,
                              total_itens=total_itens,
                              stats=stats,
+                             config=config,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              filtros={'busca': busca, 'classificacao': classificacao, 'ordenacao': ordenacao})
@@ -274,6 +334,7 @@ def listar_intimacoes():
                              total_paginas=1,
                              total_itens=0,
                              stats={'total': 0, 'com_classificacao': 0, 'analisadas': 0, 'pendentes': 0},
+                             config={},
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              filtros={'busca': '', 'classificacao': '', 'ordenacao': 'data_desc'})
@@ -296,6 +357,9 @@ def nova_intimacao():
             intimado = request.form.get('intimado', '').strip()
             status = request.form.get('status', '').strip()
             prazo = request.form.get('prazo', '').strip()
+            defensor = request.form.get('defensor', '').strip()
+            id_tarefa = request.form.get('id_tarefa', '').strip()
+            cor_etiqueta = request.form.get('cor_etiqueta', '').strip()
             
             print(f"Contexto extraído: '{contexto}'")
             print(f"Classificação extraída: '{classificacao_manual}'")
@@ -307,6 +371,9 @@ def nova_intimacao():
             print(f"Intimado: '{intimado}'")
             print(f"Status: '{status}'")
             print(f"Prazo: '{prazo}'")
+            print(f"Defensor: '{defensor}'")
+            print(f"ID Tarefa: '{id_tarefa}'")
+            print(f"Cor Etiqueta: '{cor_etiqueta}'")
             
             if not contexto:
                 print("DEBUG: Contexto vazio, retornando erro")
@@ -314,6 +381,7 @@ def nova_intimacao():
                 return render_template('nova_intimacao.html', 
                                      classificacoes=Config.TIPOS_ACAO,
                                      tipos_acao=Config.TIPOS_ACAO,
+                                     defensores=Config.DEFENSORES,
                                      dados={'contexto': contexto, 
                                            'classificacao_manual': classificacao_manual,
                                            'informacoes_adicionais': informacoes_adicionais,
@@ -323,7 +391,10 @@ def nova_intimacao():
                                            'disponibilizacao': disponibilizacao,
                                            'intimado': intimado,
                                            'status': status,
-                                           'prazo': prazo})
+                                           'prazo': prazo,
+                                           'defensor': defensor,
+                                           'id_tarefa': id_tarefa,
+                                           'cor_etiqueta': cor_etiqueta})
             
             # Criar a intimação
             intimacao_data = {
@@ -337,6 +408,9 @@ def nova_intimacao():
                 'intimado': intimado if intimado else None,
                 'status': status if status else None,
                 'prazo': prazo if prazo else None,
+                'defensor': defensor if defensor else None,
+                'id_tarefa': id_tarefa if id_tarefa else None,
+                'cor_etiqueta': cor_etiqueta if cor_etiqueta else None,
                 'data_criacao': datetime.now().isoformat(),
                 'analises': []
             }
@@ -360,6 +434,7 @@ def nova_intimacao():
             return render_template('nova_intimacao.html', 
                                  classificacoes=Config.TIPOS_ACAO,
                                  tipos_acao=Config.TIPOS_ACAO,
+                                 defensores=Config.DEFENSORES,
                                  dados={'contexto': request.form.get('contexto', ''), 
                                        'classificacao_manual': request.form.get('classificacao_manual', ''),
                                        'informacoes_adicionais': request.form.get('informacoes_adicionais', ''),
@@ -369,11 +444,15 @@ def nova_intimacao():
                                        'disponibilizacao': request.form.get('disponibilizacao', ''),
                                        'intimado': request.form.get('intimado', ''),
                                        'status': request.form.get('status', ''),
-                                       'prazo': request.form.get('prazo', '')})
+                                       'prazo': request.form.get('prazo', ''),
+                                       'defensor': request.form.get('defensor', ''),
+                                       'id_tarefa': request.form.get('id_tarefa', ''),
+                                       'cor_etiqueta': request.form.get('cor_etiqueta', '')})
     
     return render_template('nova_intimacao.html', 
                          classificacoes=Config.TIPOS_ACAO,
                          tipos_acao=Config.TIPOS_ACAO,
+                         defensores=Config.DEFENSORES,
                          dados={})
 
 @app.route('/intimacoes/<id>')
@@ -410,16 +489,56 @@ def visualizar_intimacao(id):
                 resultado = analise.get('resultado_ia', 'Não classificado')
                 stats['distribuicao_resultados'][resultado] = stats['distribuicao_resultados'].get(resultado, 0) + 1
         
+        # Carregar configurações para o link do portal
+        config = data_service.get_config()
+        
         return render_template('visualizar_intimacao.html',
                              intimacao=intimacao,
                              analises=analises,
                              stats=stats,
+                             config=config,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO)
                              
     except Exception as e:
         flash(f'Erro ao carregar intimação: {str(e)}', 'error')
         return redirect(url_for('listar_intimacoes'))
+
+@app.route('/analises/<analise_id>')
+def visualizar_analise(analise_id):
+    """Página para visualizar detalhes de uma análise específica"""
+    try:
+        # Buscar a análise em todas as intimações
+        intimacoes = data_service.get_all_intimacoes()
+        analise_encontrada = None
+        intimacao_relacionada = None
+        
+        for intimacao in intimacoes:
+            for analise in intimacao.get('analises', []):
+                if analise.get('id') == analise_id:
+                    analise_encontrada = analise
+                    intimacao_relacionada = intimacao
+                    break
+            if analise_encontrada:
+                break
+        
+        if not analise_encontrada:
+            flash('Análise não encontrada.', 'error')
+            return redirect(url_for('analise'))
+        
+        # Buscar informações do prompt usado
+        prompt_usado = None
+        if analise_encontrada.get('prompt_id'):
+            prompt_usado = data_service.get_prompt_by_id(analise_encontrada['prompt_id'])
+        
+        return render_template('visualizar_analise.html',
+                               analise=analise_encontrada,
+                               intimacao=intimacao_relacionada,
+                               prompt=prompt_usado)
+    except Exception as e:
+        print(f"Erro ao visualizar análise: {e}")
+        flash('Erro ao carregar análise.', 'error')
+        return redirect(url_for('analise'))
 
 @app.route('/prompts')
 def listar_prompts():
@@ -500,6 +619,7 @@ def novo_prompt():
         try:
             nome = request.form.get('nome', '').strip()
             descricao = request.form.get('descricao', '').strip()
+            regra_negocio = request.form.get('regra_negocio', '').strip()
             conteudo = request.form.get('conteudo', '').strip()
             
             if not nome or not conteudo:
@@ -516,6 +636,7 @@ def novo_prompt():
             prompt_data = {
                 'nome': nome,
                 'descricao': descricao if descricao else None,
+                'regra_negocio': regra_negocio if regra_negocio else None,
                 'conteudo': conteudo,
                 'data_criacao': datetime.now().isoformat(),
                 'total_usos': 0,
@@ -587,9 +708,20 @@ def analise():
         intimacoes = data_service.get_all_intimacoes()
         config = data_service.get_config()
         
+        # Validar dados antes de processar
+        if prompts is None:
+            prompts = []
+        if intimacoes is None:
+            intimacoes = []
+        if config is None:
+            config = {}
+        
         # Adicionar informações de tamanho aos prompts
         for prompt in prompts:
-            conteudo_len = len(prompt.get('conteudo', ''))
+            conteudo = prompt.get('conteudo', '')
+            if conteudo is None:
+                conteudo = ''
+            conteudo_len = len(conteudo)
             if conteudo_len <= 500:
                 prompt['tamanho'] = 'Pequeno'
             elif conteudo_len <= 2000:
@@ -597,14 +729,25 @@ def analise():
             else:
                 prompt['tamanho'] = 'Grande'
         
+        # Usar o ai_manager_service global
+        provedor_atual = ai_manager_service.get_current_provider()
+        
+        # Debug das configurações
+        modelo_padrao = config.get('azure_deployment', 'gpt-4')
+        temperatura_padrao = config.get('azure_temperatura', 0.7)
+        max_tokens_padrao = config.get('azure_max_tokens', 500)
+        
+        print(f"=== DEBUG: Configurações carregadas - Modelo: {modelo_padrao}, Temp: {temperatura_padrao}, Tokens: {max_tokens_padrao} ===")
+        
         return render_template('analise.html',
                              prompts=prompts,
                              intimacoes=intimacoes,
                              classificacoes=Config.TIPOS_ACAO,
                              modelos_disponiveis=Config.OPENAI_MODELS,
-                             modelo_padrao=config.get('modelo_padrao', 'gpt-4'),
-                             temperatura_padrao=config.get('temperatura_padrao', 0.7),
-                             max_tokens_padrao=config.get('max_tokens_padrao', 500))
+                             modelo_padrao=modelo_padrao,
+                             temperatura_padrao=temperatura_padrao,
+                             max_tokens_padrao=max_tokens_padrao,
+                             provedor_atual=provedor_atual)
     except Exception as e:
         flash(f'Erro ao carregar página de análise: {str(e)}', 'error')
         return render_template('analise.html',
@@ -612,6 +755,7 @@ def analise():
                              intimacoes=[],
                              classificacoes=Config.TIPOS_ACAO,
                              modelos_disponiveis=Config.OPENAI_MODELS,
+                             provedor_atual='openai',
                              modelo_padrao='gpt-4',
                              temperatura_padrao=0.7,
                              max_tokens_padrao=500)
@@ -627,12 +771,20 @@ def executar_analise():
         prompt_id = data.get('prompt_id')
         intimacao_ids = data.get('intimacao_ids', [])
         configuracoes = data.get('configuracoes', {})
+        session_id = data.get('session_id')  # ID da sessão para cancelamento
         
         if not prompt_id or not intimacao_ids:
             return jsonify({'error': 'Prompt e intimações são obrigatórios'}), 400
         
+        if not session_id:
+            return jsonify({'error': 'Session ID é obrigatório para cancelamento'}), 400
+        
         print(f"=== DEBUG: Prompt ID: {prompt_id} ===")
         print(f"=== DEBUG: Intimação IDs: {intimacao_ids} ===")
+        print(f"=== DEBUG: Session ID: {session_id} ===")
+        
+        # Registrar análise para controle de cancelamento
+        registrar_analise(session_id, len(intimacao_ids))
         
         # Carregar configurações padrão
         config = data_service.get_config()
@@ -651,17 +803,31 @@ def executar_analise():
         # Executar análises
         prompt = data_service.get_prompt_by_id(prompt_id)
         if not prompt:
+            finalizar_analise(session_id)
             return jsonify({'error': 'Prompt não encontrado'}), 404
             
         print(f"=== DEBUG: Prompt encontrado: {prompt['nome']} ===")
             
-        for intimacao_id in intimacao_ids:
+        for i, intimacao_id in enumerate(intimacao_ids, 1):
+            # Verificar se a análise foi cancelada
+            if verificar_cancelamento(session_id):
+                print(f"=== DEBUG: Análise cancelada pelo usuário - Session ID: {session_id} ===")
+                finalizar_analise(session_id)
+                return jsonify({
+                    'success': False,
+                    'cancelado': True,
+                    'message': 'Análise cancelada pelo usuário'
+                })
+            
+            # Atualizar progresso
+            atualizar_progresso_analise(session_id, i)
+            
             intimacao = data_service.get_intimacao_by_id(intimacao_id)
             if not intimacao:
                 print(f"=== DEBUG: Intimação {intimacao_id} não encontrada ===")
                 continue
                 
-            print(f"=== DEBUG: Analisando intimação {intimacao_id} ===")
+            print(f"=== DEBUG: Analisando intimação {intimacao_id} ({i}/{len(intimacao_ids)}) ===")
             print(f"=== DEBUG: Classificação manual: {intimacao.get('classificacao_manual')} ===")
                 
             try:
@@ -671,18 +837,21 @@ def executar_analise():
                 {intimacao['contexto']}
                 """
                 
-                prompt_final = prompt['conteudo'].replace('{CONTEXTO}', contexto)
+                # Substituir variáveis no prompt
+                prompt_final = prompt['conteudo']
+                
+                # Substituir {REGRADENEGOCIO} se existir
+                if prompt.get('regra_negocio') and '{REGRADENEGOCIO}' in prompt_final:
+                    prompt_final = prompt_final.replace('{REGRADENEGOCIO}', prompt['regra_negocio'])
+                
+                # Substituir {CONTEXTO}
+                prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
                 
                 print(f"=== DEBUG: Prompt final preparado (primeiros 200 chars): {prompt_final[:200]}... ===")
                 
-                # Usar serviço OpenAI real
-                from services.openai_service import OpenAIService
                 import time
                 
                 inicio = time.time()
-                
-                # Inicializar serviço OpenAI
-                openai_service = OpenAIService()
                 
                 # Preparar parâmetros para a OpenAI
                 parametros = {
@@ -696,17 +865,16 @@ def executar_analise():
                 print(f"=== DEBUG: Prompt final (primeiros 500 chars): {prompt_final[:500]}... ===")
                 print(f"=== DEBUG: Prompt final (últimos 500 chars): ...{prompt_final[-500:]} ===")
                 
-                # Fazer chamada direta para OpenAI (prompt já construído)
-                resposta_completa = openai_service._fazer_chamada_com_retry(
-                    prompt_final,  # Prompt já construído com contexto
-                    parametros
+                # Fazer chamada para IA usando o gerenciador
+                resultado_ia, resposta_completa, tokens_info = ai_manager_service.analisar_intimacao(
+                    contexto=contexto,
+                    prompt_template=prompt_final,
+                    parametros=parametros
                 )
-                
-                # Extrair classificação da resposta
-                resultado_ia = openai_service._extrair_classificacao(resposta_completa)
                 
                 print(f"=== DEBUG: Resposta completa da OpenAI: {resposta_completa} ===")
                 print(f"=== DEBUG: Classificação extraída: {resultado_ia} ===")
+                print(f"=== DEBUG: Tokens info: {tokens_info} ===")
                 
                 tempo_processamento = time.time() - inicio
                 
@@ -719,43 +887,55 @@ def executar_analise():
                     acertou = resultado_ia_normalizado == classificacao_manual
                     print(f"=== DEBUG: Comparação - Manual: {classificacao_manual}, IA: {resultado_ia_normalizado}, Acertou: {acertou} ===")
                 
-                # Calcular tokens e custo reais
-                tokens_usados = len(prompt_final.split()) + len(resposta_completa.split())  # Estimativa simples
-                custo_estimado = openai_service.estimate_cost(
-                    prompt_length=len(prompt_final),
-                    response_length=len(resposta_completa),
-                    model=modelo
-                )
+                # Usar tokens reais da API
+                tokens_input = tokens_info.get('input', 0)
+                tokens_output = tokens_info.get('output', 0)
+                tokens_usados = tokens_info.get('total', tokens_input + tokens_output)
+        
                 
                 # Debug para verificar campos da intimação
                 print(f"=== DEBUG: Campos da intimação {intimacao_id} ===")
                 print(f"Campos disponíveis: {list(intimacao.keys())}")
-                print(f"Informações adicionais: {intimacao.get('informacoes_adicionais')}")
+                print(f"Informações adicionais: {intimacao.get('informacao_adicional')}")
                 print(f"Informações adicionais (alt): {intimacao.get('informacao_adicional')}")
+                
+
                 
                 resultado = {
                     'prompt_id': prompt_id,
                     'prompt_nome': prompt['nome'],
+                    'regra_negocio': prompt.get('regra_negocio', '').replace('\r\n', '\n') if prompt.get('regra_negocio') else None,
                     'intimacao_id': intimacao_id,
                     'contexto': intimacao['contexto'][:100] + '...' if len(intimacao['contexto']) > 100 else intimacao['contexto'],
                     'classificacao_manual': intimacao.get('classificacao_manual'),
-                    'informacao_adicional': intimacao.get('informacoes_adicionais') or intimacao.get('informacao_adicional'),
+                    'informacao_adicional': intimacao.get('informacao_adicional') or intimacao.get('informacao_adicional'),
                     'resultado_ia': resultado_ia,
                     'acertou': acertou,
                     'tempo_processamento': round(tempo_processamento, 3),
                     'modelo': modelo,
                     'temperatura': temperatura,
                     'tokens_usados': tokens_usados,
-                    'custo_estimado': round(custo_estimado, 4),
+                    'tokens_input': tokens_input,
+                    'tokens_output': tokens_output,
                     'prompt_completo': prompt_final,
-                    'resposta_completa': resposta_completa
+                    'resposta_completa': resposta_completa,
+                    # Incluir dados completos da intimação para o card compacto
+                    'intimacao': intimacao
                 }
                 
+                # Calcular custo real baseado nos tokens
+                provider = ai_manager_service.get_current_provider()
+                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
+                
+                # Adicionar provider e custo ao resultado
+                resultado['provider'] = provider
+                resultado['custo_real'] = custo_real
+                
                 resultados.append(resultado)
-                print(f"=== DEBUG: Resultado adicionado: {resultado} ===")
                 
                 # Salvar resultado se solicitado
                 if salvar_resultados:
+                    
                     # Adicionar análise à intimação
                     analise_data = {
                         'data_analise': datetime.now().isoformat(),
@@ -767,13 +947,15 @@ def executar_analise():
                         'modelo': modelo,
                         'temperatura': temperatura,
                         'tokens_usados': resultado['tokens_usados'],
-                        'custo_estimado': resultado['custo_estimado'],
+                        'tokens_input': tokens_input,
+                        'tokens_output': tokens_output,
+
+                        'custo_real': custo_real,  # Custo real calculado
                         'prompt_completo': prompt_final,
                         'resposta_completa': resposta_completa
                     }
                     
                     data_service.adicionar_analise_intimacao(intimacao_id, analise_data)
-                    data_service.adicionar_uso_prompt(prompt_id, analise_data)
                     print(f"=== DEBUG: Resultado salvo no banco ===")
                 
             except Exception as e:
@@ -786,12 +968,15 @@ def executar_analise():
                 }
                 resultados.append(resultado)
         
+        # Finalizar análise
+        finalizar_analise(session_id)
+        
         # Calcular estatísticas gerais
         total_analises = len([r for r in resultados if 'erro' not in r])
         acertos = len([r for r in resultados if r.get('acertou') == True])
         erros = len([r for r in resultados if r.get('acertou') == False])
         tempo_total = sum([r.get('tempo_processamento', 0) for r in resultados if 'erro' not in r])
-        custo_total = sum([r.get('custo_estimado', 0) for r in resultados if 'erro' not in r])
+        custo_total = sum([r.get('custo_real', 0) for r in resultados if 'erro' not in r])
         
         estatisticas = {
             'total_analises': total_analises,
@@ -811,6 +996,10 @@ def executar_analise():
         })
         
     except Exception as e:
+        # Garantir que a análise seja finalizada mesmo em caso de erro
+        session_id = data.get('session_id') if 'data' in locals() else None
+        if session_id:
+            finalizar_analise(session_id)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/relatorios')
@@ -827,18 +1016,49 @@ def relatorios():
         intimacoes = data_service.get_all_intimacoes()
         prompts = data_service.get_all_prompts()
         
-        # Coletar todas as análises
+        # Coletar todas as análises diretamente da tabela (evita duplicação)
+        todas_analises_raw = data_service.get_all_analises()
         todas_analises = []
-        for intimacao in intimacoes:
-            for analise in intimacao.get('analises', []):
-                analise['intimacao_id'] = intimacao['id']
+        
+        # Criar mapa de intimações para lookup rápido
+        intimacoes_map = {intimacao['id']: intimacao for intimacao in intimacoes}
+        
+        for analise in todas_analises_raw:
+            # Buscar intimação correspondente
+            intimacao = intimacoes_map.get(analise.get('intimacao_id'))
+            if intimacao:
                 analise['contexto'] = intimacao['contexto']
                 analise['classificacao_manual'] = intimacao.get('classificacao_manual')
-                analise['informacao_adicional'] = intimacao.get('informacoes_adicionais')
-                # Garantir que os campos de prompt e resposta completos estejam presentes
-                analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
-                analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
-                todas_analises.append(analise)
+                analise['informacao_adicional'] = intimacao.get('informacao_adicional')
+                # Incluir o objeto intimação completo para o card
+                analise['intimacao'] = intimacao
+            else:
+                # Análise sem intimação (histórico antigo)
+                analise['contexto'] = analise.get('contexto', 'N/A')
+                analise['classificacao_manual'] = analise.get('classificacao_manual', 'N/A')
+                analise['informacao_adicional'] = 'N/A'
+                analise['intimacao'] = None
+            
+            # Garantir que os campos de prompt e resposta completos estejam presentes
+            analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
+            analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
+            
+            # Calcular custo real baseado nos tokens
+            tokens_input = analise.get('tokens_input', 0)
+            tokens_output = analise.get('tokens_output', 0)
+            modelo = analise.get('modelo', 'gpt-3.5-turbo')
+            
+            # Obter provider atual ou usar o salvo na análise
+            provider = analise.get('provider', ai_manager_service.get_current_provider())
+            analise['provider'] = provider
+            
+            if tokens_input > 0 or tokens_output > 0:
+                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
+                analise['custo_real'] = custo_real
+            else:
+                analise['custo_real'] = 0.0
+            
+            todas_analises.append(analise)
         
         # Aplicar filtros
         analises_filtradas = todas_analises
@@ -944,7 +1164,7 @@ def relatorios():
         
         # Estatísticas rápidas
         tempo_total = sum([a.get('tempo_processamento', 0) for a in analises_filtradas])
-        custo_total = sum([a.get('custo_estimado', 0) for a in analises_filtradas])
+        custo_total = sum([a.get('custo_real', 0.0) for a in analises_filtradas])
         
         stats = {
             'acertos': acertos,
@@ -1008,18 +1228,49 @@ def api_relatorios_pagina(pagina):
         # Obter dados
         intimacoes = data_service.get_all_intimacoes()
         
-        # Coletar todas as análises
+        # Coletar todas as análises diretamente da tabela (evita duplicação)
+        todas_analises_raw = data_service.get_all_analises()
         todas_analises = []
-        for intimacao in intimacoes:
-            for analise in intimacao.get('analises', []):
-                analise['intimacao_id'] = intimacao['id']
+        
+        # Criar mapa de intimações para lookup rápido
+        intimacoes_map = {intimacao['id']: intimacao for intimacao in intimacoes}
+        
+        for analise in todas_analises_raw:
+            # Buscar intimação correspondente
+            intimacao = intimacoes_map.get(analise.get('intimacao_id'))
+            if intimacao:
                 analise['contexto'] = intimacao['contexto']
                 analise['classificacao_manual'] = intimacao.get('classificacao_manual')
-                analise['informacao_adicional'] = intimacao.get('informacoes_adicionais')
-                # Garantir que os campos de prompt e resposta completos estejam presentes
-                analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
-                analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
-                todas_analises.append(analise)
+                analise['informacao_adicional'] = intimacao.get('informacao_adicional')
+                # Incluir o objeto intimação completo para o card
+                analise['intimacao'] = intimacao
+            else:
+                # Análise sem intimação (histórico antigo)
+                analise['contexto'] = analise.get('contexto', 'N/A')
+                analise['classificacao_manual'] = analise.get('classificacao_manual', 'N/A')
+                analise['informacao_adicional'] = 'N/A'
+                analise['intimacao'] = None
+            
+            # Garantir que os campos de prompt e resposta completos estejam presentes
+            analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
+            analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
+            
+            # Calcular custo real baseado nos tokens
+            tokens_input = analise.get('tokens_input', 0)
+            tokens_output = analise.get('tokens_output', 0)
+            modelo = analise.get('modelo', 'gpt-3.5-turbo')
+            
+            # Obter provider atual ou usar o salvo na análise
+            provider = analise.get('provider', ai_manager_service.get_current_provider())
+            analise['provider'] = provider
+            
+            if tokens_input > 0 or tokens_output > 0:
+                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
+                analise['custo_real'] = custo_real
+            else:
+                analise['custo_real'] = 0.0
+            
+            todas_analises.append(analise)
         
         # Aplicar filtros
         analises_filtradas = todas_analises
@@ -1059,7 +1310,7 @@ def api_relatorios_pagina(pagina):
         }
         
         # Renderizar apenas a tabela e paginação
-        html_tabela = render_template('partials/tabela_analises.html',
+        html_tabela = render_template('partials/tabela_analises_com_card.html',
                                      analises=analises_paginadas,
                                      paginacao=paginacao)
         
@@ -1075,7 +1326,218 @@ def api_relatorios_pagina(pagina):
 @app.route('/componentes-demo')
 def componentes_demo():
     """Página de demonstração dos componentes"""
-    return render_template('componentes_demo.html')
+    # Dados mockados para demonstração
+    analises_demo = [
+        {
+            'id': 'analise-001',
+            'intimacao_id': 'f71ac7be-a6d8-4c00-bd62-e5a4d94fad8c',
+            'data_analise': '2025-08-11T18:01:31',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Cumprimento de sentença\n- **Comarca**: Carazinho\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-18T14:18:56\n- **Assuntos**: Sucumbência\n- **Valor da Causa**: R$ 406,61\n- **Órgão Julgador**: Juízo da 2ª Vara Cível da Comarca de Carazinho',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'decisão que recebe a fase de cumprimento de sentença',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 2.5,
+
+            'resposta_completa': 'Resposta completa da IA para demonstração.'
+        },
+        {
+            'id': 'analise-002',
+            'intimacao_id': '7240e914-6832-4a83-b159-4dbcb8f43854',
+            'data_analise': '2025-08-11T18:02:15',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Execução de Título Extrajudicial\n- **Comarca**: Passo Fundo\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-20T10:30:00\n- **Assuntos**: Cobrança\n- **Valor da Causa**: R$ 1.250,00\n- **Órgão Julgador**: Juízo da 1ª Vara Cível da Comarca de Passo Fundo',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'intimação para apresentação de defesa',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 3.1,
+
+            'resposta_completa': 'Outra resposta completa da IA.'
+        },
+        {
+            'id': 'analise-003',
+            'intimacao_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            'data_analise': '2025-08-11T18:03:42',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Procedimento Comum\n- **Comarca**: Erechim\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-22T16:45:00\n- **Assuntos**: Indenização\n- **Valor da Causa**: R$ 5.000,00\n- **Órgão Julgador**: Juízo da 3ª Vara Cível da Comarca de Erechim',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'decisão interlocutória sobre pedido de liminar',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 1.8,
+
+            'resposta_completa': 'Terceira resposta completa da IA.'
+        },
+        {
+            'id': 'analise-004',
+            'intimacao_id': 'b2c3d4e5-f6g7-8901-bcde-f23456789012',
+            'data_analise': '2025-08-11T18:04:18',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Ação de Cobrança\n- **Comarca**: Caxias do Sul\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-25T09:20:00\n- **Assuntos**: Cobrança\n- **Valor da Causa**: R$ 2.800,00\n- **Órgão Julgador**: Juízo da 2ª Vara Cível da Comarca de Caxias do Sul',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'decisão que recebe a fase de cumprimento de sentença',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 2.8,
+
+            'resposta_completa': 'Quarta resposta completa da IA.'
+        },
+        {
+            'id': 'analise-005',
+            'intimacao_id': 'c3d4e5f6-g7h8-9012-cdef-345678901234',
+            'data_analise': '2025-08-11T18:05:33',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Execução de Sentença\n- **Comarca**: Bento Gonçalves\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-28T14:10:00\n- **Assuntos**: Execução\n- **Valor da Causa**: R$ 3.500,00\n- **Órgão Julgador**: Juízo da 1ª Vara Cível da Comarca de Bento Gonçalves',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'intimação para apresentação de defesa',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 2.2,
+
+            'resposta_completa': 'Quinta resposta completa da IA.'
+        },
+        {
+            'id': 'analise-006',
+            'intimacao_id': 'd4e5f6g7-h8i9-0123-defg-456789012345',
+            'data_analise': '2025-08-11T18:06:47',
+            'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Procedimento Comum\n- **Comarca**: Farroupilha\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-30T11:35:00\n- **Assuntos**: Indenização\n- **Valor da Causa**: R$ 4.200,00\n- **Órgão Julgador**: Juízo da 3ª Vara Cível da Comarca de Farroupilha',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'RENUNCIAR PRAZO',
+            'informacao_adicional': 'decisão interlocutória sobre pedido de liminar',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 3.0,
+
+            'resposta_completa': 'Sexta resposta completa da IA.'
+        }
+    ]
+    
+    prompts_demo = [
+        {'id': 'prompt-001', 'nome': 'Classificar Intimação'},
+        {'id': 'prompt-002', 'nome': 'Analisar Processo'},
+        {'id': 'prompt-003', 'nome': 'Extrair Informações'}
+    ]
+    
+    # Dados de paginação para demonstração
+    paginacao_demo = {
+        'pagina_atual': 1,
+        'total_paginas': 1,
+        'itens_por_pagina': 10,
+        'total_itens': len(analises_demo),
+        'inicio': 1,
+        'fim': len(analises_demo)
+    }
+    
+    # Dados de análises com informações completas de intimação para demonstração dos cards
+    analises_demo_com_cards = [
+        {
+            'id': 'analise-001',
+            'intimacao_id': 'f71ac7be-a6d8-4c00-bd62-e5a4d94fad8c',
+            'data_analise': '2025-08-11T18:01:31',
+            'contexto': 'Intimação para cumprimento de sentença - Sucumbência',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'ELABORAR PEÇA',
+            'informacao_adicional': 'decisão que recebe a fase de cumprimento de sentença',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': True,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 2.5,
+
+            'resposta_completa': 'Resposta completa da IA para demonstração.',
+            'intimacao': {
+                'id': 'f71ac7be-a6d8-4c00-bd62-e5a4d94fad8c',
+                'processo': '5000002-31.2025.8.21.0103',
+                'orgao_julgador': 'Juízo da 2ª Vara Cível da Comarca de Carazinho',
+                'classe': 'Cumprimento de sentença',
+                'disponibilizacao': '11/08/2025 às 18:01',
+                'intimado': 'DEFENSORIA PÚBLICA DO ESTADO DO RIO GRANDE DO SUL',
+                'status': 'Pendente',
+                'prazo': '15 dias'
+            }
+        },
+        {
+            'id': 'analise-002',
+            'intimacao_id': '7240e914-6832-4a83-b159-4dbcb8f43854',
+            'data_analise': '2025-08-11T18:02:15',
+            'contexto': 'Intimação para apresentação de defesa em execução',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'URGÊNCIA',
+            'informacao_adicional': 'intimação para apresentação de defesa',
+            'resultado_ia': 'ELABORAR PEÇA',
+            'acertou': False,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 3.1,
+
+            'resposta_completa': 'Outra resposta completa da IA.',
+            'intimacao': {
+                'id': '7240e914-6832-4a83-b159-4dbcb8f43854',
+                'processo': '5000123-45.2025.8.21.0104',
+                'orgao_julgador': 'Juízo da 1ª Vara Cível da Comarca de Passo Fundo',
+                'classe': 'Execução de Título Extrajudicial',
+                'disponibilizacao': '11/08/2025 às 18:02',
+                'intimado': 'DEFENSORIA PÚBLICA DO ESTADO DO RIO GRANDE DO SUL',
+                'status': 'Urgente',
+                'prazo': '5 dias'
+            }
+        },
+        {
+            'id': 'analise-003',
+            'intimacao_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+            'data_analise': '2025-08-11T18:03:42',
+            'contexto': 'Decisão interlocutória sobre pedido de liminar',
+            'prompt_nome': 'prompt inicial',
+            'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
+            'classificacao_manual': 'ANALISAR PROCESSO',
+            'informacao_adicional': 'decisão interlocutória sobre pedido de liminar',
+            'resultado_ia': 'ANALISAR PROCESSO',
+            'acertou': True,
+            'modelo': 'gpt-4',
+            'temperatura': 0.0,
+            'tempo_processamento': 1.8,
+
+            'resposta_completa': 'Terceira resposta completa da IA.',
+            'intimacao': {
+                'id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+                'processo': '5000456-78.2025.8.21.0105',
+                'orgao_julgador': 'Juízo da 3ª Vara Cível da Comarca de Erechim',
+                'classe': 'Procedimento Comum',
+                'disponibilizacao': '11/08/2025 às 18:03',
+                'intimado': 'DEFENSORIA PÚBLICA DO ESTADO DO RIO GRANDE DO SUL',
+                'status': 'Concluído',
+                'prazo': '10 dias'
+            }
+        }
+    ]
+    
+    return render_template('componentes_demo.html', 
+                         analises=analises_demo, 
+                         prompts_demo=prompts_demo,
+                         paginacao=paginacao_demo,
+                         analises_demo_com_cards=analises_demo_com_cards)
 
 @app.route('/exportar')
 def exportar_dados():
@@ -1105,7 +1567,7 @@ def exportar_dados():
                     analise['intimacao_id'] = intimacao['id']
                     analise['contexto'] = intimacao['contexto']
                     analise['classificacao_manual'] = intimacao.get('classificacao_manual')
-                    analise['informacao_adicional'] = intimacao.get('informacoes_adicionais')
+                    analise['informacao_adicional'] = intimacao.get('informacao_adicional')
                     # Garantir que os campos de prompt e resposta completos estejam presentes
                     analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
                     analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
@@ -1166,7 +1628,7 @@ def exportar_dados():
                     analise.get('modelo', ''),
                     f"{analise.get('temperatura', 0):.1f}" if analise.get('temperatura') is not None else 'N/A',
                     f"{analise.get('tempo_processamento', 0):.3f}",
-                    f"{analise.get('custo_estimado', 0):.4f}"
+                    "N/A"  # Custo removido - simulação desabilitada
                 ])
             
             output.seek(0)
@@ -1207,6 +1669,7 @@ def configuracoes():
                 'formato_data': request.form.get('formato_data', 'DD/MM/YYYY'),
                 'tema': request.form.get('tema', 'light'),
                 'idioma': request.form.get('idioma', 'pt-BR'),
+                'portal_defensoria_link': request.form.get('portal_defensoria_link', ''),
                 'mostrar_tooltips': request.form.get('mostrar_tooltips') == 'on',
                 'animacoes': request.form.get('animacoes') == 'on',
                 'sons_notificacao': request.form.get('sons_notificacao') == 'on',
@@ -1234,6 +1697,10 @@ def configuracoes():
         # Carregar configurações
         config = data_service.get_config()
         
+
+        
+
+        
         # Garantir valores padrão se não existirem
         if not config:
             config = {}
@@ -1248,10 +1715,17 @@ def configuracoes():
         # Debug: verificar se a chave está sendo passada
         print("=== DEBUG: Chave da API configurada via variável de ambiente ===")
         
+        # Usar o ai_manager_service global
+        provedor_atual = ai_manager_service.get_current_provider()
+        
         # Valores padrão para configurações
+        config.setdefault('ai_provider', provedor_atual)
         config.setdefault('modelo_padrao', 'gpt-4')
-        config.setdefault('temperatura_padrao', 0.7)
-        config.setdefault('max_tokens_padrao', 500)
+        # Não definir valor padrão para azure_temperatura se já existe
+        if 'azure_temperatura' not in config:
+            config['azure_temperatura'] = 0.7
+        if 'azure_max_tokens' not in config:
+            config['azure_max_tokens'] = 500
         config.setdefault('timeout_padrao', 30)
         config.setdefault('max_retries', 3)
         config.setdefault('retry_delay', 1)
@@ -1259,6 +1733,7 @@ def configuracoes():
         config.setdefault('formato_data', 'DD/MM/YYYY')
         config.setdefault('tema', 'light')
         config.setdefault('idioma', 'pt-BR')
+        config.setdefault('portal_defensoria_link', '')
         config.setdefault('mostrar_tooltips', True)
         config.setdefault('animacoes', True)
         config.setdefault('sons_notificacao', False)
@@ -1289,7 +1764,7 @@ def configuracoes():
         uso_api = {
             'requisicoes_hoje': 127,
             'tokens_usados': 15420,
-            'custo_estimado': 0.23,
+    
             'limite_mensal': 10000,
             'percentual_usado': 15.4
         }
@@ -1302,23 +1777,74 @@ def configuracoes():
             {'timestamp': '2024-01-15 14:15:00', 'nivel': 'INFO', 'mensagem': 'Backup automático realizado'}
         ]
         
+        # Obter informações do provedor atual
+        provedor_atual = ai_manager_service.get_current_provider()
+        
+        # Usar todos os modelos disponíveis (OpenAI + Azure) para a página de configurações
+        modelos_disponiveis = list(set(Config.OPENAI_MODELS + Config.AZURE_OPENAI_MODELS))
+        modelos_disponiveis.sort()  # Ordenar alfabeticamente
+        
+        # Carregar preços da API
+        precos_openai = config.get('precos_openai', Config.PRECOS_OPENAI_PADRAO)
+        precos_azure = config.get('precos_azure', Config.PRECOS_AZURE_PADRAO)
+        
         return render_template('configuracoes.html',
                              config=config,
-                             modelos_disponiveis=Config.OPENAI_MODELS,
+                             provedor_atual=provedor_atual,
+                             modelos_disponiveis=modelos_disponiveis,
                              status_sistema=status_sistema,
                              uso_api=uso_api,
-                             logs_recentes=logs_recentes)
+                             logs_recentes=logs_recentes,
+                             precos_openai=precos_openai,
+                             precos_azure=precos_azure)
                              
     except Exception as e:
         flash(f'Erro ao carregar configurações: {str(e)}', 'error')
         return render_template('configuracoes.html',
                              config=DEFAULT_CONFIG,
+                             provedor_atual='openai',
                              modelos_disponiveis=Config.OPENAI_MODELS,
+                             precos_openai=Config.PRECOS_OPENAI_PADRAO,
+                             precos_azure=Config.PRECOS_AZURE_PADRAO,
                              status_sistema={},
                              uso_api={},
                              logs_recentes=[])
 
 # Rotas auxiliares e APIs
+
+@app.route('/api/intimacoes/<id>/editar', methods=['POST'])
+def editar_intimacao_api(id):
+    """API para editar campo de intimação"""
+    print(f"=== DEBUG: EDITANDO INTIMAÇÃO ===")
+    print(f"ID da intimação: {id}")
+    
+    try:
+        data = request.get_json()
+        campo = data.get('campo')
+        valor = data.get('valor')
+        
+        print(f"DEBUG: Campo: {campo}, Valor: {valor}")
+        
+        if not campo:
+            return jsonify({'success': False, 'error': 'Campo não especificado'}), 400
+        
+        # Buscar intimação atual
+        intimacao = data_service.get_intimacao_by_id(id)
+        if not intimacao:
+            return jsonify({'success': False, 'error': 'Intimação não encontrada'}), 404
+        
+        # Atualizar o campo
+        intimacao[campo] = valor
+        
+        # Salvar intimação atualizada
+        data_service.save_intimacao(intimacao)
+        
+        print(f"DEBUG: Campo {campo} atualizado com sucesso")
+        return jsonify({'success': True, 'message': 'Campo atualizado com sucesso'})
+        
+    except Exception as e:
+        print(f"DEBUG: Erro ao editar intimação: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/intimacoes/<id>/excluir', methods=['DELETE'])
 def excluir_intimacao(id):
@@ -1358,38 +1884,43 @@ def excluir_analise():
     """Excluir análise específica"""
     try:
         data = request.get_json()
-        intimacao_id = data.get('intimacao_id')
-        analise_id = data.get('analise_id')
+        analise_ids = data.get('analise_ids', [])
         
-        if not intimacao_id or not analise_id:
-            return jsonify({'error': 'ID da intimação e da análise são obrigatórios'}), 400
+        # Suporte para exclusão única (compatibilidade)
+        if 'analise_id' in data:
+            analise_ids = [data['analise_id']]
         
-        print(f"=== DEBUG: Excluindo análise {analise_id} da intimação {intimacao_id} ===")
+        if not analise_ids:
+            return jsonify({'error': 'IDs das análises são obrigatórios'}), 400
         
-        # Buscar a intimação
-        intimacoes = data_service.get_all_intimacoes()
-        intimacao = next((i for i in intimacoes if i['id'] == intimacao_id), None)
+        print(f"=== DEBUG: Excluindo {len(analise_ids)} análises: {analise_ids} ===")
         
-        if not intimacao:
-            return jsonify({'error': 'Intimação não encontrada'}), 404
+        excluidas = 0
+        erros = []
         
-        # Remover a análise específica
-        analises = intimacao.get('analises', [])
-        analise_encontrada = next((a for a in analises if a.get('id') == analise_id), None)
+        for analise_id in analise_ids:
+            try:
+                # Excluir diretamente da tabela de análises
+                sucesso = data_service.delete_analise(analise_id)
+                if sucesso:
+                    excluidas += 1
+                    print(f"✅ Análise {analise_id} excluída")
+                else:
+                    erros.append(f"Análise {analise_id} não encontrada")
+                    print(f"❌ Análise {analise_id} não encontrada")
+            except Exception as e:
+                erros.append(f"Erro ao excluir {analise_id}: {str(e)}")
+                print(f"❌ Erro ao excluir análise {analise_id}: {e}")
         
-        if not analise_encontrada:
-            return jsonify({'error': 'Análise não encontrada'}), 404
+        if excluidas > 0:
+            print(f"✅ {excluidas} análises excluídas com sucesso")
         
-        # Remover a análise
-        analises.remove(analise_encontrada)
-        intimacao['analises'] = analises
-        
-        # Salvar a intimação atualizada
-        data_service.save_intimacao(intimacao)
-        
-        print(f"=== DEBUG: Análise {analise_id} excluída com sucesso ===")
-        
-        return jsonify({'success': True, 'message': 'Análise excluída com sucesso'})
+        return jsonify({
+            'success': True,
+            'message': f'{excluidas} análises excluídas com sucesso',
+            'excluidas': excluidas,
+            'erros': erros
+        })
         
     except Exception as e:
         print(f"=== ERRO ao excluir análise: {e} ===")
@@ -1457,24 +1988,258 @@ def duplicar_prompt(id):
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/configuracoes/testar-conexao', methods=['POST'])
-def testar_conexao_openai():
-    """API para testar conexão com OpenAI"""
+def testar_conexao_ai():
+    """API para testar conexão com o provedor de IA atual"""
     try:
-        # Simular teste de conexão
-        import time
-        time.sleep(1)  # Simular delay de rede
+        # Testar conexão usando o gerenciador de IA
+        sucesso, mensagem = ai_manager_service.test_connection()
         
-        # Aqui seria implementado o teste real com a API da OpenAI
-        return jsonify({
-            'success': True,
-            'message': 'Conexão com OpenAI estabelecida com sucesso',
-            'latencia': '245ms',
-            'modelo_disponivel': 'gpt-3.5-turbo'
-        })
+        if sucesso:
+            provider_name = ai_manager_service.get_provider_display_name()
+            return jsonify({
+                'success': True,
+                'message': f'Conexão com {provider_name} estabelecida com sucesso',
+                'provider': provider_name,
+                'models': ai_manager_service.get_available_models()[:3]  # Primeiros 3 modelos
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': mensagem
+            }), 500
+            
     except Exception as e:
         return jsonify({
             'success': False,
-            'message': f'Erro ao conectar com OpenAI: {str(e)}'
+            'message': f'Erro ao testar conexão: {str(e)}'
+        }), 500
+
+@app.route('/api/configuracoes/provedor', methods=['POST'])
+def alterar_provedor_ia():
+    """API para alterar o provedor de IA"""
+    try:
+        data = request.get_json()
+        provider = data.get('provider', 'openai')
+        
+        # Validar provedor
+        if provider not in ai_manager_service.get_available_providers():
+            return jsonify({
+                'success': False,
+                'message': f'Provedor "{provider}" não disponível'
+            }), 400
+        
+        # Alterar provedor
+        if ai_manager_service.set_provider(provider):
+            return jsonify({
+                'success': True,
+                'message': f'Provedor alterado para {provider} com sucesso',
+                'current_provider': ai_manager_service.get_current_provider(),
+                'provider_name': ai_manager_service.get_provider_display_name()
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Falha ao alterar para o provedor {provider}'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao alterar provedor: {str(e)}'
+        }), 500
+
+@app.route('/api/configuracoes/testar-azure', methods=['POST'])
+def testar_conexao_azure():
+    """API para testar conexão com Azure OpenAI"""
+    try:
+        data = request.get_json()
+        
+        # Verificar se deve usar credenciais do .env
+        if data.get('use_env_credentials'):
+            # Usar credenciais das variáveis de ambiente
+            from services.azure_service import AzureService
+            azure_service = AzureService()
+            
+            # Testar conexão com credenciais do .env
+            sucesso, mensagem = azure_service.test_connection()
+            
+            if sucesso:
+                return jsonify({
+                    'success': True,
+                    'message': 'Conexão com Azure OpenAI estabelecida com sucesso!',
+                    'models': azure_service.get_available_models()[:3]
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': mensagem
+                }), 500
+        else:
+            # Usar credenciais fornecidas no formulário (modo legado)
+            api_key = data.get('api_key')
+            endpoint = data.get('endpoint')
+            api_version = data.get('api_version', '2024-02-15-preview')
+            
+            if not api_key or not endpoint:
+                return jsonify({
+                    'success': False,
+                    'message': 'Chave da API e endpoint são obrigatórios'
+                }), 400
+            
+            # Importar e testar Azure OpenAI temporariamente
+            from services.azure_service import AzureService
+            azure_service = AzureService()
+            
+            # Atualizar credenciais temporariamente para teste
+            azure_service.update_credentials(api_key, endpoint, api_version)
+            
+            # Testar conexão
+            sucesso, mensagem = azure_service.test_connection()
+            
+            if sucesso:
+                return jsonify({
+                    'success': True,
+                    'message': 'Conexão com Azure OpenAI estabelecida com sucesso!',
+                    'models': azure_service.get_available_models()[:3]
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': mensagem
+                }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao testar conexão Azure: {str(e)}'
+        }), 500
+
+@app.route('/api/configuracoes/azure', methods=['POST'])
+def salvar_configuracao_azure():
+    """API para salvar configurações do Azure OpenAI"""
+    try:
+        data = request.get_json()
+        
+        # Carregar configuração atual
+        config = data_service.get_config() or {}
+        
+        # Atualizar configurações do Azure
+        config.update({
+            'azure_api_key': data.get('azure_api_key', ''),
+            'azure_endpoint': data.get('azure_endpoint', ''),
+            'azure_api_version': data.get('azure_api_version', '2024-02-15-preview'),
+            'azure_deployment': data.get('azure_deployment', 'gpt-4'),
+            'azure_temperatura': float(data.get('azure_temperatura', 0.7)),
+            'azure_max_tokens': int(data.get('azure_max_tokens', 500)),
+            'azure_timeout': int(data.get('azure_timeout', 30))
+        })
+        
+        # Salvar configuração
+        data_service.save_config(config)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Configurações do Azure OpenAI salvas com sucesso!'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao salvar configurações: {str(e)}'
+        }), 500
+
+@app.route('/api/configuracoes/precos-openai', methods=['POST'])
+def salvar_precos_openai():
+    """API para salvar preços da OpenAI"""
+    try:
+        data = request.get_json()
+        
+        # Carregar configuração atual
+        config = data_service.get_config() or {}
+        
+        # Atualizar preços OpenAI (formato aninhado para compatibilidade com template)
+        precos_openai = {
+            'gpt-4o': {
+                'input': float(data.get('openai_gpt4o_input', 2.50)),
+                'output': float(data.get('openai_gpt4o_output', 10.00))
+            },
+            'gpt-4o-mini': {
+                'input': float(data.get('openai_gpt4o_mini_input', 0.15)),
+                'output': float(data.get('openai_gpt4o_mini_output', 0.60))
+            },
+            'gpt-4-turbo': {
+                'input': float(data.get('openai_gpt4_turbo_input', 10.00)),
+                'output': float(data.get('openai_gpt4_turbo_output', 30.00))
+            },
+            'gpt-3.5-turbo': {
+                'input': float(data.get('openai_gpt35_turbo_input', 0.50)),
+                'output': float(data.get('openai_gpt35_turbo_output', 1.50))
+            },
+            'data_atualizacao': data.get('data_atualizacao_openai', datetime.now().strftime('%Y-%m-%d'))
+        }
+        
+        config['precos_openai'] = precos_openai
+        
+        # Salvar configuração
+        data_service.save_config(config)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Preços da OpenAI salvos com sucesso!'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao salvar preços: {str(e)}'
+        }), 500
+
+
+
+@app.route('/api/configuracoes/precos-azure', methods=['POST'])
+def salvar_precos_azure():
+    """API para salvar preços do Azure OpenAI"""
+    try:
+        data = request.get_json()
+        
+        # Carregar configuração atual
+        config = data_service.get_config() or {}
+        
+        # Atualizar preços Azure (formato aninhado para compatibilidade com template)
+        precos_azure = {
+            'gpt-4o': {
+                'input': float(data.get('azure_gpt4o_input', 5.00)),
+                'output': float(data.get('azure_gpt4o_output', 15.00))
+            },
+            'gpt-4o-mini': {
+                'input': float(data.get('azure_gpt4o_mini_input', 0.165)),
+                'output': float(data.get('azure_gpt4o_mini_output', 0.66))
+            },
+            'gpt-4-turbo': {
+                'input': float(data.get('azure_gpt4_turbo_input', 10.00)),
+                'output': float(data.get('azure_gpt4_turbo_output', 30.00))
+            },
+            'gpt-3.5-turbo': {
+                'input': float(data.get('azure_gpt35_turbo_input', 0.50)),
+                'output': float(data.get('azure_gpt35_turbo_output', 1.50))
+            },
+            'data_atualizacao': data.get('data_atualizacao_azure', datetime.now().strftime('%Y-%m-%d'))
+        }
+        
+        config['precos_azure'] = precos_azure
+        
+        # Salvar configuração
+        data_service.save_config(config)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Preços do Azure OpenAI salvos com sucesso!'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao salvar preços: {str(e)}'
         }), 500
 
 @app.route('/api/backup/criar', methods=['POST'])
@@ -1518,8 +2283,11 @@ Analise o seguinte contexto de intimação e extraia as informações solicitada
 - intimado: nome do intimado (se encontrado)
 - status: status da intimação (se encontrado)
 - prazo: prazo da intimação (se encontrado)
+- defensor: nome do defensor responsável (se encontrado)
+- id_tarefa: identificador da tarefa (se encontrado)
 
 Se alguma informação não for encontrada, retorne null para essa chave.
+Não tente extrair cor_etiqueta - esse campo será preenchido manualmente pelo usuário.
 
 Contexto da intimação:
 {contexto}
@@ -1527,15 +2295,23 @@ Contexto da intimação:
 Retorne APENAS o JSON, sem texto adicional.
 """
         
-        # Chamar a IA
-        resposta = openai_service.analyze_text(
-            prompt_extrair,
-            modelo="gpt-4",
-            temperatura=0.1,
-            max_tokens=500
+        # Usar o mesmo padrão da análise de intimações que funciona
+        # Preparar parâmetros igual à análise
+        parametros = {
+            'temperatura': 0.1,
+            'max_tokens': 500,
+            'top_p': 1.0
+        }
+        
+        # Fazer chamada para IA usando o gerenciador igual à análise
+        resultado_ia, resposta, tokens_info = ai_manager_service.analisar_intimacao(
+            contexto=contexto,
+            prompt_template=prompt_extrair,
+            parametros=parametros
         )
         
         print(f"=== DEBUG: Resposta da IA: {resposta}")
+        print(f"=== DEBUG: Tokens info: {tokens_info}")
         
         # Tentar extrair JSON da resposta
         try:
@@ -1580,6 +2356,203 @@ def limpar_cache():
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/restaurar-dados-demo', methods=['POST'])
+def restaurar_dados_demo():
+    """API para restaurar dados mockados de demonstração"""
+    try:
+        # Dados mockados para demonstração
+        dados_demo = {
+            "analises": [
+                {
+                    "id": "demo-1",
+                    "data": "2024-01-15",
+                    "intimacao": "Intimação Demo 1",
+                    "prompt": "Prompt de demonstração 1",
+                    "classificacao_manual": "Urgente",
+                    "informacao_ia": "Análise de demonstração 1",
+                    "resultado_ia": "Resultado positivo",
+                    "status": "Concluída",
+                    "configuracoes": "Config padrão",
+                    "tempo": "2.5s",
+                    "custo": "R$ 0,15",
+                    "prompt_completo": "Prompt completo de demonstração 1",
+                    "resposta_ia": "Resposta detalhada da IA para demonstração"
+                },
+                {
+                    "id": "demo-2",
+                    "data": "2024-01-16",
+                    "intimacao": "Intimação Demo 2",
+                    "prompt": "Prompt de demonstração 2",
+                    "classificacao_manual": "Normal",
+                    "informacao_ia": "Análise de demonstração 2",
+                    "resultado_ia": "Resultado neutro",
+                    "status": "Em andamento",
+                    "configuracoes": "Config personalizada",
+                    "tempo": "1.8s",
+                    "custo": "R$ 0,12",
+                    "prompt_completo": "Prompt completo de demonstração 2",
+                    "resposta_ia": "Resposta detalhada da IA para demonstração 2"
+                },
+                {
+                    "id": "demo-3",
+                    "data": "2024-01-17",
+                    "intimacao": "Intimação Demo 3",
+                    "prompt": "Prompt de demonstração 3",
+                    "classificacao_manual": "Baixa",
+                    "informacao_ia": "Análise de demonstração 3",
+                    "resultado_ia": "Resultado negativo",
+                    "status": "Erro",
+                    "configuracoes": "Config avançada",
+                    "tempo": "3.2s",
+                    "custo": "R$ 0,18",
+                    "prompt_completo": "Prompt completo de demonstração 3",
+                    "resposta_ia": "Resposta detalhada da IA para demonstração 3"
+                }
+            ]
+        }
+        
+        # Salvar os dados no arquivo analises.json
+        with open('data/analises.json', 'w', encoding='utf-8') as f:
+            json.dump(dados_demo, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Dados de demonstração restaurados com sucesso!',
+            'total_analises': len(dados_demo['analises'])
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'message': f'Erro ao restaurar dados: {str(e)}'
+        }), 500
+
+@app.route('/api/precos-modelos')
+def obter_precos_modelos():
+    """Retorna os preços atuais dos modelos de IA configurados"""
+    try:
+        # Obter configurações atuais
+        config_data = data_service.get_config()
+        
+        # Preços OpenAI (usar padrão se não configurado)
+        precos_openai = config_data.get('precos_openai')
+        if not precos_openai:
+            precos_openai = Config.PRECOS_OPENAI_PADRAO.copy()
+            # Remover data_atualizacao se existir
+            precos_openai.pop('data_atualizacao', None)
+        
+        # Preços Azure (usar padrão se não configurado)
+        precos_azure = config_data.get('precos_azure')
+        if not precos_azure:
+            precos_azure = Config.PRECOS_AZURE_PADRAO.copy()
+            # Remover data_atualizacao se existir
+            precos_azure.pop('data_atualizacao', None)
+        
+        return jsonify({
+            'success': True,
+            'precos': {
+                'openai': precos_openai,
+                'azure': precos_azure
+            }
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter preços dos modelos: {str(e)}'
+        }), 500
+
+@app.route('/api/cancelar-analise', methods=['POST'])
+def cancelar_analise_api():
+    """Cancela uma análise em andamento"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'message': 'Session ID é obrigatório'
+            }), 400
+        
+        if cancelar_analise(session_id):
+            return jsonify({
+                'success': True,
+                'message': 'Análise cancelada com sucesso'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Análise não encontrada ou já finalizada'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao cancelar análise: {str(e)}'
+        }), 500
+
+@app.route('/api/tooltip-custo')
+def gerar_tooltip_custo():
+    """Gera tooltip de custo usando o serviço de custo"""
+    try:
+        modelo = request.args.get('modelo', 'gpt-4o-mini')
+        tokens_input = int(request.args.get('tokens_input', 0))
+        tokens_output = int(request.args.get('tokens_output', 0))
+        provider = request.args.get('provider', 'azure')
+        custo_real = float(request.args.get('custo_real', 0))
+        
+        tooltip_html = cost_service.generate_cost_tooltip(
+            tokens_input, tokens_output, modelo, provider, custo_real
+        )
+        
+        return jsonify({
+            'success': True,
+            'tooltip_html': tooltip_html
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao gerar tooltip: {str(e)}'
+        }), 500
+
+@app.route('/api/analise-progresso')
+def analise_progresso():
+    """Endpoint para Server-Sent Events do progresso da análise"""
+    # Capturar argumentos ANTES de criar a função generate
+    total_intimacoes = request.args.get('total', type=int, default=10)
+    
+    def generate():
+        try:
+            print(f"=== DEBUG: Iniciando progresso para {total_intimacoes} intimações ===")
+            
+            # Enviar início
+            yield f"data: {json.dumps({'tipo': 'inicio', 'total': total_intimacoes, 'atual': 0})}\n\n"
+            
+            # Simular progresso real (sem cache)
+            for i in range(1, total_intimacoes + 1):
+                # Simular tempo de processamento real
+                time.sleep(1)  # 1 segundo por intimação
+                
+                # Descrições realistas
+                descricoes = [
+                    f"Processando intimação {i} de {total_intimacoes}",
+                    f"Analisando contexto da intimação {i}",
+                    f"Classificando intimação {i} com IA",
+                    f"Salvando resultado da intimação {i}",
+                    f"Finalizando análise da intimação {i}"
+                ]
+                descricao = descricoes[i % len(descricoes)]
+                
+                yield f"data: {json.dumps({'tipo': 'progresso', 'total': total_intimacoes, 'atual': i, 'descricao': descricao})}\n\n"
+            
+            # Enviar conclusão
+            yield f"data: {json.dumps({'tipo': 'conclusao', 'total': total_intimacoes, 'atual': total_intimacoes, 'descricao': 'Análise concluída com sucesso!'})}\n\n"
+            
+        except Exception as e:
+            print(f"=== ERRO no progresso: {e} ===")
+            yield f"data: {json.dumps({'tipo': 'erro', 'mensagem': str(e)})}\n\n"
+    
+    return Response(generate(), mimetype='text/event-stream')
 
 # Manipuladores de erro
 @app.errorhandler(404)

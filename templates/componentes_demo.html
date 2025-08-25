@@ -131,269 +131,7 @@
         </div>
     </div>
 
-    <!-- Seção 3: Tabela com Cards -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-table"></i>
-                        Tabela com Cards Compactos
-                    </h5>
-                    <small class="text-muted">Implementação: Tabela com cards na primeira coluna</small>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover intimacoes-cards-table">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width: 40%;">Card da Intimação</th>
-                                    <th style="width: 15%;">Classificação Manual</th>
-                                    <th style="width: 20%;">Informações Adicionais</th>
-                                    <th style="width: 15%;">Data de Criação</th>
-                                    <th style="width: 10%;">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr class="intimacao-row" data-intimacao-id="{{ intimacao_exemplo.id }}">
-                                    <td class="card-cell">
-                                        {% set intimacao = intimacao_exemplo %}
-                                        {% include 'partials/card_intimacao_compact.html' %}
-                                    </td>
-                                    <td class="classificacao-cell">
-                                        <span class="badge bg-primary">{{ intimacao_exemplo.classificacao_manual }}</span>
-                                    </td>
-                                    <td class="info-cell">
-                                        <div class="info-adicional-text" title="{{ intimacao_exemplo.informacoes_adicionais }}">
-                                            {{ intimacao_exemplo.informacoes_adicionais[:50] }}...
-                                        </div>
-                                    </td>
-                                    <td class="data-cell">
-                                        <small class="text-muted">2025-01-15</small>
-                                    </td>
-                                    <td class="acoes-cell">
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <button class="btn btn-outline-primary btn-sm" title="Visualizar">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-outline-danger btn-sm" title="Excluir">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr class="intimacao-row" data-intimacao-id="{{ intimacao_urgente.id }}">
-                                    <td class="card-cell">
-                                        {% set intimacao = intimacao_urgente %}
-                                        {% include 'partials/card_intimacao_compact.html' %}
-                                    </td>
-                                    <td class="classificacao-cell">
-                                        <span class="badge bg-warning">{{ intimacao_urgente.classificacao_manual }}</span>
-                                    </td>
-                                    <td class="info-cell">
-                                        <div class="info-adicional-text" title="{{ intimacao_urgente.informacoes_adicionais }}">
-                                            {{ intimacao_urgente.informacoes_adicionais[:50] }}...
-                                        </div>
-                                    </td>
-                                    <td class="data-cell">
-                                        <small class="text-muted">2025-01-16</small>
-                                    </td>
-                                    <td class="acoes-cell">
-                                        <div class="btn-group btn-group-sm" role="group">
-                                            <button class="btn btn-outline-primary btn-sm" title="Visualizar">
-                                                <i class="bi bi-eye"></i>
-                                            </button>
-                                            <button class="btn btn-outline-danger btn-sm" title="Excluir">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Seção 4: Variações de Tema -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-palette"></i>
-                        Variações de Tema
-                    </h5>
-                    <small class="text-muted">Diferentes cores baseadas no status</small>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <h6 class="text-muted mb-2">Tema Padrão</h6>
-                            {% set intimacao = intimacao_exemplo %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <h6 class="text-muted mb-2">Tema Sucesso</h6>
-                            {% set intimacao = intimacao_concluida %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <h6 class="text-muted mb-2">Tema Aviso</h6>
-                            {% set intimacao = intimacao_urgente %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                        <div class="col-md-6 col-lg-3 mb-3">
-                            <h6 class="text-muted mb-2">Tema Perigo</h6>
-                            {% set intimacao = intimacao_urgente %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Seção 5: Responsividade -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-phone"></i>
-                        Teste de Responsividade
-                    </h5>
-                    <small class="text-muted">Redimensione a janela para ver o comportamento responsivo</small>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-lg-4 col-md-6 mb-3">
-                            {% set intimacao = intimacao_exemplo %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                        <div class="col-lg-4 col-md-6 mb-3">
-                            {% set intimacao = intimacao_urgente %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                        <div class="col-lg-4 col-md-6 mb-3">
-                            {% set intimacao = intimacao_concluida %}
-                            {% include 'partials/card_intimacao.html' %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Seção 6: Badges e Status -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-tags"></i>
-                        Badges e Status
-                    </h5>
-                    <small class="text-muted">Componentes de status e classificação</small>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Badges de Classificação</h6>
-                            <div class="mb-3">
-                                <span class="badge bg-success">ELABORAR PEÇA</span>
-                                <span class="badge bg-warning">ANALISAR PROCESSO</span>
-                                <span class="badge bg-danger">URGÊNCIA</span>
-                                <span class="badge bg-info">CONTATAR ASSISTIDO</span>
-                                <span class="badge bg-secondary">RENUNCIAR PRAZO</span>
-                                <span class="badge bg-primary">ENCAMINHAR INTIMAÇÃO</span>
-                            </div>
-                            
-                            <h6>Badges de Status</h6>
-                            <div class="mb-3">
-                                <span class="badge bg-success">
-                                    <i class="bi bi-check-circle"></i> Acertou
-                                </span>
-                                <span class="badge bg-danger">
-                                    <i class="bi bi-x-circle"></i> Errou
-                                </span>
-                                <span class="badge bg-warning">Pendente</span>
-                                <span class="badge bg-info">Em Processamento</span>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Badges de Configuração</h6>
-                            <div class="mb-3">
-                                <span class="badge bg-primary me-2">GPT-4, Temp: 0.1</span>
-                                <span class="badge bg-info">500 chars</span>
-                                <span class="badge bg-warning">15x usado</span>
-                                <span class="badge bg-secondary">ID: abc123</span>
-                            </div>
-                            
-                            <h6>Badges de Métricas</h6>
-                            <div class="mb-3">
-                                <span class="badge bg-success">85% acurácia</span>
-                                <span class="badge bg-warning">2.3s tempo</span>
-                                <span class="badge bg-info">$0.002 custo</span>
-                                <span class="badge bg-primary">25 análises</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Seção 7: Alertas e Notificações -->
-    <div class="row mb-5">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        Alertas e Notificações
-                    </h5>
-                    <small class="text-muted">Componentes de feedback e avisos</small>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>Alertas Informativos</h6>
-                            <div class="alert alert-info alert-dismissible fade show" role="alert">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>Informação:</strong> Esta é uma mensagem informativa para o usuário.
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                            
-                            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                <i class="bi bi-check-circle me-2"></i>
-                                <strong>Sucesso:</strong> Operação realizada com sucesso!
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Alertas de Aviso</h6>
-                            <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                <strong>Atenção:</strong> Esta é uma mensagem de aviso importante.
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                            
-                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                <i class="bi bi-x-circle me-2"></i>
-                                <strong>Erro:</strong> Ocorreu um erro durante a operação.
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Seção 8: Tabela de Análises Básica -->
+    <!-- Seção 3: Tabela de Análises Básica -->
     <div class="row mb-5">
         <div class="col-12">
             <div class="card">
@@ -419,7 +157,7 @@
                         'modelo': 'gpt-4',
                         'temperatura': 0.1,
                         'tempo_processamento': 2.5,
-                        'custo_estimado': 0.002
+
                     } %}
                     
                     {% set analise_erro = {
@@ -436,17 +174,17 @@
                         'modelo': 'gpt-4',
                         'temperatura': 0.2,
                         'tempo_processamento': 3.1,
-                        'custo_estimado': 0.003
+
                     } %}
                     
-                    {% set analises_demo = [analise_exemplo, analise_erro] %}
+                    {% set analises = [analise_exemplo, analise_erro] %}
                     {% include 'partials/tabela_analises.html' %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Seção 8.5: Tabela de Análises Avançada -->
+    <!-- Seção 4: Tabela de Análises Avançada -->
     <div class="row mb-5">
         <div class="col-12">
             <div class="card">
@@ -463,128 +201,18 @@
                         <strong>Componente Avançado:</strong> Esta tabela inclui configuração de colunas, filtros rápidos, paginação, contadores e exportação.
                     </div>
                     
-                    {% set analise_exemplo = {
-                        'id': 'analise-001',
-                        'intimacao_id': 'f71ac7be-a6d8-4c00-bd62-e5a4d94fad8c',
-                        'data_analise': '2025-08-11T18:01:31',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Cumprimento de sentença\n- **Comarca**: Carazinho\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-18T14:18:56\n- **Assuntos**: Sucumbência\n- **Valor da Causa**: R$ 406,61\n- **Órgão Julgador**: Juízo da 2ª Vara Cível da Comarca de Carazinho',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'decisão que recebe a fase de cumprimento de sentença',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 2.5,
-                        'custo_estimado': 0.002,
-                        'resposta_completa': 'Resposta completa da IA para demonstração.'
-                    } %}
-                    
-                    {% set analise_erro = {
-                        'id': 'analise-002',
-                        'intimacao_id': '7240e914-6832-4a83-b159-4dbcb8f43854',
-                        'data_analise': '2025-08-11T18:02:15',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Execução de Título Extrajudicial\n- **Comarca**: Passo Fundo\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-20T10:30:00\n- **Assuntos**: Cobrança\n- **Valor da Causa**: R$ 1.250,00\n- **Órgão Julgador**: Juízo da 1ª Vara Cível da Comarca de Passo Fundo',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'intimação para apresentação de defesa',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 3.1,
-                        'custo_estimado': 0.003,
-                        'resposta_completa': 'Outra resposta completa da IA.'
-                    } %}
-                    
-                    {% set analise_sucesso = {
-                        'id': 'analise-003',
-                        'intimacao_id': 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-                        'data_analise': '2025-08-11T18:03:42',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Procedimento Comum\n- **Comarca**: Erechim\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-22T16:45:00\n- **Assuntos**: Indenização\n- **Valor da Causa**: R$ 5.000,00\n- **Órgão Julgador**: Juízo da 3ª Vara Cível da Comarca de Erechim',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'decisão interlocutória sobre pedido de liminar',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 1.8,
-                        'custo_estimado': 0.001,
-                        'resposta_completa': 'Terceira resposta completa da IA.'
-                    } %}
-                    
-                    {% set analise_4 = {
-                        'id': 'analise-004',
-                        'intimacao_id': 'b2c3d4e5-f6g7-8901-bcde-f23456789012',
-                        'data_analise': '2025-08-11T18:04:18',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Ação de Cobrança\n- **Comarca**: Caxias do Sul\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-25T09:20:00\n- **Assuntos**: Cobrança\n- **Valor da Causa**: R$ 2.800,00\n- **Órgão Julgador**: Juízo da 2ª Vara Cível da Comarca de Caxias do Sul',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'decisão que recebe a fase de cumprimento de sentença',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 2.8,
-                        'custo_estimado': 0.002,
-                        'resposta_completa': 'Quarta resposta completa da IA.'
-                    } %}
-                    
-                    {% set analise_5 = {
-                        'id': 'analise-005',
-                        'intimacao_id': 'c3d4e5f6-g7h8-9012-cdef-345678901234',
-                        'data_analise': '2025-08-11T18:05:33',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Execução de Sentença\n- **Comarca**: Bento Gonçalves\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-28T14:10:00\n- **Assuntos**: Execução\n- **Valor da Causa**: R$ 3.500,00\n- **Órgão Julgador**: Juízo da 1ª Vara Cível da Comarca de Bento Gonçalves',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'intimação para apresentação de defesa',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 2.2,
-                        'custo_estimado': 0.002,
-                        'resposta_completa': 'Quinta resposta completa da IA.'
-                    } %}
-                    
-                    {% set analise_6 = {
-                        'id': 'analise-006',
-                        'intimacao_id': 'd4e5f6g7-h8i9-0123-defg-456789012345',
-                        'data_analise': '2025-08-11T18:06:47',
-                        'contexto': '# Dados do Processo\n## Informações Básicas do Processo\n- **Classe Processual**: Procedimento Comum\n- **Comarca**: Farroupilha\n- **Competência**: Cível - Geral\n- **Data Ajuizamento**: 2025-07-30T11:35:00\n- **Assuntos**: Indenização\n- **Valor da Causa**: R$ 4.200,00\n- **Órgão Julgador**: Juízo da 3ª Vara Cível da Comarca de Farroupilha',
-                        'prompt_nome': 'prompt inicial',
-                        'prompt_completo': 'Analise o contexto da intimação e classifique adequadamente.',
-                        'classificacao_manual': 'RENUNCIAR PRAZO',
-                        'informacao_adicional': 'decisão interlocutória sobre pedido de liminar',
-                        'resultado_ia': 'ELABORAR PEÇA',
-                        'acertou': False,
-                        'modelo': 'gpt-4',
-                        'temperatura': 0.0,
-                        'tempo_processamento': 3.0,
-                        'custo_estimado': 0.003,
-                        'resposta_completa': 'Sexta resposta completa da IA.'
-                    } %}
-                    
-                    {% set analises = [analise_exemplo, analise_erro, analise_sucesso, analise_4, analise_5, analise_6] %}
-                    {% set prompts_demo = [
+                    {% set analises = [analise_exemplo, analise_erro] %}
+                    {% set prompts = [
                         {'id': 'prompt-001', 'nome': 'Classificar Intimação'},
-                        {'id': 'prompt-002', 'nome': 'Analisar Processo'},
-                        {'id': 'prompt-003', 'nome': 'Extrair Informações'}
+                        {'id': 'prompt-002', 'nome': 'Analisar Processo'}
                     ] %}
-                    
                     {% include 'partials/tabela_analises_avancada.html' %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Seção 9: Modais -->
+    <!-- Seção 5: Modais -->
     <div class="row mb-5">
         <div class="col-12">
             <div class="card">
@@ -622,7 +250,62 @@
         </div>
     </div>
 
-    <!-- Seção 10: Informações dos Componentes -->
+    <!-- Seção 6: Badges e Status -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-tags"></i>
+                        Badges e Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Badges de Classificação</h6>
+                            <div class="mb-3">
+                                <span class="badge bg-success me-2">ELABORAR PEÇA</span>
+                                <span class="badge bg-warning me-2">ANALISAR PROCESSO</span>
+                                <span class="badge bg-danger me-2">URGÊNCIA</span>
+                                <span class="badge bg-info me-2">CONTATAR ASSISTIDO</span>
+                                <span class="badge bg-secondary me-2">RENUNCIAR PRAZO</span>
+                                <span class="badge bg-primary me-2">ENCAMINHAR INTIMAÇÃO</span>
+                            </div>
+                            
+                            <h6>Badges de Status</h6>
+                            <div class="mb-3">
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> Acertou
+                                </span>
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-x-circle"></i> Errou
+                                </span>
+                                <span class="badge bg-warning">Pendente</span>
+                                <span class="badge bg-info">Em Processamento</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Alertas do Sistema</h6>
+                            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Informação:</strong> Esta é uma mensagem informativa.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                            
+                            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>Sucesso:</strong> Operação realizada com sucesso!
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção 7: Informações dos Componentes -->
     <div class="row mb-5">
         <div class="col-12">
             <div class="card">
@@ -641,7 +324,6 @@
                                 <li><strong>Uso:</strong> Listas, dashboards, visualizações detalhadas</li>
                                 <li><strong>Características:</strong> Todas as informações + ações</li>
                                 <li><strong>Responsivo:</strong> Sim</li>
-                                <li><strong>Animações:</strong> Hover effects</li>
                             </ul>
                         </div>
                         <div class="col-md-4">
@@ -651,51 +333,15 @@
                                 <li><strong>Uso:</strong> Tabelas, listas compactas</li>
                                 <li><strong>Características:</strong> Informações essenciais</li>
                                 <li><strong>Responsivo:</strong> Sim</li>
-                                <li><strong>Animações:</strong> Hover effects</li>
                             </ul>
                         </div>
                         <div class="col-md-4">
-                            <h6>Tabela de Análises Básica</h6>
+                            <h6>Tabelas de Análises</h6>
                             <ul class="list-unstyled">
-                                <li><strong>Arquivo:</strong> <code>partials/tabela_analises.html</code></li>
-                                <li><strong>Uso:</strong> Relatórios, histórico de análises</li>
-                                <li><strong>Características:</strong> Paginação, filtros, ações</li>
-                                <li><strong>Responsivo:</strong> Sim</li>
-                                <li><strong>Interativo:</strong> Checkboxes, modais</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-md-4">
-                            <h6>Tabela de Análises Avançada</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>Arquivo:</strong> <code>partials/tabela_analises_avancada.html</code></li>
-                                <li><strong>Uso:</strong> Relatórios detalhados, análise avançada</li>
-                                <li><strong>Características:</strong> Configuração de colunas, filtros rápidos</li>
-                                <li><strong>Responsivo:</strong> Sim</li>
-                                <li><strong>Interativo:</strong> Exportação, paginação, contadores</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <h6>Modais</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>Arquivo:</strong> <code>partials/modais_prompt_resposta.html</code></li>
-                                <li><strong>Uso:</strong> Exibir prompts e respostas completas</li>
-                                <li><strong>Características:</strong> Formatação de código, cópia</li>
-                                <li><strong>Responsivo:</strong> Sim</li>
-                                <li><strong>Funcionalidades:</strong> Botões de cópia e fechamento</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>Badges e Alertas</h6>
-                            <ul class="list-unstyled">
-                                <li><strong>Badges:</strong> Status, classificação, métricas</li>
-                                <li><strong>Alertas:</strong> Info, sucesso, aviso, erro</li>
-                                <li><strong>Cores:</strong> Bootstrap color system</li>
-                                <li><strong>Ícones:</strong> Bootstrap Icons</li>
-                                <li><strong>Interativo:</strong> Dismissible alerts</li>
+                                <li><strong>Básica:</strong> <code>partials/tabela_analises.html</code></li>
+                                <li><strong>Avançada:</strong> <code>partials/tabela_analises_avancada.html</code></li>
+                                <li><strong>Com Cards:</strong> <code>partials/tabela_analises_com_card.html</code></li>
+                                <li><strong>Funcionalidades:</strong> Paginação, filtros, exportação</li>
                             </ul>
                         </div>
                     </div>
@@ -705,71 +351,9 @@
     </div>
 </div>
 
-<style>
-/* Estilos para a tabela de cards */
-.intimacoes-cards-table {
-    border-collapse: separate;
-    border-spacing: 0;
-}
-
-.intimacoes-cards-table th {
-    border-bottom: 2px solid #dee2e6;
-    font-weight: 600;
-    color: #495057;
-    padding: 12px 8px;
-    background: #f8f9fa;
-}
-
-.intimacoes-cards-table td {
-    padding: 8px;
-    vertical-align: top;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.intimacao-row:hover {
-    background-color: #f8f9fa;
-}
-
-/* Células da tabela */
-.classificacao-cell {
-    text-align: center;
-}
-
-.info-cell {
-    max-width: 200px;
-}
-
-.info-adicional-text {
-    font-size: 12px;
-    line-height: 1.3;
-    color: #495057;
-    cursor: help;
-}
-
-.data-cell {
-    text-align: center;
-}
-
-.acoes-cell {
-    text-align: center;
-}
-
-/* Responsividade */
-@media (max-width: 768px) {
-    .intimacoes-cards-table {
-        font-size: 12px;
-    }
-    
-    .info-cell {
-        max-width: 150px;
-    }
-}
-</style>
-
 <script>
 // Funções para demonstração
 function mostrarToast(mensagem, tipo = 'info') {
-    // Simular toast para demonstração
     console.log(`Toast ${tipo}: ${mensagem}`);
     alert(`${tipo.toUpperCase()}: ${mensagem}`);
 }
@@ -787,13 +371,6 @@ function excluirIntimacao(id) {
     if (confirm('Tem certeza que deseja excluir esta intimação?')) {
         mostrarToast(`Intimação ${id} excluída!`, 'success');
     }
-}
-
-// Função para criar card dinamicamente (demonstração)
-function criarCardIntimacao(intimacao, showActions = true) {
-    mostrarToast('Função criarCardIntimacao chamada!', 'info');
-    console.log('Dados da intimação:', intimacao);
-    console.log('Mostrar ações:', showActions);
 }
 
 // Funções para modais (demonstração)
@@ -847,9 +424,8 @@ function copiarResposta() {
     });
 }
 
-// Adicionar tooltips para informações adicionais
+// Inicializar tooltips
 document.addEventListener('DOMContentLoaded', function() {
-    // Inicializar tooltips do Bootstrap se disponível
     if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
