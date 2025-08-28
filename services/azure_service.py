@@ -3,7 +3,7 @@ import re
 from typing import Tuple, Dict, Any, Optional, List
 from openai import AzureOpenAI
 from config import Config
-from services.data_service import DataService
+from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
 
 class AzureService(AIServiceInterface):
@@ -11,7 +11,7 @@ class AzureService(AIServiceInterface):
     
     def __init__(self):
         """Inicializar o serviço Azure OpenAI"""
-        self.data_service = DataService()
+        self.data_service = SQLiteService()
         self.config = Config()
         self.client = None
         self._initialize_client()

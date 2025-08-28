@@ -6,7 +6,7 @@ from werkzeug.utils import secure_filename
 import json
 import uuid
 from config import config
-from services.data_service import DataService
+from services.sqlite_service import SQLiteService
 from services.ai_manager_service import AIManagerService
 from services.export_service import ExportService
 from services.cost_calculation_service import cost_service
@@ -760,6 +760,159 @@ def analise():
                              temperatura_padrao=0.7,
                              max_tokens_padrao=500)
 
+@app.route('/historico')
+def historico_analises():
+    """Página para visualizar histórico de análises"""
+    try:
+        # Obter lista de sessões de análise
+        sessoes = data_service.get_sessoes_analise(limit=50)
+        
+        return render_template('historico.html', sessoes=sessoes)
+    except Exception as e:
+        flash(f'Erro ao carregar histórico: {str(e)}', 'error')
+        return render_template('historico.html', sessoes=[])
+
+@app.route('/historico/<session_id>')
+def visualizar_sessao_analise(session_id):
+    """Visualizar detalhes de uma sessão específica"""
+    try:
+        # Obter detalhes da sessão
+        sessao = data_service.get_sessao_analise(session_id)
+        if not sessao:
+            flash('Sessão não encontrada', 'error')
+            return redirect(url_for('historico_analises'))
+        
+        # Obter análises da sessão
+        analises = data_service.get_analises_por_sessao(session_id)
+        
+        return render_template('visualizar_sessao.html', sessao=sessao, analises=analises)
+    except Exception as e:
+        flash(f'Erro ao carregar sessão: {str(e)}', 'error')
+        return redirect(url_for('historico_analises'))
+
+@app.route('/api/historico/excluir-sessao', methods=['POST'])
+def excluir_sessao_analise():
+    """Excluir uma sessão de análise e suas análises associadas"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        
+        if not session_id:
+            return jsonify({'error': 'Session ID é obrigatório'}), 400
+        
+        # Verificar se a sessão existe
+        sessao = data_service.get_sessao_analise(session_id)
+        if not sessao:
+            return jsonify({'error': 'Sessão não encontrada'}), 404
+        
+        # Excluir a sessão e suas análises
+        sucesso = data_service.excluir_sessao_analise(session_id)
+        
+        if sucesso:
+            return jsonify({
+                'success': True,
+                'message': 'Sessão excluída com sucesso',
+                'session_id': session_id
+            })
+        else:
+            return jsonify({'error': 'Erro ao excluir sessão'}), 500
+            
+    except Exception as e:
+        print(f"Erro ao excluir sessão: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+@app.route('/api/historico/exportar-sessao', methods=['POST'])
+def exportar_sessao_analise():
+    """Exportar uma sessão de análise para CSV/Excel"""
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        formato = data.get('formato', 'csv')  # csv ou excel
+        
+        if not session_id:
+            return jsonify({'error': 'Session ID é obrigatório'}), 400
+        
+        # Verificar se a sessão existe
+        sessao = data_service.get_sessao_analise(session_id)
+        if not sessao:
+            return jsonify({'error': 'Sessão não encontrada'}), 404
+        
+        # Obter análises da sessão
+        analises = data_service.get_analises_por_sessao(session_id)
+        
+        if not analises:
+            return jsonify({'error': 'Nenhuma análise encontrada para esta sessão'}), 404
+        
+        # Preparar dados para exportação
+        dados_exportacao = []
+        for analise in analises:
+            dados_exportacao.append({
+                'ID da Análise': analise['id'],
+                'ID da Intimação': analise['intimacao_id'],
+                'Processo': analise.get('processo', 'N/A'),
+                'Órgão Julgador': analise.get('orgao_julgador', 'N/A'),
+                'Classificação Manual': analise.get('classificacao_manual', 'N/A'),
+                'Resultado IA': analise.get('resultado_ia', 'N/A'),
+                'Acertou': 'Sim' if analise.get('acertou') else 'Não',
+                'Tempo Processamento (s)': round(analise.get('tempo_processamento', 0), 2),
+                'Custo Real ($)': round(analise.get('custo_real', 0), 6),
+                'Tokens Input': analise.get('tokens_input', 0),
+                'Tokens Output': analise.get('tokens_output', 0),
+                'Modelo': analise.get('modelo', 'N/A'),
+                'Temperatura': analise.get('temperatura', 'N/A'),
+                'Data da Análise': analise.get('data_analise_formatada', 'N/A'),
+                'Informação Adicional': analise.get('informacao_adicional', 'N/A')
+            })
+        
+        # Gerar arquivo
+        if formato == 'excel':
+            # Usar o serviço de exportação para Excel
+            from services.export_service import ExportService
+            export_service = ExportService()
+            
+            # Criar nome do arquivo
+            nome_arquivo = f"historico_sessao_{session_id[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            # Gerar Excel
+            caminho_arquivo = export_service.export_to_excel(
+                dados_exportacao, 
+                nome_arquivo,
+                sheet_name='Análises da Sessão'
+            )
+            
+            # Retornar arquivo para download
+            return send_file(
+                caminho_arquivo,
+                as_attachment=True,
+                download_name=nome_arquivo,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            # Exportar como CSV
+            from services.export_service import ExportService
+            export_service = ExportService()
+            
+            # Criar nome do arquivo
+            nome_arquivo = f"historico_sessao_{session_id[:8]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            
+            # Gerar CSV
+            caminho_arquivo = export_service.export_to_csv(
+                dados_exportacao, 
+                nome_arquivo
+            )
+            
+            # Retornar arquivo para download
+            return send_file(
+                caminho_arquivo,
+                as_attachment=True,
+                download_name=nome_arquivo,
+                mimetype='text/csv'
+            )
+            
+    except Exception as e:
+        print(f"Erro ao exportar sessão: {e}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
 @app.route('/executar-analise', methods=['POST'])
 def executar_analise():
     """Executar análise de intimações com prompts selecionados"""
@@ -789,6 +942,36 @@ def executar_analise():
         # Carregar configurações padrão
         config = data_service.get_config()
         
+        # Criar sessão de análise no banco
+        prompt = data_service.get_prompt_by_id(prompt_id)
+        if not prompt:
+            finalizar_analise(session_id)
+            return jsonify({'error': 'Prompt não encontrado'}), 404
+        
+        # Preparar configurações para a sessão
+        config_sessao = {
+            'modelo': configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4')),
+            'temperatura': float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7))),
+            'max_tokens': int(configuracoes.get('max_tokens', config.get('max_tokens_padrao', 500))),
+            'timeout': int(configuracoes.get('timeout', config.get('timeout_padrao', 30))),
+            'salvar_resultados': configuracoes.get('salvar_resultados', True),
+            'calcular_acuracia': configuracoes.get('calcular_acuracia', True),
+            'modo_paralelo': configuracoes.get('modo_paralelo', False)
+        }
+        
+        # Criar sessão no banco
+        data_service.criar_sessao_analise(
+            session_id=session_id,
+            prompt_id=prompt_id,
+            prompt_nome=prompt['nome'],
+            modelo=configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4')),
+            temperatura=float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7))),
+            max_tokens=int(configuracoes.get('max_tokens', config.get('max_tokens_padrao', 500))),
+            timeout=int(configuracoes.get('timeout', config.get('timeout_padrao', 30))),
+            total_intimacoes=len(intimacao_ids),
+            configuracoes=config_sessao
+        )
+        
         # Configurações da OpenAI (usar configurações da página se fornecidas, senão usar padrões)
         modelo = configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4'))
         temperatura = float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7)))
@@ -800,12 +983,6 @@ def executar_analise():
         
         resultados = []
         
-        # Executar análises
-        prompt = data_service.get_prompt_by_id(prompt_id)
-        if not prompt:
-            finalizar_analise(session_id)
-            return jsonify({'error': 'Prompt não encontrado'}), 404
-            
         print(f"=== DEBUG: Prompt encontrado: {prompt['nome']} ===")
             
         for i, intimacao_id in enumerate(intimacao_ids, 1):
@@ -938,6 +1115,7 @@ def executar_analise():
                     
                     # Adicionar análise à intimação
                     analise_data = {
+                        'session_id': session_id,  # Adicionar session_id
                         'data_analise': datetime.now().isoformat(),
                         'prompt_id': prompt_id,
                         'prompt_nome': prompt['nome'],
@@ -949,7 +1127,6 @@ def executar_analise():
                         'tokens_usados': resultado['tokens_usados'],
                         'tokens_input': tokens_input,
                         'tokens_output': tokens_output,
-
                         'custo_real': custo_real,  # Custo real calculado
                         'prompt_completo': prompt_final,
                         'resposta_completa': resposta_completa
@@ -977,6 +1154,7 @@ def executar_analise():
         erros = len([r for r in resultados if r.get('acertou') == False])
         tempo_total = sum([r.get('tempo_processamento', 0) for r in resultados if 'erro' not in r])
         custo_total = sum([r.get('custo_real', 0) for r in resultados if 'erro' not in r])
+        tokens_total = sum([r.get('tokens_input', 0) + r.get('tokens_output', 0) for r in resultados if 'erro' not in r])
         
         estatisticas = {
             'total_analises': total_analises,
@@ -988,6 +1166,17 @@ def executar_analise():
             'custo_total': round(custo_total, 4),
             'custo_medio': round(custo_total / total_analises, 4) if total_analises > 0 else 0
         }
+        
+        # Finalizar sessão no banco
+        estatisticas_sessao = {
+            'total_processadas': total_analises,
+            'acertos': acertos,
+            'erros': erros,
+            'tempo_total': tempo_total,
+            'custo_total': custo_total,
+            'tokens_total': tokens_total
+        }
+        data_service.finalizar_sessao_analise(session_id, estatisticas_sessao)
         
         return jsonify({
             'success': True,
@@ -2412,9 +2601,9 @@ def restaurar_dados_demo():
             ]
         }
         
-        # Salvar os dados no arquivo analises.json
-        with open('data/analises.json', 'w', encoding='utf-8') as f:
-            json.dump(dados_demo, f, ensure_ascii=False, indent=2)
+        # Os dados agora são salvos no banco SQLite, não mais em JSON
+        # Esta função foi mantida apenas para compatibilidade
+        print("ℹ️  Dados de demonstração - salvamento em JSON descontinuado (usando SQLite)")
         
         return jsonify({
             'success': True,
@@ -2631,6 +2820,40 @@ def stats_banco():
         return jsonify({
             'success': False,
             'message': f'Erro ao obter estatísticas: {str(e)}'
+        }), 500
+
+@app.route('/api/intimacoes/informacoes-adicionais', methods=['POST'])
+def obter_informacoes_adicionais_intimacoes():
+    """Obter informações adicionais de múltiplas intimações"""
+    try:
+        data = request.get_json()
+        intimacoes_ids = data.get('intimacoes_ids', [])
+        
+        if not intimacoes_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhuma intimação selecionada'
+            }), 400
+        
+        # Buscar intimações no banco
+        intimacoes = []
+        for intimacao_id in intimacoes_ids:
+            intimacao = data_service.get_intimacao_by_id(intimacao_id)
+            if intimacao:
+                intimacoes.append({
+                    'id': intimacao_id,
+                    'informacoes_adicionais': intimacao.get('informacao_adicional', '')
+                })
+        
+        return jsonify({
+            'success': True,
+            'intimacoes': intimacoes
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar informações: {str(e)}'
         }), 500
 
 @app.route('/api/backup/restaurar', methods=['POST'])

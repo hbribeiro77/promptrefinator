@@ -2,6 +2,10 @@
 
 {% block title %}Análise de Prompts - Sistema Analisador de Prompts{% endblock %}
 
+{% block extra_head %}
+<!-- Marked.js será carregado no final da página -->
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
@@ -14,23 +18,11 @@
                 <i class="bi bi-arrow-clockwise"></i>
                 Limpar
             </button>
-            <button type="button" class="btn btn-sm btn-outline-info" onclick="carregarExemplo()">
-                <i class="bi bi-lightbulb"></i>
-                Exemplo
-            </button>
         </div>
         <div class="btn-group">
-            <button type="button" class="btn btn-sm btn-secondary" onclick="testeSimples()" style="margin-right: 10px;">
-                <i class="bi bi-bug"></i>
-                Teste JS
-            </button>
             <button type="button" class="btn btn-sm btn-primary" onclick="executarAnalise()" id="btn-executar">
                 <i class="bi bi-play-circle"></i>
                 Executar Análise
-            </button>
-            <button type="button" class="btn btn-sm btn-secondary ms-2" onclick="testarLoading()">
-                <i class="bi bi-hourglass"></i>
-                Testar Loading
             </button>
         </div>
     </div>
@@ -270,9 +262,9 @@
                                                     {% endif %}
                                                 </td>
                                                 <td class="info-cell">
-                                                    {% if intimacao.informacoes_adicionais %}
-                                                    <div class="info-adicional-text" title="{{ intimacao.informacoes_adicionais }}">
-                                                        {{ intimacao.informacoes_adicionais[:80] }}{% if intimacao.informacoes_adicionais|length > 80 %}...{% endif %}
+                                                    {% if intimacao.informacao_adicional %}
+                                                    <div class="info-adicional-text" title="{{ intimacao.informacao_adicional }}">
+                                                        {{ intimacao.informacao_adicional[:80] }}{% if intimacao.informacao_adicional|length > 80 %}...{% endif %}
                                                     </div>
                                                     {% else %}
                                                     <span class="text-muted">-</span>
@@ -335,10 +327,16 @@
         <!-- Resultados da Análise -->
         <div class="card" id="card-resultados" style="display: none;">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-clipboard-data"></i>
-                    Resultados da Análise
-                </h5>
+                <div class="d-flex align-items-center">
+                    <h5 class="card-title mb-0 me-3">
+                        <i class="bi bi-clipboard-data"></i>
+                        Resultados da Análise
+                    </h5>
+                    <span id="contador-resultados-header" class="badge bg-info" style="display: none;">
+                        <i class="bi bi-eye"></i>
+                        <span id="contador-texto-header">0 de 0</span>
+                    </span>
+                </div>
                 <div>
                     <button type="button" class="btn btn-sm btn-outline-info me-2" onclick="toggleConfiguracoesColunas()">
                         <i class="bi bi-gear"></i>
@@ -470,28 +468,40 @@
                     <div class="row text-center">
                         <div class="col-md-3">
                             <div class="border-end">
-                                <h4 class="text-primary mb-0" id="total-testes">0</h4>
-                                <small class="text-muted">Total de Testes</small>
+                                <div class="stat-card" onclick="filtrarPorStatus('todos')" style="cursor: pointer;" title="Clique para mostrar todos os resultados">
+                                    <h4 class="text-primary mb-0" id="total-testes">0</h4>
+                                    <small class="text-muted">Total de Testes</small>
+                                    <div class="stat-hover-effect"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <div class="stat-card" onclick="filtrarPorStatus('acertos')" style="cursor: pointer;" title="Clique para mostrar apenas os acertos">
+                                    <h4 class="text-success mb-0" id="acertos">0</h4>
+                                    <small class="text-muted">Acertos</small>
+                                    <div class="stat-hover-effect"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border-end">
+                                <div class="stat-card" onclick="filtrarPorStatus('erros')" style="cursor: pointer;" title="Clique para mostrar apenas os erros">
+                                    <h4 class="text-danger mb-0" id="erros">0</h4>
+                                    <small class="text-muted">Erros</small>
+                                    <div class="stat-hover-effect"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-card" onclick="filtrarPorStatus('todos')" style="cursor: pointer;" title="Clique para mostrar todos os resultados">
+                                <h4 class="text-info mb-0" id="acuracia-geral">0%</h4>
+                                <small class="text-muted">Acurácia</small>
+                                <div class="stat-hover-effect"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-                        <div class="col-md-3">
-                            <div class="border-end">
-                                <h4 class="text-success mb-0" id="acertos">0</h4>
-                                <small class="text-muted">Acertos</small>
-        </div>
-            </div>
-                        <div class="col-md-3">
-                            <div class="border-end">
-                                <h4 class="text-danger mb-0" id="erros">0</h4>
-                                <small class="text-muted">Erros</small>
-                    </div>
-                    </div>
-                        <div class="col-md-3">
-                            <h4 class="text-info mb-0" id="acuracia-geral">0%</h4>
-                            <small class="text-muted">Acurácia</small>
-                    </div>
-                    </div>
-                    </div>
                 
                 <!-- Detalhes dos Resultados -->
                 <div id="resultados-container">
@@ -579,7 +589,7 @@
 
 <!-- Modal de Contexto da Intimação -->
 <div class="modal fade" id="modalContextoIntimacao" tabindex="-1">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl" style="max-width: 90vw; width: 90vw;">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -591,8 +601,8 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label fw-bold">Contexto:</label>
-                    <div class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
-                        <pre id="modal-contexto-content" class="mb-0" style="white-space: pre-wrap; font-family: inherit;"></pre>
+                    <div class="border rounded p-3 bg-light" style="max-height: 65vh; overflow-y: auto;">
+                        <div id="modal-contexto-content" class="markdown-content"></div>
                     </div>
                 </div>
             </div>
@@ -747,6 +757,356 @@
 
     .loading-spinner {
         margin-bottom: 2rem;
+    }
+
+    /* Estilos para cartões de estatísticas clicáveis */
+    .stat-card {
+        position: relative;
+        padding: 15px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-color: rgba(0, 123, 255, 0.3);
+    }
+
+    .stat-card:active {
+        transform: translateY(0);
+    }
+
+    .stat-hover-effect {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+        border-radius: 8px;
+    }
+
+    .stat-card:hover .stat-hover-effect {
+        opacity: 1;
+    }
+
+
+
+    /* Estilos para linhas filtradas */
+    .resultado-row.filtrado {
+        display: none;
+    }
+
+    .resultado-row.visivel {
+        display: table-row;
+    }
+
+    /* Estilos para o contador no cabeçalho */
+    #contador-resultados-header {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        transition: all 0.3s ease;
+    }
+
+    #contador-resultados-header:hover {
+        transform: scale(1.05);
+    }
+
+    #contador-texto-header {
+        font-weight: 500;
+    }
+
+    /* Estilos para conteúdo Markdown */
+    .markdown-content {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #333;
+    }
+
+    .markdown-content h1 {
+        color: #2c3e50;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 8px;
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-size: 1.8em;
+        font-weight: 600;
+    }
+
+    .markdown-content h2 {
+        color: #34495e;
+        border-bottom: 1px solid #bdc3c7;
+        padding-bottom: 6px;
+        margin-top: 20px;
+        margin-bottom: 12px;
+        font-size: 1.5em;
+        font-weight: 600;
+    }
+
+    .markdown-content h3 {
+        color: #2c3e50;
+        margin-top: 16px;
+        margin-bottom: 8px;
+        font-size: 1.3em;
+        font-weight: 600;
+    }
+
+    .markdown-content h4 {
+        color: #34495e;
+        margin-top: 12px;
+        margin-bottom: 6px;
+        font-size: 1.1em;
+        font-weight: 600;
+    }
+
+    .markdown-content strong {
+        color: #2c3e50;
+        font-weight: 600;
+    }
+
+    .markdown-content em {
+        color: #7f8c8d;
+        font-style: italic;
+    }
+
+    .markdown-content p {
+        margin-bottom: 12px;
+    }
+
+    .markdown-content ul, .markdown-content ol {
+        margin-bottom: 12px;
+        padding-left: 24px;
+    }
+
+    .markdown-content li {
+        margin-bottom: 4px;
+    }
+
+    .markdown-content blockquote {
+        border-left: 4px solid #3498db;
+        padding-left: 16px;
+        margin: 16px 0;
+        color: #7f8c8d;
+        font-style: italic;
+    }
+
+    .markdown-content code {
+        background-color: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+        color: #e74c3c;
+    }
+
+    .markdown-content pre {
+        background-color: #f8f9fa;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        border: 1px solid #e9ecef;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-width: 100%;
+    }
+
+    .markdown-content pre code {
+        background-color: transparent;
+        padding: 0;
+        color: #333;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+
+    /* Estilos específicos para texto de documentos */
+    .markdown-content p {
+        margin-bottom: 8px;
+        line-height: 1.4;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    /* Reduzir espaçamento entre parágrafos */
+    .markdown-content p + p {
+        margin-top: 4px;
+    }
+
+    /* Melhorar quebra de palavras longas */
+    .markdown-content {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+
+    /* Ajustar largura máxima para evitar rolagem horizontal */
+    .markdown-content * {
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Estilos específicos para documentos jurídicos */
+    .markdown-content h3 {
+        margin-top: 12px;
+        margin-bottom: 6px;
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #2c3e50;
+        border-bottom: 1px solid #ecf0f1;
+        padding-bottom: 4px;
+    }
+
+    /* Reduzir espaçamento em seções de documento */
+    .markdown-content h3 + p {
+        margin-top: 2px;
+        margin-bottom: 4px;
+    }
+
+    /* Reduzir espaçamento entre parágrafos em seções de documento */
+    .markdown-content h3 ~ p {
+        margin-bottom: 4px;
+        line-height: 1.3;
+    }
+
+    /* Estilo especial para seções de documento */
+    .markdown-content h3:contains("Documento") + *,
+    .markdown-content h3:contains("Documento") ~ * {
+        margin-bottom: 3px;
+    }
+
+    /* Fonte maior para textos de documentos */
+    .markdown-content h3:contains("Documento") ~ p {
+        font-size: 1.05rem !important;
+        line-height: 1.4 !important;
+    }
+
+    /* Melhorar espaçamento para listas */
+    .markdown-content ul, .markdown-content ol {
+        margin-bottom: 8px;
+        padding-left: 20px;
+    }
+
+    .markdown-content li {
+        margin-bottom: 2px;
+        line-height: 1.4;
+    }
+
+    /* Ajustar espaçamento para títulos */
+    .markdown-content h1 {
+        margin-top: 16px;
+        margin-bottom: 12px;
+    }
+
+    .markdown-content h2 {
+        margin-top: 14px;
+        margin-bottom: 8px;
+    }
+
+    /* Melhorar legibilidade de textos longos */
+    .markdown-content {
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+
+    /* Aumentar fonte para seções de documento */
+    .markdown-content h3 + p,
+    .markdown-content h3 ~ p {
+        font-size: 1.05rem;
+        line-height: 1.4;
+    }
+
+    /* Ajustar padding da modal para melhor aproveitamento do espaço */
+    .modal-body {
+        padding: 1rem;
+    }
+
+    .modal-body .border {
+        padding: 0.75rem !important;
+    }
+
+    /* Modal responsiva e proporcional */
+    @media (max-width: 768px) {
+        #modalContextoIntimacao .modal-dialog {
+            max-width: 95vw !important;
+            width: 95vw !important;
+            margin: 1vh auto;
+        }
+        
+        #modalContextoIntimacao .modal-body .border {
+            max-height: 55vh !important;
+        }
+    }
+
+    @media (min-width: 769px) and (max-width: 1200px) {
+        #modalContextoIntimacao .modal-dialog {
+            max-width: 85vw !important;
+            width: 85vw !important;
+        }
+        
+        #modalContextoIntimacao .modal-body .border {
+            max-height: 60vh !important;
+        }
+    }
+
+    @media (min-width: 1201px) {
+        #modalContextoIntimacao .modal-dialog {
+            max-width: 80vw !important;
+            width: 80vw !important;
+        }
+        
+        #modalContextoIntimacao .modal-body .border {
+            max-height: 65vh !important;
+        }
+    }
+
+    /* Estilo específico para texto de documento */
+    .documento-texto {
+        font-size: 1.15rem !important;
+        line-height: 1.4 !important;
+        font-weight: 500 !important;
+        color: #2c3e50 !important;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    /* Estilo para parágrafos de documento */
+    .documento-paragrafo {
+        font-size: 0.95rem !important;
+        font-weight: 400 !important;
+        color: #333 !important;
+        background-color: transparent !important;
+        padding: 0 !important;
+        margin-bottom: 3px !important;
+        line-height: 1.4 !important;
+    }
+
+
+
+    .markdown-content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 16px 0;
+    }
+
+    .markdown-content th, .markdown-content td {
+        border: 1px solid #dee2e6;
+        padding: 8px 12px;
+        text-align: left;
+    }
+
+    .markdown-content th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .markdown-content tr:nth-child(even) {
+        background-color: #f8f9fa;
     }
 
     /* AI Brain Animation */
@@ -1107,17 +1467,7 @@ function esconderLoading() {
     }
 }
 
-// Função para testar loading
-function testarLoading() {
-    console.log('=== DEBUG: Testando loading ===');
-    mostrarLoading();
-    
-    // Simular processamento por 3 segundos
-    setTimeout(() => {
-        esconderLoading();
-        showToast('Teste de loading concluído!', 'success');
-    }, 3000);
-}
+
 
 // Função para scroll suave para resultados
 function scrollParaResultados() {
@@ -1429,28 +1779,7 @@ function aplicarFiltro() {
     showToast('Filtro aplicado com sucesso!', 'success');
 }
 
-// Função para carregar exemplo
-function carregarExemplo() {
-    // Selecionar primeiro prompt e primeira intimação
-    const promptSelect = document.getElementById('prompt-selecionado');
-    const intimacaoSelect = document.getElementById('intimacoes-selecionadas');
-    
-    if (promptSelect.options.length > 1) {
-        promptSelect.selectedIndex = 1; // Primeiro prompt (pula a opção vazia)
-    }
-    
-    if (intimacaoSelect.options.length > 0) {
-        intimacaoSelect.options[0].selected = true;
-    }
-    
-    // Configurar parâmetros de exemplo
-    document.getElementById('temperatura').value = '0.2';
-    document.getElementById('temp-value').textContent = '0.2';
-    document.getElementById('max-tokens').value = '150';
-    
-    atualizarResumo();
-    showToast('Exemplo carregado!', 'info');
-}
+
 
 // Função para limpar formulário
 function limparFormulario() {
@@ -1732,6 +2061,11 @@ function finalizarAnalise() {
     }, 100);
     
     showToast(`${totalAnalises} análises concluídas. Acurácia: ${acuracia}%`, 'success');
+    
+    // Toast para avisar que foi adicionado ao histórico
+    setTimeout(() => {
+        showToast('📊 Análise adicionada ao histórico! Clique em "Histórico" no menu para visualizar.', 'info');
+    }, 1500);
 }
 
 // Função para exibir resultados
@@ -1810,7 +2144,7 @@ function exibirResultados() {
         };
         
         html += `
-            <tr>
+            <tr class="resultado-row visivel" data-acertou="${resultado.acertou}">
                 ${configuracaoColunas.intimacao ? `<td>${gerarCardCompactoIntimacao(resultado)}</td>` : ''}
                 ${configuracaoColunas.classificacao_manual ? `<td><span class="badge bg-secondary">${resultado.classificacao_manual || 'N/A'}</span></td>` : ''}
                 ${configuracaoColunas.informacao_adicional ? `<td>
@@ -1825,7 +2159,7 @@ function exibirResultados() {
                     }
                 </td>` : ''}
                 ${configuracaoColunas.resultado_ia ? `<td><span class="badge ${getBadgeClass(resultado.resultado_ia)}">${resultado.resultado_ia || 'N/A'}</span></td>` : ''}
-                ${configuracaoColunas.status ? `<td><i class="bi ${statusIcon} ${statusClass}"></i> ${statusText}</td>` : ''}
+                ${configuracaoColunas.status ? `<td class="status-cell"><i class="bi ${statusIcon} ${statusClass}"></i> ${statusText}</td>` : ''}
                 ${configuracaoColunas.configuracoes ? `<td>
                     <small>
                         <div><strong>Modelo:</strong> ${resultado.modelo || 'N/A'}</div>
@@ -1899,6 +2233,9 @@ function exibirResultados() {
     
     container.innerHTML = html;
     cardResultados.style.display = 'block';
+    
+    // Armazenar resultados para filtros
+    armazenarResultadosAtuais(resultadosAnalise);
     
 
     
@@ -1979,11 +2316,7 @@ document.querySelectorAll('.filtro-classificacao').forEach(cb => {
 
 
 
-// Teste simples para verificar se o JavaScript está funcionando
-function testeSimples() {
-    console.log('=== TESTE SIMPLES FUNCIONANDO ===');
-    alert('JavaScript está funcionando!');
-}
+
 
 // Funções para mostrar prompt e resposta completos
 function mostrarPromptCompleto(intimacaoId) {
@@ -2134,23 +2467,162 @@ document.addEventListener('keydown', function(e) {
         limparFormulario();
     }
     
-    // Ctrl+E para exemplo
-    if (e.ctrlKey && e.key === 'e') {
-        e.preventDefault();
-        carregarExemplo();
-    }
+
 });
 });
 
 // Função para visualizar contexto da intimação
 function visualizarContexto(intimacaoId, contexto) {
     console.log('=== Visualizando contexto da intimação:', intimacaoId);
+    console.log('=== Contexto recebido:', contexto);
     
     const modalElement = document.getElementById('modalContextoIntimacao');
     const contextoContent = document.getElementById('modal-contexto-content');
     
-    // Definir o conteúdo do contexto
-    contextoContent.textContent = contexto || 'Contexto não disponível';
+    // Decodificar o contexto (remover escapes)
+    let contextoDecodificado = contexto || 'Contexto não disponível';
+    
+    // Remover escapes de caracteres especiais
+    contextoDecodificado = contextoDecodificado.replace(/\\n/g, '\n');
+    contextoDecodificado = contextoDecodificado.replace(/\\r/g, '\r');
+    contextoDecodificado = contextoDecodificado.replace(/\\`/g, '`');
+    contextoDecodificado = contextoDecodificado.replace(/\\"/g, '"');
+    contextoDecodificado = contextoDecodificado.replace(/\\'/g, "'");
+    
+    console.log('=== Contexto decodificado:', contextoDecodificado);
+    
+    // Armazenar o contexto original para copiar
+    window.contextoOriginal = contextoDecodificado;
+    
+    // Processar o contexto para melhorar a formatação Markdown
+    let contextoProcessado = contextoDecodificado;
+    
+    // Limpar espaçamentos excessivos
+    contextoProcessado = contextoProcessado.replace(/\n{3,}/g, '\n\n');
+    
+    // Melhorar formatação de títulos (se não estiverem já formatados)
+    contextoProcessado = contextoProcessado.replace(/^#\s+(.+)$/gm, '# $1');
+    contextoProcessado = contextoProcessado.replace(/^##\s+(.+)$/gm, '## $1');
+    contextoProcessado = contextoProcessado.replace(/^###\s+(.+)$/gm, '### $1');
+    
+    // Melhorar formatação de negrito (se não estiverem já formatados)
+    contextoProcessado = contextoProcessado.replace(/\*\*(.+?)\*\*/g, '**$1**');
+    
+    // Processar seções de documento para reduzir espaçamento
+    // Identificar seções que começam com "### Documento" e tratar como bloco contínuo
+    contextoProcessado = contextoProcessado.replace(/(### Documento \d+)\n\n/g, '$1\n');
+    
+    // Para seções de documento, usar quebras simples em vez de duplas
+    const secoes = contextoProcessado.split(/(### Documento \d+)/);
+    if (secoes.length > 1) {
+        for (let i = 2; i < secoes.length; i += 2) {
+            // Seção de conteúdo do documento
+            secoes[i] = secoes[i].replace(/\n\n/g, '\n');
+            // Forçar criação de parágrafos para cada linha
+            secoes[i] = secoes[i].split('\n').map(linha => linha.trim()).filter(linha => linha.length > 0).join('\n\n');
+            // Adicionar marcador especial para identificar seção de documento
+            secoes[i] = '<!-- DOCUMENTO-SECTION -->' + secoes[i] + '<!-- END-DOCUMENTO-SECTION -->';
+        }
+        contextoProcessado = secoes.join('');
+    }
+    
+    // Converter quebras de linha restantes em Markdown (mas não excessivamente)
+    contextoProcessado = contextoProcessado.replace(/\n/g, '\n\n');
+    
+    // Limpar espaçamentos duplos no final
+    contextoProcessado = contextoProcessado.replace(/\n\n+$/g, '\n');
+    
+    console.log('=== Contexto processado para Markdown:', contextoProcessado);
+    
+    // Renderizar Markdown
+    try {
+        // Verificar se a biblioteca Marked está disponível
+        if (typeof marked === 'undefined') {
+            console.error('Biblioteca Marked.js não está carregada!');
+            contextoContent.textContent = contextoProcessado;
+        } else {
+            console.log('=== Marked.js disponível, renderizando...');
+            const htmlRenderizado = marked.parse(contextoProcessado);
+            console.log('=== HTML renderizado:', htmlRenderizado);
+            contextoContent.innerHTML = htmlRenderizado;
+            
+            // Aplicar estilos específicos para seções de documento
+            setTimeout(() => {
+                console.log('=== Aplicando estilos específicos para documento ===');
+                const h3Elements = contextoContent.querySelectorAll('h3');
+                console.log('H3 encontrados:', h3Elements.length);
+                
+                h3Elements.forEach((h3, index) => {
+                    console.log(`H3 ${index}:`, h3.textContent);
+                    if (h3.textContent.includes('Documento')) {
+                        console.log('=== Encontrou seção Documento! ===');
+                        
+                        // Verificar todos os elementos após o H3
+                        let nextElement = h3.nextElementSibling;
+                        let contador = 0;
+                        console.log('=== Verificando elementos após H3 ===');
+                        
+                        while (nextElement && nextElement.tagName !== 'H3') {
+                            console.log(`Elemento encontrado:`, nextElement.tagName, nextElement.textContent.substring(0, 50));
+                            
+                            // Aplicar estilos a qualquer elemento de texto (p, div, span, etc.)
+                            if (nextElement.tagName === 'P' || nextElement.tagName === 'DIV' || nextElement.tagName === 'SPAN') {
+                                console.log(`Aplicando estilo ao elemento ${contador}:`, nextElement.textContent.substring(0, 50));
+                                nextElement.style.marginBottom = '3px';
+                                nextElement.style.lineHeight = '1.4';
+                                nextElement.style.fontSize = '0.95rem';
+                                nextElement.style.fontWeight = '400';
+                                nextElement.style.color = '#333';
+                                nextElement.style.backgroundColor = 'transparent';
+                                nextElement.style.padding = '0';
+                                contador++;
+                            }
+                            nextElement = nextElement.nextElementSibling;
+                        }
+                        console.log(`Estilos aplicados a ${contador} elementos`);
+                    }
+                });
+                
+                // Tentar abordagem alternativa com marcadores
+                const htmlContent = contextoContent.innerHTML;
+                console.log('=== HTML completo da modal ===');
+                console.log(htmlContent.substring(0, 500));
+                
+                if (htmlContent.includes('<!-- DOCUMENTO-SECTION -->')) {
+                    console.log('=== Processando marcadores de documento ===');
+                    let newHtml = htmlContent;
+                    
+                    // Encontrar e processar seções de documento
+                    const regex = /<!-- DOCUMENTO-SECTION -->(.*?)<!-- END-DOCUMENTO-SECTION -->/gs;
+                    newHtml = newHtml.replace(regex, (match, content) => {
+                        console.log('Processando seção de documento:', content.substring(0, 100));
+                        // Adicionar classe especial aos parágrafos
+                        return content.replace(/<p>/g, '<p class="documento-paragrafo">');
+                    });
+                    
+                    contextoContent.innerHTML = newHtml;
+                    
+                    // Aplicar estilos aos parágrafos com a classe
+                    const docParagrafos = contextoContent.querySelectorAll('.documento-paragrafo');
+                    console.log('Parágrafos de documento encontrados:', docParagrafos.length);
+                    docParagrafos.forEach((p, index) => {
+                        console.log(`Aplicando estilo ao parágrafo ${index}:`, p.textContent.substring(0, 50));
+                        p.style.fontSize = '0.95rem';
+                        p.style.fontWeight = '400';
+                        p.style.color = '#333';
+                        p.style.backgroundColor = 'transparent';
+                        p.style.padding = '0';
+                        p.style.marginBottom = '3px';
+                        p.style.lineHeight = '1.4';
+                    });
+                }
+            }, 50);
+        }
+    } catch (error) {
+        console.error('Erro ao renderizar Markdown:', error);
+        // Fallback para texto simples
+        contextoContent.textContent = contextoProcessado;
+    }
     
     // Mostrar a modal
     const modal = new bootstrap.Modal(modalElement);
@@ -2159,8 +2631,8 @@ function visualizarContexto(intimacaoId, contexto) {
 
 // Função para copiar contexto
 function copiarContexto() {
-    const contextoContent = document.getElementById('modal-contexto-content');
-    const texto = contextoContent.textContent;
+    // Armazenar o contexto original em uma variável global quando a modal é aberta
+    const texto = window.contextoOriginal || 'Contexto não disponível';
     
     navigator.clipboard.writeText(texto).then(() => {
         showToast('Contexto copiado para a área de transferência!', 'success');
@@ -2475,6 +2947,190 @@ function navegarParaPrompt(promptId) {
         showToast('ID do prompt não disponível', 'warning');
     }
 }
+
+// Variáveis globais para filtros
+let filtroAtivo = 'todos';
+let resultadosAtuais = [];
+
+// Função para filtrar por status (acertos/erros)
+function filtrarPorStatus(status) {
+    console.log('=== DEBUG: Filtrando por status ===', status);
+    
+    filtroAtivo = status;
+    
+    // Verificar se há resultados para filtrar
+    const linhas = document.querySelectorAll('.resultado-row');
+    if (linhas.length === 0) {
+        console.warn('=== DEBUG: Nenhuma linha de resultado encontrada para filtrar ===');
+        showToast('Nenhum resultado disponível para filtrar!', 'warning');
+        return;
+    }
+    
+        if (status === 'todos') {
+        mostrarTodosResultados();
+    } else {
+        aplicarFiltroResultados(status);
+    }
+    
+    // Adicionar efeito visual nos cartões
+    destacarCartaoAtivo(status);
+}
+
+// Função para aplicar filtro nos resultados
+function aplicarFiltroResultados(status) {
+    const linhas = document.querySelectorAll('.resultado-row');
+    
+    // Verificar se há linhas para filtrar
+    if (linhas.length === 0) {
+        console.warn('=== DEBUG: Nenhuma linha de resultado encontrada ===');
+        return;
+    }
+    
+    let contadorVisiveis = 0;
+    
+    linhas.forEach(linha => {
+        const statusCell = linha.querySelector('.status-cell');
+        if (statusCell) {
+            // Verificar se acertou baseado no texto e ícone
+            const temIconeSucesso = statusCell.querySelector('.text-success') !== null;
+            const temIconeErro = statusCell.querySelector('.text-danger') !== null;
+            const textoAcertou = statusCell.textContent.includes('Acertou');
+            const textoErrou = statusCell.textContent.includes('Errou');
+            
+            const acertou = temIconeSucesso || textoAcertou;
+            const errou = temIconeErro || textoErrou;
+            
+            console.log('=== DEBUG: Linha status ===', {
+                temIconeSucesso,
+                temIconeErro,
+                textoAcertou,
+                textoErrou,
+                acertou,
+                errou,
+                status
+            });
+            
+            if (status === 'acertos' && acertou) {
+                linha.classList.remove('filtrado');
+                linha.classList.add('visivel');
+                contadorVisiveis++;
+            } else if (status === 'erros' && errou) {
+                linha.classList.remove('filtrado');
+                linha.classList.add('visivel');
+                contadorVisiveis++;
+            } else {
+                linha.classList.add('filtrado');
+                linha.classList.remove('visivel');
+            }
+        }
+    });
+    
+    console.log('=== DEBUG: Filtro aplicado ===', {
+        status,
+        totalLinhas: linhas.length,
+        contadorVisiveis
+    });
+    
+    // Atualizar contador de resultados visíveis
+    atualizarContadorResultadosVisiveis(contadorVisiveis);
+}
+
+// Função para mostrar todos os resultados
+function mostrarTodosResultados() {
+    const linhas = document.querySelectorAll('.resultado-row');
+    
+    // Verificar se há linhas para mostrar
+    if (linhas.length === 0) {
+        console.warn('=== DEBUG: Nenhuma linha de resultado encontrada ===');
+        return;
+    }
+    
+    linhas.forEach(linha => {
+        linha.classList.remove('filtrado');
+        linha.classList.add('visivel');
+    });
+    
+    // Remover contador de resultados visíveis do alerta
+    const contadorVisiveis = document.getElementById('contador-resultados-visiveis');
+    if (contadorVisiveis) {
+        contadorVisiveis.remove();
+    }
+    
+    // Esconder contador do cabeçalho
+    const contadorHeader = document.getElementById('contador-resultados-header');
+    if (contadorHeader) {
+        contadorHeader.style.display = 'none';
+    }
+}
+
+// Função para limpar filtro
+function limparFiltro() {
+    filtrarPorStatus('todos');
+}
+
+// Função para destacar cartão ativo
+function destacarCartaoAtivo(status) {
+    // Remover destaque de todos os cartões
+    const cartoes = document.querySelectorAll('.stat-card');
+    cartoes.forEach(cartao => {
+        cartao.style.borderColor = 'transparent';
+        cartao.style.backgroundColor = 'transparent';
+    });
+    
+    // Destacar cartão ativo
+    if (status !== 'todos') {
+        const cartaoAtivo = document.querySelector(`.stat-card[onclick*="${status}"]`);
+        if (cartaoAtivo) {
+            cartaoAtivo.style.borderColor = 'rgba(0, 123, 255, 0.5)';
+            cartaoAtivo.style.backgroundColor = 'rgba(0, 123, 255, 0.05)';
+        }
+    }
+}
+
+// Função para atualizar contador de resultados visíveis
+function atualizarContadorResultadosVisiveis(contador) {
+    const totalLinhas = document.querySelectorAll('.resultado-row').length;
+    
+    // Atualizar contador no cabeçalho
+    const contadorHeader = document.getElementById('contador-resultados-header');
+    const contadorTextoHeader = document.getElementById('contador-texto-header');
+    
+    if (contadorHeader && contadorTextoHeader) {
+        if (contador === totalLinhas) {
+            // Se mostrando todos, esconder o badge
+            contadorHeader.style.display = 'none';
+        } else {
+            // Se filtrado, mostrar o badge
+            contadorHeader.style.display = 'inline-block';
+            contadorTextoHeader.textContent = `${contador} de ${totalLinhas}`;
+        }
+    }
+    
+    // Remover contador anterior do alerta se existir (não vamos mais criar)
+    const contadorAnterior = document.getElementById('contador-resultados-visiveis');
+    if (contadorAnterior) {
+        contadorAnterior.remove();
+    }
+}
+
+// Função para armazenar resultados atuais (chamada quando resultados são carregados)
+function armazenarResultadosAtuais(resultados) {
+    resultadosAtuais = resultados;
+    console.log('=== DEBUG: Resultados armazenados ===', resultados.length);
+}
+</script>
+
+<!-- Marked.js para renderização de Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+    // Verificar se Marked.js foi carregado
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof marked !== 'undefined') {
+            console.log('✅ Marked.js carregado com sucesso!');
+        } else {
+            console.error('❌ Marked.js não foi carregado!');
+        }
+    });
 </script>
 
 {% endblock %}

@@ -322,8 +322,8 @@ class SQLiteService:
                 INSERT OR REPLACE INTO analises 
                 (id, intimacao_id, prompt_id, prompt_nome, data_analise, resultado_ia,
                  acertou, tempo_processamento, modelo, temperatura, tokens_usados,
-                 tokens_input, tokens_output, custo_real, prompt_completo, resposta_completa)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tokens_input, tokens_output, custo_real, prompt_completo, resposta_completa, session_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 analise['id'],
                 analise.get('intimacao_id', ''),
@@ -340,7 +340,8 @@ class SQLiteService:
                 analise.get('tokens_output', 0),
                 analise.get('custo_real', 0.0),
                 analise.get('prompt_completo', ''),
-                analise.get('resposta_completa', '')
+                analise.get('resposta_completa', ''),
+                analise.get('session_id', None)
             ))
             conn.commit()
             return analise['id']
@@ -444,6 +445,318 @@ class SQLiteService:
         
         with open(config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
+    
+    # Métodos para Sessões de Análise
+    def get_sessoes_analise(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Obter lista de sessões de análise"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    session_id,
+                    data_inicio,
+                    data_fim,
+                    prompt_id,
+                    prompt_nome,
+                    modelo,
+                    temperatura,
+                    max_tokens,
+                    timeout,
+                    total_intimacoes,
+                    intimações_processadas,
+                    acertos,
+                    erros,
+                    tempo_total,
+                    custo_total,
+                    tokens_total,
+                    status,
+                    configuracoes
+                FROM sessoes_analise 
+                ORDER BY data_inicio DESC 
+                LIMIT ?
+            ''', (limit,))
+            
+            sessoes = []
+            for row in cursor.fetchall():
+                sessao = dict(row)
+                
+                # Calcular acurácia
+                intimações_processadas = sessao['intimações_processadas'] or 0
+                acertos = sessao['acertos'] or 0
+                if intimações_processadas > 0:
+                    sessao['acuracia'] = round((acertos / intimações_processadas) * 100, 1)
+                else:
+                    sessao['acuracia'] = 0.0
+                
+                # Formatar datas
+                if sessao['data_inicio']:
+                    try:
+                        data_inicio = datetime.fromisoformat(sessao['data_inicio'].replace('Z', '+00:00'))
+                        sessao['data_inicio_formatada'] = data_inicio.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        sessao['data_inicio_formatada'] = sessao['data_inicio']
+                else:
+                    sessao['data_inicio_formatada'] = 'N/A'
+                
+                if sessao['data_fim']:
+                    try:
+                        data_fim = datetime.fromisoformat(sessao['data_fim'].replace('Z', '+00:00'))
+                        sessao['data_fim_formatada'] = data_fim.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        sessao['data_fim_formatada'] = sessao['data_fim']
+                else:
+                    sessao['data_fim_formatada'] = None
+                
+                # Converter configurações de JSON string para dict
+                if sessao['configuracoes']:
+                    try:
+                        sessao['configuracoes'] = json.loads(sessao['configuracoes'])
+                    except:
+                        sessao['configuracoes'] = {}
+                else:
+                    sessao['configuracoes'] = {}
+                
+                sessoes.append(sessao)
+            return sessoes
+    
+    def get_sessao_analise(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Obter detalhes de uma sessão específica"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    session_id,
+                    data_inicio,
+                    data_fim,
+                    prompt_id,
+                    prompt_nome,
+                    modelo,
+                    temperatura,
+                    max_tokens,
+                    timeout,
+                    total_intimacoes,
+                    intimações_processadas,
+                    acertos,
+                    erros,
+                    tempo_total,
+                    custo_total,
+                    tokens_total,
+                    status,
+                    configuracoes
+                FROM sessoes_analise 
+                WHERE session_id = ?
+            ''', (session_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                sessao = dict(row)
+                
+                # Calcular acurácia
+                intimações_processadas = sessao['intimações_processadas'] or 0
+                acertos = sessao['acertos'] or 0
+                if intimações_processadas > 0:
+                    sessao['acuracia'] = round((acertos / intimações_processadas) * 100, 1)
+                else:
+                    sessao['acuracia'] = 0.0
+                
+                # Formatar datas
+                if sessao['data_inicio']:
+                    try:
+                        data_inicio = datetime.fromisoformat(sessao['data_inicio'].replace('Z', '+00:00'))
+                        sessao['data_inicio_formatada'] = data_inicio.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        sessao['data_inicio_formatada'] = sessao['data_inicio']
+                else:
+                    sessao['data_inicio_formatada'] = 'N/A'
+                
+                if sessao['data_fim']:
+                    try:
+                        data_fim = datetime.fromisoformat(sessao['data_fim'].replace('Z', '+00:00'))
+                        sessao['data_fim_formatada'] = data_fim.strftime('%d/%m/%Y %H:%M')
+                    except:
+                        sessao['data_fim_formatada'] = sessao['data_fim']
+                else:
+                    sessao['data_fim_formatada'] = None
+                
+                # Converter configurações de JSON string para dict
+                if sessao['configuracoes']:
+                    try:
+                        sessao['configuracoes'] = json.loads(sessao['configuracoes'])
+                    except:
+                        sessao['configuracoes'] = {}
+                else:
+                    sessao['configuracoes'] = {}
+                
+                return sessao
+            return None
+    
+    def get_analises_por_sessao(self, session_id: str) -> List[Dict[str, Any]]:
+        """Obter todas as análises de uma sessão específica"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.*,
+                    i.processo,
+                    i.orgao_julgador,
+                    i.classificacao_manual,
+                    i.intimado,
+                    i.status as status_intimacao
+                FROM analises a
+                LEFT JOIN intimacoes i ON a.intimacao_id = i.id
+                WHERE a.session_id = ?
+                ORDER BY a.data_analise DESC
+            ''', (session_id,))
+            
+            analises = []
+            for row in cursor.fetchall():
+                analises.append(dict(row))
+            return analises
+    
+    def criar_sessao_analise(self, session_id: str, prompt_id: str, prompt_nome: str, 
+                           modelo: str, temperatura: float, max_tokens: int, 
+                           timeout: int, total_intimacoes: int, configuracoes: Dict[str, Any] = None) -> bool:
+        """Criar uma nova sessão de análise"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute('''
+                    INSERT INTO sessoes_analise (
+                        session_id, data_inicio, prompt_id, prompt_nome, modelo,
+                        temperatura, max_tokens, timeout, total_intimacoes,
+                        configuracoes, status
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    session_id,
+                    datetime.now().isoformat(),
+                    prompt_id,
+                    prompt_nome,
+                    modelo,
+                    temperatura,
+                    max_tokens,
+                    timeout,
+                    total_intimacoes,
+                    json.dumps(configuracoes) if configuracoes else None,
+                    'em_andamento'
+                ))
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Erro ao criar sessão: {e}")
+            return False
+    
+    def atualizar_sessao_analise(self, session_id: str, **kwargs) -> bool:
+        """Atualizar dados de uma sessão de análise"""
+        try:
+            with self.get_connection() as conn:
+                # Construir query dinamicamente
+                fields = []
+                values = []
+                
+                for key, value in kwargs.items():
+                    if key in ['intimações_processadas', 'acertos', 'erros', 'tempo_total', 
+                              'custo_total', 'tokens_total', 'status', 'data_fim']:
+                        fields.append(f"{key} = ?")
+                        values.append(value)
+                
+                if not fields:
+                    return False
+                
+                values.append(session_id)
+                query = f"UPDATE sessoes_analise SET {', '.join(fields)} WHERE session_id = ?"
+                
+                conn.execute(query, values)
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Erro ao atualizar sessão: {e}")
+            return False
+    
+    def excluir_sessao_analise(self, session_id: str) -> bool:
+        """Excluir uma sessão de análise e suas análises associadas"""
+        try:
+            with self.get_connection() as conn:
+                # Excluir análises da sessão
+                conn.execute('DELETE FROM analises WHERE session_id = ?', (session_id,))
+                
+                # Excluir a sessão
+                conn.execute('DELETE FROM sessoes_analise WHERE session_id = ?', (session_id,))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Erro ao excluir sessão: {e}")
+            return False
+    
+    def finalizar_sessao_analise(self, session_id: str, estatisticas: Dict[str, Any]) -> bool:
+        """Finalizar uma sessão de análise com estatísticas"""
+        try:
+            with self.get_connection() as conn:
+                # Atualizar a sessão com estatísticas finais
+                conn.execute('''
+                    UPDATE sessoes_analise 
+                    SET 
+                        data_fim = ?,
+                        intimações_processadas = ?,
+                        acertos = ?,
+                        erros = ?,
+                        tempo_total = ?,
+                        custo_total = ?,
+                        tokens_total = ?,
+                        status = 'concluida'
+                    WHERE session_id = ?
+                ''', (
+                    datetime.now().isoformat(),
+                    estatisticas.get('total_processadas', 0),
+                    estatisticas.get('acertos', 0),
+                    estatisticas.get('erros', 0),
+                    estatisticas.get('tempo_total', 0.0),
+                    estatisticas.get('custo_total', 0.0),
+                    estatisticas.get('tokens_total', 0),
+                    session_id
+                ))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Erro ao finalizar sessão: {e}")
+            return False
+    
+    def calcular_estatisticas_sessao(self, session_id: str) -> Dict[str, Any]:
+        """Calcular estatísticas de uma sessão de análise"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN acertou THEN 1 ELSE 0 END) as acertos,
+                    SUM(CASE WHEN NOT acertou THEN 1 ELSE 0 END) as erros,
+                    AVG(tempo_processamento) as tempo_medio,
+                    SUM(custo_real) as custo_total,
+                    SUM(tokens_input + tokens_output) as tokens_total
+                FROM analises 
+                WHERE session_id = ?
+            ''', (session_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                stats = dict(row)
+                total = stats['total_analises'] or 0
+                acertos = stats['acertos'] or 0
+                
+                return {
+                    'total_analises': total,
+                    'acertos': acertos,
+                    'erros': stats['erros'] or 0,
+                    'acuracia': (acertos / total * 100) if total > 0 else 0,
+                    'tempo_medio': stats['tempo_medio'] or 0,
+                    'custo_total': stats['custo_total'] or 0,
+                    'tokens_total': stats['tokens_total'] or 0
+                }
+            return {
+                'total_analises': 0,
+                'acertos': 0,
+                'erros': 0,
+                'acuracia': 0,
+                'tempo_medio': 0,
+                'custo_total': 0,
+                'tokens_total': 0
+            }
     
     def calculate_real_cost(self, tokens_input: int, tokens_output: int, modelo: str, provider: str = 'azure') -> float:
         """Calcular custo real baseado nos tokens e modelo"""

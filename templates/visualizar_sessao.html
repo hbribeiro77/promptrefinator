@@ -1,0 +1,596 @@
+{% extends "base.html" %}
+
+{% block title %}Sessão de Análise - {{ sessao.session_id[:8] }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('historico_analises') }}">
+                            <i class="bi bi-clock-history"></i>
+                            Histórico
+                        </a>
+                    </li>
+                    <li class="breadcrumb-item active">Sessão {{ sessao.session_id[:8] }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-activity text-primary"></i>
+                Sessão de Análise
+            </h1>
+            <p class="text-muted mb-0">{{ sessao.prompt_nome }} - {{ sessao.data_inicio_formatada }}</p>
+        </div>
+        <div>
+            <a href="{{ url_for('historico_analises') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Informações da Sessão -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        Informações da Sessão
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">ID da Sessão</small>
+                            <p class="mb-2"><code>{{ sessao.session_id }}</code></p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Status</small>
+                            <p class="mb-2">
+                                {% if sessao.status == 'concluida' %}
+                                    <span class="badge bg-success">Concluída</span>
+                                {% elif sessao.status == 'em_andamento' %}
+                                    <span class="badge bg-warning">Em andamento</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Erro</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Início</small>
+                            <p class="mb-2">{{ sessao.data_inicio_formatada }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Fim</small>
+                            <p class="mb-2">{{ sessao.data_fim_formatada or 'Em andamento' }}</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Prompt</small>
+                            <p class="mb-2">{{ sessao.prompt_nome }}</p>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Modelo</small>
+                            <p class="mb-2">{{ sessao.modelo }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up"></i>
+                        Estatísticas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-primary mb-0">{{ sessao.intimações_processadas }}/{{ sessao.total_intimacoes }}</h3>
+                                <small class="text-muted">Intimações Processadas</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h3 class="text-success mb-0">{{ sessao.acuracia }}%</h3>
+                                <small class="text-muted">Acurácia</small>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h4 class="text-info mb-0">{{ "%.2f"|format(sessao.tempo_total or 0) }}s</h4>
+                                <small class="text-muted">Tempo Total</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h4 class="text-warning mb-0">${{ "%.4f"|format(sessao.custo_total or 0) }}</h4>
+                                <small class="text-muted">Custo Total</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configurações -->
+    {% if sessao.configuracoes_parsed %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-gear"></i>
+                Configurações Utilizadas
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <small class="text-muted">Temperatura</small>
+                    <p class="mb-2">{{ sessao.temperatura }}</p>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Max Tokens</small>
+                    <p class="mb-2">{{ sessao.max_tokens }}</p>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Timeout</small>
+                    <p class="mb-2">{{ sessao.timeout }}s</p>
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted">Tokens Totais</small>
+                    <p class="mb-2">{{ sessao.tokens_total or 0 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Resultados das Análises -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check"></i>
+                    Resultados das Análises
+                </h5>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-secondary me-2" id="contador-analises">
+                        {{ analises|length }} análises
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportarResultados()">
+                        <i class="bi bi-download"></i>
+                        Exportar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if analises %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Intimação</th>
+                            <th>Classificação Manual</th>
+                            <th>Resultado IA</th>
+                            <th>Status</th>
+                            <th>Tempo</th>
+                            <th>Custo</th>
+                            <th>Tokens</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for analise in analises %}
+                        <tr>
+                            <td>
+                                {% set intimacao = {
+                                    'id': analise.intimacao_id,
+                                    'processo': analise.processo or analise.intimacao_id,
+                                    'orgao_julgador': analise.orgao_julgador or 'N/A',
+                                    'status': analise.status or 'Pendente',
+                                    'prazo': analise.prazo or 'N/A',
+                                    'intimado': analise.intimado or 'N/A',
+                                    'disponibilizacao': analise.disponibilizacao or analise.data_analise_formatada or 'N/A'
+                                } %}
+                                {% include 'partials/card_intimacao_compact.html' %}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ analise.classificacao_manual }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ analise.resultado_ia }}</span>
+                            </td>
+                            <td>
+                                {% if analise.acertou %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i>
+                                        Acertou
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-x-circle"></i>
+                                        Errou
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span>{{ "%.2f"|format(analise.tempo_processamento or 0) }}s</span>
+                            </td>
+                            <td>
+                                <span>${{ "%.4f"|format(analise.custo_real or 0) }}</span>
+                            </td>
+                            <td>
+                                <small class="text-muted">
+                                    {{ analise.tokens_input or 0 }}/{{ analise.tokens_output or 0 }}
+                                </small>
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-primary" 
+                                            onclick="visualizarPrompt('{{ analise.id }}')" 
+                                            title="Ver prompt">
+                                        <i class="bi bi-chat-quote"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" 
+                                            onclick="visualizarResposta('{{ analise.id }}')" 
+                                            title="Ver resposta">
+                                        <i class="bi bi-chat-text"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info" 
+                                            onclick="visualizarContexto('{{ analise.intimacao_id }}', '{{ analise.contexto|replace("'", "\\'")|replace('"', '\\"') }}')" 
+                                            title="Ver contexto">
+                                        <i class="bi bi-file-text"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h4 class="text-muted mt-3">Nenhuma análise encontrada</h4>
+                <p class="text-muted">Esta sessão não possui análises registradas.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para visualizar prompt -->
+<div class="modal fade" id="modalPrompt" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Prompt Completo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="modal-prompt-content" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="copiarPrompt()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para visualizar resposta -->
+<div class="modal fade" id="modalResposta" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Resposta da IA</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="modal-resposta-content" class="bg-light p-3 rounded"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="copiarResposta()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para visualizar contexto -->
+<div class="modal fade" id="modalContexto" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Contexto da Intimação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-contexto-content" class="markdown-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="copiarContexto()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Dados das análises para acesso via JavaScript
+const analisesData = {{ analises|tojson }};
+
+// Função para visualizar prompt
+function visualizarPrompt(analiseId) {
+    const analise = analisesData.find(a => a.id === analiseId);
+    if (analise && analise.prompt_completo) {
+        document.getElementById('modal-prompt-content').textContent = analise.prompt_completo;
+        const modal = new bootstrap.Modal(document.getElementById('modalPrompt'));
+        modal.show();
+    } else {
+        showToast('Prompt não disponível', 'warning');
+    }
+}
+
+// Função para visualizar resposta
+function visualizarResposta(analiseId) {
+    const analise = analisesData.find(a => a.id === analiseId);
+    if (analise && analise.resposta_completa) {
+        document.getElementById('modal-resposta-content').textContent = analise.resposta_completa;
+        const modal = new bootstrap.Modal(document.getElementById('modalResposta'));
+        modal.show();
+    } else {
+        showToast('Resposta não disponível', 'warning');
+    }
+}
+
+// Função para visualizar contexto
+function visualizarContexto(intimacaoId, contexto) {
+    if (contexto) {
+        // Decodificar o contexto
+        let contextoDecodificado = contexto;
+        contextoDecodificado = contextoDecodificado.replace(/\\n/g, '\n');
+        contextoDecodificado = contextoDecodificado.replace(/\\r/g, '\r');
+        contextoDecodificado = contextoDecodificado.replace(/\\`/g, '`');
+        contextoDecodificado = contextoDecodificado.replace(/\\"/g, '"');
+        contextoDecodificado = contextoDecodificado.replace(/\\'/g, "'");
+        
+        // Armazenar o contexto original para copiar
+        window.contextoOriginal = contextoDecodificado;
+        
+        // Processar para Markdown
+        let contextoProcessado = contextoDecodificado;
+        contextoProcessado = contextoProcessado.replace(/\n{3,}/g, '\n\n');
+        contextoProcessado = contextoProcessado.replace(/\n/g, '\n\n');
+        
+        // Renderizar Markdown
+        try {
+            if (typeof marked !== 'undefined') {
+                const htmlRenderizado = marked.parse(contextoProcessado);
+                document.getElementById('modal-contexto-content').innerHTML = htmlRenderizado;
+            } else {
+                document.getElementById('modal-contexto-content').textContent = contextoProcessado;
+            }
+        } catch (e) {
+            document.getElementById('modal-contexto-content').textContent = contextoProcessado;
+        }
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalContexto'));
+        modal.show();
+    } else {
+        showToast('Contexto não disponível', 'warning');
+    }
+}
+
+// Função para copiar prompt
+function copiarPrompt() {
+    const conteudo = document.getElementById('modal-prompt-content').textContent;
+    navigator.clipboard.writeText(conteudo).then(() => {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    });
+}
+
+// Função para copiar resposta
+function copiarResposta() {
+    const conteudo = document.getElementById('modal-resposta-content').textContent;
+    navigator.clipboard.writeText(conteudo).then(() => {
+        showToast('Resposta copiada para a área de transferência!', 'success');
+    });
+}
+
+// Função para copiar contexto
+function copiarContexto() {
+    if (window.contextoOriginal) {
+        navigator.clipboard.writeText(window.contextoOriginal).then(() => {
+            showToast('Contexto copiado para a área de transferência!', 'success');
+        });
+    }
+}
+
+// Função para exportar resultados
+function exportarResultados() {
+    // Fazer download direto do CSV
+    exportarCSV();
+}
+
+// Função para exportar em CSV
+function exportarCSV() {
+    const sessionId = '{{ sessao.session_id }}';
+    
+    // Mostrar loading no botão de exportar
+    const btn = document.querySelector('button[onclick="exportarResultados()"]');
+    const textoOriginal = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Exportando...';
+    btn.disabled = true;
+    
+    // Fazer requisição para exportar
+    fetch('/api/historico/exportar-sessao', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            session_id: sessionId,
+            formato: 'csv'
+        })
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.blob();
+        } else {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Erro na exportação');
+            });
+        }
+    })
+    .then(blob => {
+        // Criar link para download
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `historico_sessao_${sessionId.slice(0, 8)}_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast('Exportação CSV concluída!', 'success');
+    })
+    .catch(error => {
+        console.error('Erro:', error);
+        showToast('Erro na exportação: ' + error.message, 'error');
+    })
+    .finally(() => {
+        // Restaurar botão
+        btn.innerHTML = textoOriginal;
+        btn.disabled = false;
+    });
+}
+
+
+
+// Função para mostrar toast
+function showToast(message, type = 'info') {
+    // Implementar toast se necessário
+    console.log(`Toast: ${message} (${type})`);
+}
+</script>
+
+<style>
+/* Estilos para cards compactos na tabela */
+.table td {
+    vertical-align: top;
+    padding: 0.75rem;
+}
+
+/* Ajustes para o card compacto na tabela */
+.intimacao-card-compact {
+    margin: 0;
+    max-width: 100%;
+}
+
+.card-intimacao-content-compact {
+    padding: 6px 8px;
+}
+
+.card-intimacao-row-compact {
+    margin-bottom: 2px;
+}
+
+.field-label-compact {
+    font-size: 9px;
+}
+
+.field-value-compact {
+    font-size: 10px;
+}
+
+/* Ajuste da largura da coluna de intimação */
+.table th:first-child,
+.table td:first-child {
+    min-width: 320px;
+    max-width: 350px;
+}
+
+.markdown-content {
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.375rem;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.markdown-content p {
+    margin-bottom: 0.5rem;
+    line-height: 1.5;
+}
+
+.markdown-content pre,
+.markdown-content code {
+    background-color: #e9ecef;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.markdown-content pre {
+    padding: 1rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    margin-bottom: 0.5rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-content li {
+    margin-bottom: 0.25rem;
+}
+</style>
+{% endblock %}

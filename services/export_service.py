@@ -5,14 +5,14 @@ from typing import List, Dict, Any, Optional
 from flask import Response, make_response
 from io import StringIO
 from config import Config
-from services.data_service import DataService
+from services.sqlite_service import SQLiteService
 
 class ExportService:
     """Serviço para exportação de dados"""
     
     def __init__(self):
         """Inicializar o serviço de exportação"""
-        self.data_service = DataService()
+        self.data_service = SQLiteService()
         self.config = Config()
     
     def exportar_csv(self, 
@@ -330,3 +330,44 @@ class ExportService:
             
         except Exception as e:
             raise Exception(f"Erro ao salvar arquivo local: {str(e)}")
+    
+    def export_to_csv(self, dados: List[Dict[str, Any]], nome_arquivo: str) -> str:
+        """Exportar dados para CSV"""
+        try:
+            # Criar DataFrame
+            df = pd.DataFrame(dados)
+            
+            # Garantir que o diretório existe
+            os.makedirs(self.config.EXPORT_DIR, exist_ok=True)
+            
+            # Criar caminho do arquivo
+            caminho_arquivo = os.path.join(self.config.EXPORT_DIR, nome_arquivo)
+            
+            # Salvar CSV
+            df.to_csv(caminho_arquivo, index=False, encoding='utf-8-sig')
+            
+            return caminho_arquivo
+            
+        except Exception as e:
+            raise Exception(f"Erro ao exportar CSV: {str(e)}")
+    
+    def export_to_excel(self, dados: List[Dict[str, Any]], nome_arquivo: str, sheet_name: str = 'Dados') -> str:
+        """Exportar dados para Excel"""
+        try:
+            # Criar DataFrame
+            df = pd.DataFrame(dados)
+            
+            # Garantir que o diretório existe
+            os.makedirs(self.config.EXPORT_DIR, exist_ok=True)
+            
+            # Criar caminho do arquivo
+            caminho_arquivo = os.path.join(self.config.EXPORT_DIR, nome_arquivo)
+            
+            # Salvar Excel
+            with pd.ExcelWriter(caminho_arquivo, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+            
+            return caminho_arquivo
+            
+        except Exception as e:
+            raise Exception(f"Erro ao exportar Excel: {str(e)}")

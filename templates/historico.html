@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+
+{% block title %}Histórico de Análises{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="bi bi-clock-history text-primary"></i>
+                Histórico de Análises
+            </h1>
+            <p class="text-muted mb-0">Visualize todas as análises executadas no sistema</p>
+        </div>
+        <div>
+            <a href="{{ url_for('analise') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i>
+                Nova Análise
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="filtro-data" class="form-label">Período</label>
+                    <select class="form-select" id="filtro-data">
+                        <option value="">Todos os períodos</option>
+                        <option value="hoje">Hoje</option>
+                        <option value="semana">Última semana</option>
+                        <option value="mes">Último mês</option>
+                        <option value="trimestre">Último trimestre</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-prompt" class="form-label">Prompt</label>
+                    <select class="form-select" id="filtro-prompt">
+                        <option value="">Todos os prompts</option>
+                        <!-- Será preenchido via JavaScript -->
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-status" class="form-label">Status</label>
+                    <select class="form-select" id="filtro-status">
+                        <option value="">Todos os status</option>
+                        <option value="concluida">Concluída</option>
+                        <option value="em_andamento">Em andamento</option>
+                        <option value="erro">Erro</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-acuracia" class="form-label">Acurácia mínima</label>
+                    <select class="form-select" id="filtro-acuracia">
+                        <option value="">Qualquer acurácia</option>
+                        <option value="90">90%+</option>
+                        <option value="80">80%+</option>
+                        <option value="70">70%+</option>
+                        <option value="60">60%+</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Sessões -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-ul"></i>
+                    Sessões de Análise
+                </h5>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-secondary me-2" id="contador-sessoes">
+                        {{ sessoes|length }} sessões
+                    </span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="limparFiltros()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if sessoes %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Prompt</th>
+                            <th>Modelo</th>
+                            <th>Intimações</th>
+                            <th>Acurácia</th>
+                            <th>Tempo</th>
+                            <th>Custo</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sessao in sessoes %}
+                        <tr class="sessao-row" 
+                            data-data="{{ sessao.data_inicio }}"
+                            data-prompt="{{ sessao.prompt_id }}"
+                            data-status="{{ sessao.status }}"
+                            data-acuracia="{{ sessao.acuracia }}"
+                            data-session-id="{{ sessao.session_id }}">
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <small class="text-muted">{{ sessao.data_inicio_formatada }}</small>
+                                    {% if sessao.data_fim_formatada %}
+                                    <small class="text-muted">Fim: {{ sessao.data_fim_formatada }}</small>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <strong>{{ sessao.prompt_nome }}</strong>
+                                    <small class="text-muted">Temp: {{ sessao.temperatura }}</small>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ sessao.modelo }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>{{ sessao.intimações_processadas }}/{{ sessao.total_intimacoes }}</span>
+                                    <small class="text-muted">Processadas</small>
+                                </div>
+                            </td>
+                            <td>
+                                {% if sessao.acuracia >= 80 %}
+                                    <span class="badge bg-success">{{ sessao.acuracia }}%</span>
+                                {% elif sessao.acuracia >= 60 %}
+                                    <span class="badge bg-warning">{{ sessao.acuracia }}%</span>
+                                {% else %}
+                                    <span class="badge bg-danger">{{ sessao.acuracia }}%</span>
+                                {% endif %}
+                                <br>
+                                <small class="text-muted">{{ sessao.acertos }}/{{ sessao.intimações_processadas }}</small>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>{{ "%.2f"|format(sessao.tempo_total or 0) }}s</span>
+                                    <small class="text-muted">Total</small>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>${{ "%.4f"|format(sessao.custo_total or 0) }}</span>
+                                    <small class="text-muted">{{ sessao.tokens_total or 0 }} tokens</small>
+                                </div>
+                            </td>
+                            <td>
+                                {% if sessao.status == 'concluida' %}
+                                    <span class="badge bg-success">Concluída</span>
+                                {% elif sessao.status == 'em_andamento' %}
+                                    <span class="badge bg-warning">Em andamento</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Erro</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('visualizar_sessao_analise', session_id=sessao.session_id) }}" 
+                                       class="btn btn-outline-primary" title="Visualizar detalhes">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button class="btn btn-outline-secondary" 
+                                            onclick="copiarResumoSessao('{{ sessao.session_id }}')" 
+                                            title="Copiar resumo">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger" 
+                                            onclick="excluirSessao('{{ sessao.session_id }}')" 
+                                            title="Excluir sessão">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h4 class="text-muted mt-3">Nenhuma análise encontrada</h4>
+                <p class="text-muted">Execute sua primeira análise para ver o histórico aqui.</p>
+                <a href="{{ url_for('analise') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i>
+                    Executar Análise
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalConfirmarExclusao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir esta sessão de análise?</p>
+                <p class="text-muted small">Esta ação não pode ser desfeita e removerá todas as análises associadas.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarExclusao">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variáveis globais
+let sessaoParaExcluir = null;
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== Página de histórico carregada ===');
+    
+    // Configurar filtros
+    configurarFiltros();
+    
+    // Aplicar filtros iniciais
+    aplicarFiltros();
+});
+
+// Configurar filtros
+function configurarFiltros() {
+    // Filtro de data
+    document.getElementById('filtro-data').addEventListener('change', aplicarFiltros);
+    
+    // Filtro de prompt
+    document.getElementById('filtro-prompt').addEventListener('change', aplicarFiltros);
+    
+    // Filtro de status
+    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+    
+    // Filtro de acurácia
+    document.getElementById('filtro-acuracia').addEventListener('change', aplicarFiltros);
+}
+
+// Aplicar filtros
+function aplicarFiltros() {
+    const filtroData = document.getElementById('filtro-data').value;
+    const filtroPrompt = document.getElementById('filtro-prompt').value;
+    const filtroStatus = document.getElementById('filtro-status').value;
+    const filtroAcuracia = document.getElementById('filtro-acuracia').value;
+    
+    const linhas = document.querySelectorAll('.sessao-row');
+    let visiveis = 0;
+    
+    linhas.forEach(linha => {
+        let mostrar = true;
+        
+        // Filtro de data
+        if (filtroData && !filtrarPorData(linha.dataset.data, filtroData)) {
+            mostrar = false;
+        }
+        
+        // Filtro de prompt
+        if (filtroPrompt && linha.dataset.prompt !== filtroPrompt) {
+            mostrar = false;
+        }
+        
+        // Filtro de status
+        if (filtroStatus && linha.dataset.status !== filtroStatus) {
+            mostrar = false;
+        }
+        
+        // Filtro de acurácia
+        if (filtroAcuracia && parseFloat(linha.dataset.acuracia) < parseFloat(filtroAcuracia)) {
+            mostrar = false;
+        }
+        
+        if (mostrar) {
+            linha.style.display = '';
+            visiveis++;
+        } else {
+            linha.style.display = 'none';
+        }
+    });
+    
+    // Atualizar contador
+    document.getElementById('contador-sessoes').textContent = `${visiveis} sessões`;
+}
+
+// Filtrar por data
+function filtrarPorData(dataSessao, filtro) {
+    const hoje = new Date();
+    const dataSessaoObj = new Date(dataSessao);
+    
+    switch (filtro) {
+        case 'hoje':
+            return dataSessaoObj.toDateString() === hoje.toDateString();
+        case 'semana':
+            const umaSemanaAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
+            return dataSessaoObj >= umaSemanaAtras;
+        case 'mes':
+            const umMesAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
+            return dataSessaoObj >= umMesAtras;
+        case 'trimestre':
+            const tresMesesAtras = new Date(hoje.getTime() - 90 * 24 * 60 * 60 * 1000);
+            return dataSessaoObj >= tresMesesAtras;
+        default:
+            return true;
+    }
+}
+
+// Limpar filtros
+function limparFiltros() {
+    document.getElementById('filtro-data').value = '';
+    document.getElementById('filtro-prompt').value = '';
+    document.getElementById('filtro-status').value = '';
+    document.getElementById('filtro-acuracia').value = '';
+    aplicarFiltros();
+}
+
+// Copiar resumo da sessão
+function copiarResumoSessao(sessionId) {
+    // Implementar cópia do resumo
+    showToast('Funcionalidade de cópia em desenvolvimento', 'info');
+}
+
+// Excluir sessão
+function excluirSessao(sessionId) {
+    sessaoParaExcluir = sessionId;
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmarExclusao'));
+    modal.show();
+}
+
+// Confirmar exclusão
+document.getElementById('btnConfirmarExclusao').addEventListener('click', function() {
+    if (sessaoParaExcluir) {
+        // Mostrar loading
+        const btn = document.getElementById('btnConfirmarExclusao');
+        const textoOriginal = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Excluindo...';
+        btn.disabled = true;
+        
+        // Fazer requisição para excluir
+        fetch('/api/historico/excluir-sessao', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                session_id: sessaoParaExcluir
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('Sessão excluída com sucesso!', 'success');
+                
+                // Remover a linha da tabela
+                const linha = document.querySelector(`[data-session-id="${sessaoParaExcluir}"]`);
+                if (linha) {
+                    linha.remove();
+                }
+                
+                // Atualizar contador
+                const linhas = document.querySelectorAll('.sessao-row');
+                document.getElementById('contador-sessoes').textContent = `${linhas.length} sessões`;
+                
+                // Fechar modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfirmarExclusao'));
+                modal.hide();
+            } else {
+                showToast(data.error || 'Erro ao excluir sessão', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            showToast('Erro ao excluir sessão', 'error');
+        })
+        .finally(() => {
+            // Restaurar botão
+            btn.innerHTML = textoOriginal;
+            btn.disabled = false;
+            sessaoParaExcluir = null;
+        });
+    }
+});
+
+// Função para mostrar toast
+function showToast(message, type = 'info') {
+    // Criar toast se não existir
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Criar toast
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Mostrar toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+    toast.show();
+    
+    // Remover toast após ser fechado
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
+}
+</script>
+{% endblock %}

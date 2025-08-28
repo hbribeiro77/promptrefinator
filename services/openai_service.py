@@ -3,7 +3,7 @@ import time
 import re
 from typing import Tuple, Dict, Any, Optional, List
 from config import Config
-from services.data_service import DataService
+from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
 
 class OpenAIService(AIServiceInterface):
@@ -11,7 +11,7 @@ class OpenAIService(AIServiceInterface):
     
     def __init__(self):
         """Inicializar o serviço OpenAI"""
-        self.data_service = DataService()
+        self.data_service = SQLiteService()
         self.config = Config()
         self.client = None
         self._initialize_client()

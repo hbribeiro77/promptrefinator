@@ -18,6 +18,10 @@
                 <i class="bi bi-x-circle"></i>
                 Limpar Seleção
             </button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="mostrarInformacoesAdicionais()" id="btn-acoes-lote" disabled>
+                <i class="bi bi-info-circle"></i>
+                Ver Informações Adicionais (<span id="contador-selecionadas">0</span>)
+            </button>
         </div>
         <div class="btn-group">
             <a href="{{ url_for('nova_intimacao') }}" class="btn btn-sm btn-primary" onclick="console.log('=== DEBUG: BOTÃO NOVA INTIMAÇÃO CLICADO (FRONTEND) ==='); console.log('Redirecionando para nova intimação...');">
@@ -135,6 +139,42 @@
     </div>
 </div>
 
+<!-- Modal para visualizar informações adicionais em lote -->
+<div class="modal fade" id="modalInformacoesAdicionais" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle text-primary"></i>
+                    Informações Adicionais das Intimações Selecionadas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge bg-primary" id="contador-modal">0 intimações selecionadas</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTodasInformacoes()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Todas
+                        </button>
+                    </div>
+                </div>
+                <div id="lista-informacoes-adicionais">
+                    <!-- Conteúdo será preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarTodasInformacoes()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Todas as Informações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal para visualizar contexto da intimação -->
 <div class="modal fade" id="modalContextoIntimacao" tabindex="-1">
     <div class="modal-dialog modal-xl">
@@ -183,7 +223,10 @@
                     <table class="table table-hover intimacoes-cards-table">
                         <thead class="table-light">
                             <tr>
-                                <th style="width: 25%;">Card da Intimação</th>
+                                <th style="width: 3%;">
+                                    <input type="checkbox" class="form-check-input" id="checkbox-todas" onchange="toggleTodasIntimacoes(this)">
+                                </th>
+                                <th style="width: 22%;">Card da Intimação</th>
                                 <th style="width: 12%;">Classificação Manual</th>
                                 <th style="width: 15%;">Informações Adicionais</th>
                                 <th style="width: 12%;">Defensor</th>
@@ -196,6 +239,12 @@
                         <tbody>
                             {% for intimacao in intimacoes %}
                             <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}">
+                                <td class="checkbox-cell">
+                                    <input type="checkbox" class="form-check-input checkbox-intimacao" 
+                                           value="{{ intimacao.id }}" 
+                                           data-intimacao-id="{{ intimacao.id }}"
+                                           onchange="atualizarContadorSelecionadas()">
+                                </td>
                                 <td class="card-cell">
                                     {% include 'partials/card_intimacao_compact.html' %}
                                 </td>
@@ -308,6 +357,159 @@
 {% block extra_js %}
 <script>
 let intimacaoParaExcluir = null;
+
+// Funções para gerenciamento de checkboxes
+function toggleTodasIntimacoes(checkbox) {
+    const checkboxes = document.querySelectorAll('.checkbox-intimacao');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+    atualizarContadorSelecionadas();
+}
+
+function selecionarTodas() {
+    const checkboxTodas = document.getElementById('checkbox-todas');
+    checkboxTodas.checked = true;
+    toggleTodasIntimacoes(checkboxTodas);
+}
+
+function limparSelecao() {
+    const checkboxTodas = document.getElementById('checkbox-todas');
+    checkboxTodas.checked = false;
+    toggleTodasIntimacoes(checkboxTodas);
+}
+
+function atualizarContadorSelecionadas() {
+    const checkboxes = document.querySelectorAll('.checkbox-intimacao:checked');
+    const contador = checkboxes.length;
+    const btnAcoesLote = document.getElementById('btn-acoes-lote');
+    const contadorSpan = document.getElementById('contador-selecionadas');
+    
+    contadorSpan.textContent = contador;
+    btnAcoesLote.disabled = contador === 0;
+    
+    // Atualizar checkbox "todas"
+    const checkboxTodas = document.getElementById('checkbox-todas');
+    const totalCheckboxes = document.querySelectorAll('.checkbox-intimacao').length;
+    checkboxTodas.checked = contador === totalCheckboxes && totalCheckboxes > 0;
+    checkboxTodas.indeterminate = contador > 0 && contador < totalCheckboxes;
+}
+
+function mostrarInformacoesAdicionais() {
+    const checkboxes = document.querySelectorAll('.checkbox-intimacao:checked');
+    if (checkboxes.length === 0) {
+        showToast('Selecione pelo menos uma intimação!', 'warning');
+        return;
+    }
+    
+    const intimacoesSelecionadas = Array.from(checkboxes).map(cb => cb.dataset.intimacaoId);
+    
+    // Buscar informações das intimações selecionadas
+    fetch('/api/intimacoes/informacoes-adicionais', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            intimacoes_ids: intimacoesSelecionadas
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            preencherModalInformacoes(data.intimacoes);
+            const modal = new bootstrap.Modal(document.getElementById('modalInformacoesAdicionais'));
+            modal.show();
+        } else {
+            showToast(`Erro: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao buscar informações:', error);
+        showToast('Erro ao buscar informações das intimações!', 'error');
+    });
+}
+
+function preencherModalInformacoes(intimacoes) {
+    const container = document.getElementById('lista-informacoes-adicionais');
+    const contadorModal = document.getElementById('contador-modal');
+    
+    contadorModal.textContent = `${intimacoes.length} intimação(ões) selecionada(s)`;
+    
+    let html = '';
+    
+    intimacoes.forEach((intimacao, index) => {
+        const temInformacao = intimacao.informacoes_adicionais && intimacao.informacoes_adicionais.trim();
+        
+        html += `
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-file-text text-primary"></i>
+                        Intimação ${index + 1} - ID: ${intimacao.id}
+                    </h6>
+                    ${temInformacao ? `
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarInformacao('${intimacao.id}')">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="card-body">
+                    ${temInformacao ? `
+                        <div class="mb-2">
+                            <strong>Informações Adicionais:</strong>
+                        </div>
+                        <div class="bg-light p-3 rounded" id="info-${intimacao.id}">
+                            ${intimacao.informacoes_adicionais.replace(/\n/g, '<br>')}
+                        </div>
+                    ` : `
+                        <div class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Nenhuma informação adicional cadastrada para esta intimação.
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+function copiarInformacao(intimacaoId) {
+    const elemento = document.getElementById(`info-${intimacaoId}`);
+    if (elemento) {
+        const texto = elemento.innerText;
+        navigator.clipboard.writeText(texto).then(() => {
+            showToast('Informação copiada para a área de transferência!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar informação!', 'error');
+        });
+    }
+}
+
+function copiarTodasInformacoes() {
+    const elementos = document.querySelectorAll('#lista-informacoes-adicionais .bg-light');
+    if (elementos.length === 0) {
+        showToast('Nenhuma informação para copiar!', 'warning');
+        return;
+    }
+    
+    let todasInformacoes = '';
+    elementos.forEach((elemento, index) => {
+        const intimacaoId = elemento.id.replace('info-', '');
+        todasInformacoes += `=== INTIMAÇÃO ${index + 1} (ID: ${intimacaoId}) ===\n`;
+        todasInformacoes += elemento.innerText;
+        todasInformacoes += '\n\n';
+    });
+    
+    navigator.clipboard.writeText(todasInformacoes).then(() => {
+        showToast('Todas as informações copiadas para a área de transferência!', 'success');
+    }).catch(() => {
+        showToast('Erro ao copiar informações!', 'error');
+    });
+}
 
 
 
@@ -632,6 +834,59 @@ function copiarContexto() {
     .intimacoes-cards-container {
         max-width: 100%;
     }
+}
+
+/* Estilos para checkboxes */
+.checkbox-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.checkbox-intimacao {
+    cursor: pointer;
+    transform: scale(1.2);
+}
+
+.checkbox-intimacao:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+#checkbox-todas {
+    cursor: pointer;
+    transform: scale(1.2);
+}
+
+#checkbox-todas:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Estilos para o botão de ações em lote */
+#btn-acoes-lote:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Estilos para a modal de informações adicionais */
+.modal-xl {
+    max-width: 90%;
+}
+
+#lista-informacoes-adicionais .card {
+    border-left: 4px solid #0d6efd;
+}
+
+#lista-informacoes-adicionais .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+#lista-informacoes-adicionais .bg-light {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
 }
 </style>
 

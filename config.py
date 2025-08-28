@@ -15,11 +15,9 @@ class Config:
     DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
     BACKUP_DIR = os.path.join(DATA_DIR, 'backups')
     
-    # Arquivos de dados
-    INTIMACOES_FILE = os.path.join(DATA_DIR, 'intimacoes.json')
-    PROMPTS_FILE = os.path.join(DATA_DIR, 'prompts.json')
-    ANALISES_FILE = os.path.join(DATA_DIR, 'analises.json')
+    # Arquivos de dados (apenas config.json ainda é usado)
     CONFIG_FILE = os.path.join(DATA_DIR, 'config.json')
+    # Nota: intimacoes.json, prompts.json e analises.json foram substituídos pelo SQLite
     
     # Configurações OpenAI
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')

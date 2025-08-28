@@ -2,14 +2,14 @@ from typing import Dict, Any, List, Tuple, Optional
 from services.ai_service_interface import AIServiceInterface
 from services.openai_service import OpenAIService
 from services.azure_service import AzureService
-from services.data_service import DataService
+from services.sqlite_service import SQLiteService
 
 class AIManagerService:
     """Gerenciador de serviços de IA que permite alternar entre diferentes provedores"""
     
     def __init__(self):
         """Inicializar o gerenciador de IA"""
-        self.data_service = DataService()
+        self.data_service = SQLiteService()
         self.providers = {
             'openai': OpenAIService,
             'azure': AzureService
