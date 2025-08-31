@@ -579,11 +579,11 @@ class SQLiteService:
                 # Converter configurações de JSON string para dict
                 if sessao['configuracoes']:
                     try:
-                        sessao['configuracoes'] = json.loads(sessao['configuracoes'])
+                        sessao['configuracoes_parsed'] = json.loads(sessao['configuracoes'])
                     except:
-                        sessao['configuracoes'] = {}
+                        sessao['configuracoes_parsed'] = {}
                 else:
-                    sessao['configuracoes'] = {}
+                    sessao['configuracoes_parsed'] = {}
                 
                 return sessao
             return None
@@ -597,6 +597,7 @@ class SQLiteService:
                     i.processo,
                     i.orgao_julgador,
                     i.classificacao_manual,
+                    i.informacao_adicional,
                     i.intimado,
                     i.status as status_intimacao
                 FROM analises a

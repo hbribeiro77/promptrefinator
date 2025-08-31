@@ -6,7 +6,11 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
         <i class="bi bi-plus-circle"></i>
-        Novo Prompt
+        {% if dados and dados.nome and '(Cópia)' in dados.nome %}
+            Copiar Prompt
+        {% else %}
+            Novo Prompt
+        {% endif %}
     </h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <a href="{{ url_for('listar_prompts') }}" class="btn btn-sm btn-outline-secondary">
@@ -15,6 +19,14 @@
         </a>
     </div>
 </div>
+
+{% if dados and dados.nome and '(Cópia)' in dados.nome %}
+<div class="alert alert-info mb-3" role="alert">
+    <i class="bi bi-info-circle"></i>
+    <strong>Copiando Prompt:</strong> Você está criando uma cópia de um prompt existente. 
+    Todos os campos foram preenchidos automaticamente. Você pode modificar qualquer campo antes de salvar.
+</div>
+{% endif %}
 
 <div class="row">
     <div class="col-lg-8">
@@ -26,13 +38,14 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form method="POST" id="form-prompt">
+                <form method="POST" action="{{ url_for('novo_prompt') }}" id="form-prompt">
                     <div class="mb-3">
                         <label for="nome" class="form-label">
                             Nome do Prompt <span class="text-danger">*</span>
                         </label>
                         <input type="text" class="form-control" id="nome" name="nome" 
-                               placeholder="Ex: Classificador de Intimações v1.0" required>
+                               placeholder="Ex: Classificador de Intimações v1.0" 
+                               value="{{ dados.nome if dados else '' }}" required>
                         <div class="form-text">
                             <i class="bi bi-info-circle"></i>
                             Escolha um nome descritivo e único para identificar este prompt.
@@ -44,7 +57,7 @@
                             Descrição
                         </label>
                         <textarea class="form-control" id="descricao" name="descricao" rows="3" 
-                                  placeholder="Descreva o objetivo e funcionamento deste prompt..."></textarea>
+                                  placeholder="Descreva o objetivo e funcionamento deste prompt...">{{ dados.descricao if dados else '' }}</textarea>
                         <div class="form-text">
                             <i class="bi bi-lightbulb"></i>
                             Explique o que este prompt faz e quando deve ser usado.
@@ -71,7 +84,7 @@
                         </label>
                         <div class="position-relative">
                             <textarea class="form-control" id="conteudo" name="conteudo" rows="15" 
-                                      placeholder="Digite o prompt aqui..." required></textarea>
+                                      placeholder="Digite o prompt aqui..." required>{{ dados.conteudo if dados else '' }}</textarea>
                             <div class="position-absolute top-0 end-0 p-2">
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button type="button" class="btn btn-outline-secondary" onclick="inserirVariavel('{REGRADENEGOCIO}')" title="Inserir variável REGRADENEGOCIO">

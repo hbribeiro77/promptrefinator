@@ -20,6 +20,14 @@
             </a>
         </div>
         <div class="btn-group">
+            <a href="{{ url_for('copiar_prompt', id=prompt.id) }}" class="btn btn-sm btn-outline-info">
+                <i class="bi bi-files"></i>
+                Copiar
+            </a>
+            <a href="{{ url_for('editar_prompt', id=prompt.id) }}" class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-pencil-square"></i>
+                Editar
+            </a>
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmarExclusao()">
                 <i class="bi bi-trash"></i>
                 Excluir

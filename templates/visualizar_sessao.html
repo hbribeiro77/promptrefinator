@@ -74,13 +74,21 @@
                     <div class="row">
                         <div class="col-6">
                             <small class="text-muted">Prompt</small>
-                            <p class="mb-2">{{ sessao.prompt_nome }}</p>
+                            <p class="mb-2">
+                                <a href="{{ url_for('visualizar_prompt', id=sessao.prompt_id) }}" 
+                                   target="_blank" 
+                                   class="text-decoration-none">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>
+                                    {{ sessao.prompt_nome }}
+                                </a>
+                            </p>
                         </div>
                         <div class="col-6">
                             <small class="text-muted">Modelo</small>
                             <p class="mb-2">{{ sessao.modelo }}</p>
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>
@@ -97,8 +105,8 @@
                     <div class="row">
                         <div class="col-6">
                             <div class="text-center">
-                                <h3 class="text-primary mb-0">{{ sessao.intimações_processadas }}/{{ sessao.total_intimacoes }}</h3>
-                                <small class="text-muted">Intimações Processadas</small>
+                                <h3 class="text-primary mb-0">{{ sessao.acertos or 0 }}/{{ sessao.intimações_processadas or 0 }}</h3>
+                                <small class="text-muted">Acertos / Processadas</small>
                             </div>
                         </div>
                         <div class="col-6">
@@ -128,6 +136,23 @@
         </div>
     </div>
 
+    <!-- Regra de Negócio -->
+    {% if sessao.configuracoes_parsed and sessao.configuracoes_parsed.regra_negocio %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-file-text"></i>
+                Regra de Negócio Utilizada
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="bg-light p-3 rounded border">
+                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; color: #495057;">{{ sessao.configuracoes_parsed.regra_negocio }}</pre>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Configurações -->
     {% if sessao.configuracoes_parsed %}
     <div class="card mb-4">
@@ -139,19 +164,23 @@
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-md-3">
+                <div class="col">
+                    <small class="text-muted">Modelo</small>
+                    <p class="mb-2">{{ sessao.modelo }}</p>
+                </div>
+                <div class="col">
                     <small class="text-muted">Temperatura</small>
                     <p class="mb-2">{{ sessao.temperatura }}</p>
                 </div>
-                <div class="col-md-3">
+                <div class="col">
                     <small class="text-muted">Max Tokens</small>
                     <p class="mb-2">{{ sessao.max_tokens }}</p>
                 </div>
-                <div class="col-md-3">
+                <div class="col">
                     <small class="text-muted">Timeout</small>
                     <p class="mb-2">{{ sessao.timeout }}s</p>
                 </div>
-                <div class="col-md-3">
+                <div class="col">
                     <small class="text-muted">Tokens Totais</small>
                     <p class="mb-2">{{ sessao.tokens_total or 0 }}</p>
                 </div>
@@ -172,6 +201,10 @@
                     <span class="badge bg-secondary me-2" id="contador-analises">
                         {{ analises|length }} análises
                     </span>
+                    <button type="button" class="btn btn-sm btn-outline-info me-2" onclick="toggleConfiguracaoColunas()">
+                        <i class="bi bi-gear"></i>
+                        Configurar
+                    </button>
                     <button class="btn btn-sm btn-outline-primary" onclick="exportarResultados()">
                         <i class="bi bi-download"></i>
                         Exportar
@@ -179,26 +212,92 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Configuração de Colunas (colapsável) -->
+        <div class="card-body border-bottom" id="configuracao-colunas" style="display: none;">
+            <div class="row">
+                <div class="col-md-3">
+                    <h6 class="text-muted mb-2">Colunas Básicas</h6>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-intimacao" checked>
+                        <label class="form-check-label" for="col-intimacao">Intimação</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-classificacao-manual" checked>
+                        <label class="form-check-label" for="col-classificacao-manual">Classificação Manual</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-informacao-adicional" checked>
+                        <label class="form-check-label" for="col-informacao-adicional">Informação Adicional</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted mb-2">Colunas de Resultado</h6>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-resultado-ia" checked>
+                        <label class="form-check-label" for="col-resultado-ia">Resultado IA</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-status" checked>
+                        <label class="form-check-label" for="col-status">Status</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted mb-2">Colunas de Métricas</h6>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-tempo" checked>
+                        <label class="form-check-label" for="col-tempo">Tempo</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-custo" checked>
+                        <label class="form-check-label" for="col-custo">Custo</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-tokens" checked>
+                        <label class="form-check-label" for="col-tokens">Tokens</label>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <h6 class="text-muted mb-2">Ações</h6>
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selecionarTodasColunas()">
+                            <i class="bi bi-check-all"></i>
+                            Selecionar Todas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecaoColunas()">
+                            <i class="bi bi-x-circle"></i>
+                            Limpar Seleção
+                        </button>
+                        <button type="button" class="btn btn-sm btn-success" onclick="salvarConfiguracaoColunas()">
+                            <i class="bi bi-check-circle"></i>
+                            Salvar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <div class="card-body p-0">
             {% if analises %}
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Intimação</th>
-                            <th>Classificação Manual</th>
-                            <th>Resultado IA</th>
-                            <th>Status</th>
-                            <th>Tempo</th>
-                            <th>Custo</th>
-                            <th>Tokens</th>
+                            <th class="col-intimacao">Intimação</th>
+                            <th class="col-classificacao-manual">Classificação Manual</th>
+                            <th class="col-informacao-adicional">Informação Adicional</th>
+                            <th class="col-resultado-ia">Resultado IA</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-tempo">Tempo</th>
+                            <th class="col-custo">Custo</th>
+                            <th class="col-tokens">Tokens</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for analise in analises %}
                         <tr>
-                            <td>
+                            <td class="col-intimacao">
                                 {% set intimacao = {
                                     'id': analise.intimacao_id,
                                     'processo': analise.processo or analise.intimacao_id,
@@ -210,13 +309,22 @@
                                 } %}
                                 {% include 'partials/card_intimacao_compact.html' %}
                             </td>
-                            <td>
+                            <td class="col-classificacao-manual">
                                 <span class="badge bg-secondary">{{ analise.classificacao_manual }}</span>
                             </td>
-                            <td>
+                            <td class="col-informacao-adicional">
+                                {% if analise.informacao_adicional %}
+                                    <div class="info-adicional-text" title="{{ analise.informacao_adicional }}">
+                                        {{ analise.informacao_adicional[:50] }}{% if analise.informacao_adicional|length > 50 %}...{% endif %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="col-resultado-ia">
                                 <span class="badge bg-info">{{ analise.resultado_ia }}</span>
                             </td>
-                            <td>
+                            <td class="col-status">
                                 {% if analise.acertou %}
                                     <span class="badge bg-success">
                                         <i class="bi bi-check-circle"></i>
@@ -229,13 +337,13 @@
                                     </span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="col-tempo">
                                 <span>{{ "%.2f"|format(analise.tempo_processamento or 0) }}s</span>
                             </td>
-                            <td>
+                            <td class="col-custo">
                                 <span>${{ "%.4f"|format(analise.custo_real or 0) }}</span>
                             </td>
-                            <td>
+                            <td class="col-tokens">
                                 <small class="text-muted">
                                     {{ analise.tokens_input or 0 }}/{{ analise.tokens_output or 0 }}
                                 </small>
@@ -506,6 +614,149 @@ function exportarCSV() {
 function showToast(message, type = 'info') {
     // Implementar toast se necessário
     console.log(`Toast: ${message} (${type})`);
+}
+
+// Configuração de colunas
+let configuracaoColunas = {};
+
+// Carregar configuração ao inicializar
+document.addEventListener('DOMContentLoaded', function() {
+    carregarConfiguracaoColunas();
+    aplicarConfiguracaoColunas();
+});
+
+function carregarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasSessao');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        configuracaoColunas = {
+            intimacao: true,
+            classificacao_manual: true,
+            resultado_ia: true,
+            informacao_adicional: true,
+            status: true,
+            tempo: true,
+            custo: true,
+            tokens: true
+        };
+    }
+    
+    // Aplicar configuração aos checkboxes
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = configuracaoColunas[key];
+        }
+    });
+}
+
+function aplicarConfiguracaoColunas() {
+    const configSalva = localStorage.getItem('configuracaoColunasSessao');
+    if (configSalva) {
+        configuracaoColunas = JSON.parse(configSalva);
+    } else {
+        configuracaoColunas = {
+            intimacao: true,
+            classificacao_manual: true,
+            resultado_ia: true,
+            informacao_adicional: true,
+            status: true,
+            tempo: true,
+            custo: true,
+            tokens: true
+        };
+    }
+    
+    // Aplicar visibilidade das colunas
+    const colunas = {
+        'intimacao': '.col-intimacao',
+        'classificacao_manual': '.col-classificacao-manual',
+        'resultado_ia': '.col-resultado-ia',
+        'informacao_adicional': '.col-informacao-adicional',
+        'status': '.col-status',
+        'tempo': '.col-tempo',
+        'custo': '.col-custo',
+        'tokens': '.col-tokens'
+    };
+    
+    Object.keys(colunas).forEach(key => {
+        const visivel = configuracaoColunas[key];
+        const elementos = document.querySelectorAll(colunas[key]);
+        elementos.forEach(el => {
+            el.style.display = visivel ? '' : 'none';
+        });
+    });
+}
+
+// Event listeners para checkboxes
+document.addEventListener('change', function(e) {
+    if (e.target.matches('input[type="checkbox"][id^="col-"]')) {
+        const key = e.target.id.replace('col-', '').replace('-', '_');
+        configuracaoColunas[key] = e.target.checked;
+        localStorage.setItem('configuracaoColunasSessao', JSON.stringify(configuracaoColunas));
+        aplicarConfiguracaoColunas();
+    }
+});
+
+function toggleConfiguracaoColunas() {
+    const configDiv = document.getElementById('configuracao-colunas');
+    configDiv.style.display = configDiv.style.display === 'none' ? 'block' : 'none';
+}
+
+function selecionarTodasColunas() {
+    configuracaoColunas = {
+        intimacao: true,
+        classificacao_manual: true,
+        resultado_ia: true,
+        informacao_adicional: true,
+        status: true,
+        tempo: true,
+        custo: true,
+        tokens: true
+    };
+    
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    });
+    
+    localStorage.setItem('configuracaoColunasSessao', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+}
+
+function limparSelecaoColunas() {
+    configuracaoColunas = {
+        intimacao: false,
+        classificacao_manual: false,
+        resultado_ia: false,
+        informacao_adicional: false,
+        status: false,
+        tempo: false,
+        custo: false,
+        tokens: false
+    };
+    
+    Object.keys(configuracaoColunas).forEach(key => {
+        const checkbox = document.getElementById(`col-${key.replace('_', '-')}`);
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+    });
+    
+    localStorage.setItem('configuracaoColunasSessao', JSON.stringify(configuracaoColunas));
+    aplicarConfiguracaoColunas();
+}
+
+function salvarConfiguracaoColunas() {
+    // A configuração já é salva automaticamente quando os checkboxes mudam
+    showToast('Configuração salva com sucesso!', 'success');
+    
+    // Fechar painel de configuração
+    const configDiv = document.getElementById('configuracao-colunas');
+    configDiv.style.display = 'none';
 }
 </script>
 

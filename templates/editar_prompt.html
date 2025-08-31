@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Prompt - Sistema Analisador de Prompts{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="bi bi-pencil-square"></i>
+        Editar Prompt
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('visualizar_prompt', id=prompt.id) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Voltar para Prompt
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-code-square"></i>
+                    Dados do Prompt
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="form-prompt">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">
+                            Nome do Prompt <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="nome" name="nome" 
+                               placeholder="Ex: Classificador de Intimações v1.0" 
+                               value="{{ dados.nome if dados else prompt.nome }}" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Escolha um nome descritivo e único para identificar este prompt.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">
+                            Descrição
+                        </label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3" 
+                                  placeholder="Descreva o objetivo e funcionamento deste prompt...">{{ dados.descricao if dados else prompt.descricao or '' }}</textarea>
+                        <div class="form-text">
+                            <i class="bi bi-lightbulb"></i>
+                            Explique o que este prompt faz e quando deve ser usado.
+                        </div>
+                    </div>
+
+                    <!-- Regra de Negócio -->
+                    <div class="mb-3">
+                        <label for="regra-negocio" class="form-label">
+                            <i class="bi bi-gear"></i>
+                            Regra de Negócio (Opcional)
+                        </label>
+                        <textarea class="form-control" id="regra-negocio" name="regra_negocio" rows="3" 
+                                  placeholder="Digite regras de negócio específicas que serão inseridas no prompt...">{{ dados.regra_negocio if dados else prompt.regra_negocio or '' }}</textarea>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Regras de negócio que serão inseridas no prompt usando a variável <code>{REGRADENEGOCIO}</code>.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="conteudo" class="form-label">
+                            Conteúdo do Prompt <span class="text-danger">*</span>
+                        </label>
+                        <div class="position-relative">
+                            <textarea class="form-control" id="conteudo" name="conteudo" rows="15" 
+                                      placeholder="Digite o prompt aqui..." required>{{ dados.conteudo if dados else prompt.conteudo }}</textarea>
+                            <div class="position-absolute top-0 end-0 p-2">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="inserirVariavel('{REGRADENEGOCIO}')" title="Inserir variável REGRADENEGOCIO">
+                                        <i class="bi bi-gear"></i>
+                                        {REGRADENEGOCIO}
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary" onclick="inserirVariavel('{CONTEXTO}')" title="Inserir variável CONTEXTO">
+                                        <i class="bi bi-braces"></i>
+                                        {CONTEXTO}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Use <code>{REGRADENEGOCIO}</code> para inserir regras de negócio específicas e <code>{CONTEXTO}</code> onde o texto da intimação deve ser inserido.
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                Caracteres: <span id="char-count">0</span> | 
+                                Palavras: <span id="word-count">0</span> | 
+                                Linhas: <span id="line-count">0</span> |
+                                Tokens estimados: <span id="token-count">0</span>
+                            </small>
+                        </div>
+                    </div>
+
+                    <!-- Informações do Prompt -->
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-info-circle"></i>
+                            Informações do Prompt
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>ID:</strong> <code>{{ prompt.id }}</code><br>
+                                <strong>Data de Criação:</strong> 
+                                {% if prompt.data_criacao %}
+                                    {% set data = prompt.data_criacao.split('T')[0] if 'T' in prompt.data_criacao else prompt.data_criacao %}
+                                    {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Total de Usos:</strong> {{ prompt.total_usos or 0 }}<br>
+                                <strong>Acurácia Média:</strong> {{ "%.1f"|format(prompt.acuracia_media or 0) }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('visualizar_prompt', id=prompt.id) }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i>
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Dicas de Edição -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-lightbulb"></i>
+                    Dicas de Edição
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Mantenha a variável {CONTEXTO}</strong> para que o prompt funcione corretamente
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-check-circle text-success"></i>
+                        <strong>Use {REGRADENEGOCIO}</strong> para inserir regras específicas
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                        <strong>Atenção:</strong> Alterações podem afetar análises futuras
+                    </li>
+                    <li class="mb-2">
+                        <i class="bi bi-info-circle text-info"></i>
+                        <strong>Histórico:</strong> Análises anteriores não serão afetadas
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Preview do Prompt -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-eye"></i>
+                    Preview do Prompt
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="preview-content" class="bg-light p-3 rounded">
+                    <small class="text-muted">Digite o conteúdo do prompt para ver o preview...</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Função para inserir variáveis no textarea
+function inserirVariavel(variavel) {
+    const textarea = document.getElementById('conteudo');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    
+    textarea.value = text.substring(0, start) + variavel + text.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + variavel.length;
+    textarea.focus();
+    
+    // Atualizar contadores
+    atualizarContadores();
+    atualizarPreview();
+}
+
+// Função para atualizar contadores
+function atualizarContadores() {
+    const textarea = document.getElementById('conteudo');
+    const texto = textarea.value;
+    
+    // Contar caracteres
+    document.getElementById('char-count').textContent = texto.length;
+    
+    // Contar palavras
+    const palavras = texto.trim().split(/\s+/).filter(palavra => palavra.length > 0);
+    document.getElementById('word-count').textContent = palavras.length;
+    
+    // Contar linhas
+    const linhas = texto.split('\n').length;
+    document.getElementById('line-count').textContent = linhas;
+    
+    // Estimar tokens (aproximadamente 4 caracteres por token)
+    const tokens = Math.ceil(texto.length / 4);
+    document.getElementById('token-count').textContent = tokens;
+}
+
+// Função para atualizar preview
+function atualizarPreview() {
+    const textarea = document.getElementById('conteudo');
+    const preview = document.getElementById('preview-content');
+    const texto = textarea.value;
+    
+    if (texto.trim()) {
+        // Substituir variáveis por placeholders no preview
+        let previewText = texto
+            .replace(/{CONTEXTO}/g, '<span class="badge bg-primary">[CONTEXTO DA INTIMAÇÃO]</span>')
+            .replace(/{REGRADENEGOCIO}/g, '<span class="badge bg-secondary">[REGRAS DE NEGÓCIO]</span>');
+        
+        preview.innerHTML = `<pre class="mb-0">${previewText}</pre>`;
+    } else {
+        preview.innerHTML = '<small class="text-muted">Digite o conteúdo do prompt para ver o preview...</small>';
+    }
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    const textarea = document.getElementById('conteudo');
+    
+    // Atualizar contadores e preview quando o texto mudar
+    textarea.addEventListener('input', function() {
+        atualizarContadores();
+        atualizarPreview();
+    });
+    
+    // Inicializar contadores e preview
+    atualizarContadores();
+    atualizarPreview();
+});
+</script>
+{% endblock %}

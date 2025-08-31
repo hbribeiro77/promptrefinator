@@ -200,6 +200,14 @@
                                    class="btn btn-outline-primary" title="Visualizar">
                                     <i class="bi bi-eye"></i>
                                 </a>
+                                <a href="{{ url_for('copiar_prompt', id=prompt.id) }}" 
+                                   class="btn btn-outline-info" title="Copiar">
+                                    <i class="bi bi-files"></i>
+                                </a>
+                                <a href="{{ url_for('editar_prompt', id=prompt.id) }}" 
+                                   class="btn btn-outline-warning" title="Editar">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
                                 <button type="button" class="btn btn-outline-success" 
                                         data-prompt-id="{{ prompt.id }}"
                                         onclick="testarPrompt(this.dataset.promptId)" title="Testar">

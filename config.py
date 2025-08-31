@@ -60,7 +60,8 @@ class Config:
     DEFENSORES = [
         'Rodrigo Ahlert Weirich',
         'André Iglésias e Silva Borges',
-        'Walter Luchese Willig'
+        'Walter Luchese Willig',
+        'Felipe Frota Aguiar Pizarro Drummond'
     ]
     
     @staticmethod

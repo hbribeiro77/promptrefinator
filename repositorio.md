@@ -46,3 +46,6 @@ git push origin main
 ✅ Visualização de detalhes da sessão
 ✅ Persistência de session_id nas análises
 ✅ Finalização de sessões com estatísticas
+
+
+

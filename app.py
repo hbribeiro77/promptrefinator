@@ -956,7 +956,8 @@ def executar_analise():
             'timeout': int(configuracoes.get('timeout', config.get('timeout_padrao', 30))),
             'salvar_resultados': configuracoes.get('salvar_resultados', True),
             'calcular_acuracia': configuracoes.get('calcular_acuracia', True),
-            'modo_paralelo': configuracoes.get('modo_paralelo', False)
+            'modo_paralelo': configuracoes.get('modo_paralelo', False),
+            'regra_negocio': prompt.get('regra_negocio', '')
         }
         
         # Criar sessão no banco
@@ -2975,6 +2976,86 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('500.html'), 500
+
+@app.route('/prompts/<id>/editar', methods=['GET', 'POST'])
+def editar_prompt(id):
+    """Página para editar um prompt"""
+    try:
+        prompt = data_service.get_prompt_by_id(id)
+        if not prompt:
+            flash('Prompt não encontrado.', 'error')
+            return redirect(url_for('listar_prompts'))
+        
+        if request.method == 'POST':
+            # Processar formulário de edição
+            nome = request.form.get('nome', '').strip()
+            descricao = request.form.get('descricao', '').strip()
+            regra_negocio = request.form.get('regra_negocio', '').strip()
+            conteudo = request.form.get('conteudo', '').strip()
+            
+            if not nome or not conteudo:
+                flash('Nome e conteúdo do prompt são obrigatórios.', 'error')
+                return render_template('editar_prompt.html',
+                                     prompt=prompt,
+                                     dados={'nome': nome, 'descricao': descricao, 
+                                           'regra_negocio': regra_negocio, 'conteudo': conteudo})
+            
+            # Validar se o prompt contém a variável {CONTEXTO}
+            if '{CONTEXTO}' not in conteudo:
+                flash('O prompt deve conter a variável {CONTEXTO} para funcionar corretamente.', 'warning')
+            
+            # Atualizar o prompt
+            prompt_atualizado = {
+                'id': prompt['id'],
+                'nome': nome,
+                'descricao': descricao,
+                'regra_negocio': regra_negocio,
+                'conteudo': conteudo,
+                'categoria': prompt.get('categoria', ''),
+                'tags': prompt.get('tags', []),
+                'data_criacao': prompt.get('data_criacao', ''),
+                'total_usos': prompt.get('total_usos', 0),
+                'acuracia_media': prompt.get('acuracia_media', 0.0),
+                'tempo_medio': prompt.get('tempo_medio', 0.0),
+                'custo_total': prompt.get('custo_total', 0.0)
+            }
+            
+            data_service.save_prompt(prompt_atualizado)
+            flash('Prompt atualizado com sucesso!', 'success')
+            return redirect(url_for('visualizar_prompt', id=id))
+        
+        # GET - mostrar formulário de edição
+        return render_template('editar_prompt.html', prompt=prompt)
+        
+    except Exception as e:
+        flash(f'Erro ao editar prompt: {str(e)}', 'error')
+        return redirect(url_for('listar_prompts'))
+
+@app.route('/prompts/<id>/copiar')
+def copiar_prompt(id):
+    """Copiar um prompt - redireciona para criação com dados preenchidos"""
+    try:
+        prompt = data_service.get_prompt_by_id(id)
+        if not prompt:
+            flash('Prompt não encontrado.', 'error')
+            return redirect(url_for('listar_prompts'))
+        
+        # Preparar dados para a página de criação
+        dados_copia = {
+            'nome': f"{prompt['nome']} (Cópia)",
+            'descricao': prompt.get('descricao', ''),
+            'regra_negocio': prompt.get('regra_negocio', ''),
+            'conteudo': prompt.get('conteudo', ''),
+            'categoria': prompt.get('categoria', ''),
+            'tags': prompt.get('tags', [])
+        }
+        
+        # Redirecionar para página de criação com dados preenchidos
+        return render_template('novo_prompt.html', dados=dados_copia)
+        
+    except Exception as e:
+        flash(f'Erro ao copiar prompt: {str(e)}', 'error')
+        return redirect(url_for('listar_prompts'))
 
 if __name__ == '__main__':
     # Criar diretórios necessários

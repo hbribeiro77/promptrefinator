@@ -17,10 +17,11 @@ Automatizar e otimizar o processo de triagem de intimações jurídicas através
 - **UI Framework**: Bootstrap 5.3.0
 - **Ícones**: Bootstrap Icons 1.10.0
 - **Gráficos**: Chart.js
-- **IA**: OpenAI API (GPT-3.5-turbo, GPT-4)
-- **Armazenamento**: JSON (arquivos locais)
+- **IA**: OpenAI API (GPT-3.5-turbo, GPT-4) + Azure OpenAI (GPT-4, GPT-35-turbo)
+- **Armazenamento**: SQLite (NOVO) + JSON (legado)
 - **Exportação**: CSV, Excel
 - **Variáveis de Ambiente**: python-dotenv
+- **Banco de Dados**: SQLite3 (NOVO)
 
 ### **Estrutura de Diretórios**
 ```
@@ -28,17 +29,26 @@ promptrefinator2/
 ├── app.py                 # Aplicação principal Flask
 ├── config.py              # Configurações do sistema
 ├── requirements.txt       # Dependências Python
-├── .env                   # Variáveis de ambiente (NOVO)
-├── .gitignore            # Arquivos ignorados pelo Git (NOVO)
-├── README.md             # Documentação do projeto (NOVO)
+├── .env                   # Variáveis de ambiente
+├── .gitignore            # Arquivos ignorados pelo Git
+├── README.md             # Documentação do projeto
 ├── data/                  # Dados persistentes
-│   ├── intimacoes.json   # Intimações cadastradas
-│   ├── prompts.json      # Prompts de IA
+│   ├── database.db       # Banco SQLite (NOVO)
 │   ├── config.json       # Configurações do usuário
 │   └── backups/          # Backups automáticos
+├── models/               # Modelos de dados (NOVO)
+│   ├── __init__.py
+│   ├── intimacao.py
+│   ├── prompt.py
+│   └── analise.py
 ├── services/             # Camada de serviços
 │   ├── data_service.py   # Gerenciamento de dados
+│   ├── sqlite_service.py # Serviço SQLite (NOVO)
 │   ├── openai_service.py # Integração OpenAI
+│   ├── azure_service.py  # Integração Azure OpenAI (NOVO)
+│   ├── ai_manager_service.py # Gerenciador de IA (NOVO)
+│   ├── ai_service_interface.py # Interface de IA (NOVO)
+│   ├── cost_calculation_service.py # Cálculo de custos (NOVO)
 │   └── export_service.py # Exportação de dados
 ├── templates/            # Templates HTML
 │   ├── base.html         # Template base
@@ -47,9 +57,20 @@ promptrefinator2/
 │   ├── relatorios.html   # Relatórios e gráficos
 │   ├── configuracoes.html # Configurações
 │   ├── intimacoes.html   # Listagem de intimações
+│   ├── nova_intimacao.html # Nova intimação (NOVO)
+│   ├── visualizar_intimacao.html # Visualizar intimação (NOVO)
 │   ├── prompts.html      # Listagem de prompts
+│   ├── novo_prompt.html  # Novo prompt (NOVO)
+│   ├── visualizar_prompt.html # Visualizar prompt (NOVO)
+│   ├── editar_prompt.html # Editar prompt (NOVO)
+│   ├── historico.html    # Histórico de análises (NOVO)
+│   ├── visualizar_sessao.html # Visualizar sessão (NOVO)
 │   └── partials/         # Componentes reutilizáveis
 │       ├── tabela_analises.html
+│       ├── tabela_analises_avancada.html # Tabela avançada (NOVO)
+│       ├── tabela_analises_com_card.html # Tabela com cards (NOVO)
+│       ├── card_intimacao.html # Card de intimação (NOVO)
+│       ├── card_intimacao_compact.html # Card compacto (NOVO)
 │       └── modais_prompt_resposta.html
 └── static/               # Arquivos estáticos
     ├── css/
@@ -72,15 +93,27 @@ promptrefinator2/
 **Rotas Principais:**
 - `/` - Dashboard principal
 - `/intimacoes` - Gerenciamento de intimações
+- `/intimacoes/nova` - Nova intimação (NOVO)
+- `/intimacoes/<id>` - Visualizar intimação (NOVO)
 - `/prompts` - Gerenciamento de prompts
+- `/prompts/novo` - Novo prompt (NOVO)
+- `/prompts/<id>` - Visualizar prompt (NOVO)
+- `/prompts/<id>/editar` - Editar prompt (NOVO)
+- `/prompts/<id>/copiar` - Copiar prompt (NOVO)
+- `/prompts/<id>/excluir` - Excluir prompt (NOVO)
 - `/analise` - Interface de análise de IA
 - `/relatorios` - Relatórios e estatísticas
 - `/configuracoes` - Configurações do sistema
+- `/historico` - Histórico de análises (NOVO)
+- `/historico/<session_id>` - Visualizar sessão (NOVO)
 - `/exportar` - Exportação de dados
 - `/api/relatorios/pagina/<int:pagina>` - Paginação AJAX
 - `/api/analises/excluir` - Exclusão de análises
-- `/api/analise-progresso` - Server-Sent Events para progresso em tempo real (NOVO)
-- `/api/precos-modelos` - API para obter preços dos modelos (NOVO)
+- `/api/analise-progresso` - Server-Sent Events para progresso em tempo real
+- `/api/precos-modelos` - API para obter preços dos modelos
+- `/api/prompts/<id>/excluir` - Excluir prompt via API (NOVO)
+- `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
+- `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
 
 **Funcionalidades Especiais:**
 - Paginação AJAX para relatórios
@@ -89,9 +122,23 @@ promptrefinator2/
 - API REST para operações CRUD
 - Sistema de variáveis de ambiente para chaves de API
 - Persistência de configurações de colunas via localStorage
-- **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
-- **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
-- **NOVO**: Tooltips de memória de cálculo com soma automática
+- Sistema de progresso em tempo real com Server-Sent Events
+- Cálculo de custo real baseado em tokens e preços configurados
+- Tooltips de memória de cálculo com soma automática
+- **NOVO**: Migração completa para SQLite
+- **NOVO**: Sistema de sessões de análise
+- **NOVO**: Suporte a Azure OpenAI
+- **NOVO**: Gerenciador de IA unificado
+- **NOVO**: CRUD completo de prompts (criar, editar, copiar, excluir)
+- **NOVO**: CRUD completo de intimações
+- **NOVO**: Histórico de análises com sessões
+- **NOVO**: Visualização detalhada de sessões
+- **NOVO**: Configuração de colunas na visualização de sessões
+- **NOVO**: Campo "defensor" nas intimações
+- **NOVO**: Campo "informação adicional" nas intimações
+- **NOVO**: Regra de negócio exibida nas sessões
+- **NOVO**: Link clicável para prompt nas sessões
+- **NOVO**: Proporção de acertos nas estatísticas
 
 ### **2. Configurações (`config.py`)**
 
@@ -102,42 +149,65 @@ promptrefinator2/
 - `TestingConfig` - Configurações para testes
 
 **Configurações Principais:**
-- Chaves de API OpenAI (agora via variáveis de ambiente)
-- Modelos de IA disponíveis
+- Chaves de API OpenAI e Azure OpenAI (via variáveis de ambiente)
+- Modelos de IA disponíveis (OpenAI + Azure)
 - Tipos de ação para classificação
+- Lista de defensores disponíveis (NOVO)
 - Configurações de backup e paginação
 
 ### **3. Serviços**
 
-#### **DataService (`services/data_service.py`)**
+#### **SQLiteService (`services/sqlite_service.py`) - NOVO**
 **Responsabilidades:**
-- Gerenciamento completo de dados JSON
-- CRUD para intimações, prompts e análises
+- Gerenciamento completo do banco SQLite
+- CRUD para intimações, prompts, análises e sessões
 - Sistema de backup automático
 - Validação e integridade de dados
-- **NOVO**: Substituição de placeholders por variáveis de ambiente
+- Substituição de placeholders por variáveis de ambiente
 
 **Métodos Principais:**
 - `get_all_intimacoes()` - Listar todas as intimações
 - `save_intimacao()` - Salvar intimação
-- `adicionar_analise_intimacao()` - Adicionar análise
-- `get_config()` / `save_config()` - Gerenciar configurações
-- **NOVO**: Substituição automática de `${VARIABLE}` por valores de ambiente
+- `get_all_prompts()` - Listar todos os prompts
+- `save_prompt()` - Salvar prompt
+- `delete_prompt()` - Excluir prompt
+- `get_sessoes_analise()` - Listar sessões de análise
+- `get_sessao_analise()` - Obter sessão específica
+- `criar_sessao_analise()` - Criar nova sessão
+- `get_analises_por_sessao()` - Obter análises de uma sessão
+- Substituição automática de `${VARIABLE}` por valores de ambiente
 
-#### **OpenAIService (`services/openai_service.py`)**
+#### **DataService (`services/data_service.py`) - LEGADO**
 **Responsabilidades:**
-- Integração com API OpenAI
-- Análise de intimações usando IA
+- Gerenciamento de dados JSON (mantido para compatibilidade)
+- Migração gradual para SQLite
+
+#### **AIManagerService (`services/ai_manager_service.py`) - NOVO**
+**Responsabilidades:**
+- Gerenciamento unificado de serviços de IA
+- Integração com OpenAI e Azure OpenAI
+- Seleção automática do melhor serviço
 - Tratamento de erros e retry
-- Estimativa de custos
-- **NOVO**: Priorização de variáveis de ambiente sobre config.json
+- Análise de intimações usando IA
 
 **Funcionalidades:**
-- Teste de conexão com OpenAI
+- Teste de conexão com múltiplos provedores
 - Análise de intimações com prompts customizados
 - Extração de classificações da resposta da IA
 - Sistema de retry para falhas de API
-- **NOVO**: Carregamento seguro de chaves de API
+- Carregamento seguro de chaves de API
+
+#### **OpenAIService (`services/openai_service.py`)**
+**Responsabilidades:**
+- Integração específica com API OpenAI
+- Implementação da interface de IA
+- Tratamento de erros específicos da OpenAI
+
+#### **AzureService (`services/azure_service.py`) - NOVO**
+**Responsabilidades:**
+- Integração específica com Azure OpenAI
+- Implementação da interface de IA
+- Tratamento de erros específicos do Azure
 
 #### **ExportService (`services/export_service.py`)**
 **Responsabilidades:**
@@ -445,6 +515,49 @@ promptrefinator2/
 
 ---
 
+## 🆕 **Melhorias Recentes Implementadas (2025)**
+
+### **Migração para SQLite**
+- ✅ Migração completa de JSON para SQLite
+- ✅ Estrutura de banco otimizada
+- ✅ Backup automático do banco
+- ✅ Performance melhorada
+
+### **Sistema de Sessões de Análise**
+- ✅ Agrupamento de análises por sessão
+- ✅ Histórico de sessões com estatísticas
+- ✅ Visualização detalhada de sessões
+- ✅ Exportação de sessões completas
+
+### **CRUD Completo de Prompts**
+- ✅ Criação de prompts com regra de negócio
+- ✅ Edição de prompts existentes
+- ✅ Cópia de prompts com sufixo "(Cópia)"
+- ✅ Exclusão de prompts com confirmação
+- ✅ Visualização detalhada de prompts
+
+### **CRUD Completo de Intimações**
+- ✅ Criação de intimações com defensor
+- ✅ Campo "informação adicional"
+- ✅ Visualização detalhada de intimações
+- ✅ Edição e exclusão de intimações
+
+### **Melhorias na Interface**
+- ✅ Configuração de colunas na visualização de sessões
+- ✅ Coluna "Informação Adicional" nas análises
+- ✅ Regra de negócio exibida nas sessões
+- ✅ Link clicável para prompt nas sessões
+- ✅ Proporção de acertos nas estatísticas (13/20)
+- ✅ Layout otimizado das configurações
+
+### **Suporte a Azure OpenAI**
+- ✅ Integração com Azure OpenAI
+- ✅ Gerenciador unificado de IA
+- ✅ Seleção automática do melhor serviço
+- ✅ Interface padronizada para múltiplos provedores
+
+---
+
 ## 🔮 **Funcionalidades Futuras**
 
 ### **Melhorias Planejadas**
@@ -457,7 +570,6 @@ promptrefinator2/
 - Sistema de versionamento de prompts
 
 ### **Escalabilidade**
-- Migração para banco de dados relacional
 - Sistema de cache distribuído
 - Load balancing
 - Microserviços
@@ -472,7 +584,7 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - ✅ Arquitetura modular e escalável
 - ✅ Interface responsiva e intuitiva
 - ✅ Sistema robusto de backup
-- ✅ Integração eficiente com OpenAI
+- ✅ Integração eficiente com OpenAI e Azure OpenAI
 - ✅ Relatórios detalhados e gráficos
 - ✅ Configuração flexível
 - ✅ Exportação de dados completa
@@ -480,28 +592,36 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - ✅ Persistência de configurações do usuário
 - ✅ Sistema de modais reutilizáveis
 - ✅ Paginação AJAX otimizada
-- ✅ **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
-- ✅ **NOVO**: Cálculo de custo real baseado em tokens e preços
-- ✅ **NOVO**: Tooltips de memória de cálculo com soma automática
+- ✅ Sistema de progresso em tempo real com Server-Sent Events
+- ✅ Cálculo de custo real baseado em tokens e preços
+- ✅ Tooltips de memória de cálculo com soma automática
+- ✅ **NOVO**: Banco de dados SQLite otimizado
+- ✅ **NOVO**: Sistema de sessões de análise
+- ✅ **NOVO**: CRUD completo de prompts e intimações
+- ✅ **NOVO**: Histórico detalhado de análises
+- ✅ **NOVO**: Configuração de colunas personalizável
+- ✅ **NOVO**: Gerenciador unificado de IA
 
 **Tecnologias Utilizadas:**
 - Python + Flask (Backend)
 - Bootstrap 5 + Chart.js (Frontend)
-- OpenAI API (IA)
-- JSON (Persistência)
+- OpenAI API + Azure OpenAI (IA)
+- SQLite (Persistência principal)
+- JSON (Persistência legado)
 - AJAX (Interatividade)
-- **NOVO**: python-dotenv (Variáveis de ambiente)
+- python-dotenv (Variáveis de ambiente)
 
-**Melhorias Recentes:**
-- 🔐 Segurança da chave da API OpenAI via variáveis de ambiente
-- 🎛️ Persistência de configurações de colunas via localStorage
-- 🔄 Sistema de modais reutilizáveis para prompts e respostas
-- 📊 Paginação AJAX sem mudança de URL
-- 🗂️ Componentes modulares para melhor manutenibilidade
-- 📝 Documentação completa com README.md
-- ⚡ **NOVO**: Sistema de progresso em tempo real com Server-Sent Events
-- 💰 **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
-- 🧮 **NOVO**: Tooltips de memória de cálculo com soma automática
-- 🎯 **NOVO**: Barra de progresso dinâmica com cancelamento
+**Melhorias Recentes (2025):**
+- 🗄️ Migração completa para SQLite
+- 📊 Sistema de sessões de análise
+- 🔄 CRUD completo de prompts e intimações
+- 📈 Histórico detalhado de análises
+- ⚙️ Configuração de colunas personalizável
+- 🤖 Gerenciador unificado de IA (OpenAI + Azure)
+- 📋 Campo "defensor" e "informação adicional" nas intimações
+- 📝 Regra de negócio exibida nas sessões
+- 🔗 Link clicável para prompt nas sessões
+- 📊 Proporção de acertos nas estatísticas
+- 🎨 Layout otimizado das configurações
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.
