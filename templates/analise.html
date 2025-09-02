@@ -135,8 +135,8 @@
                             <span class="text-danger">*</span>
                         </label>
                         <div class="row">
-                            <div class="col-md-8">
-                                <select class="form-select" id="prompt-selecionado" name="prompt_id" required>
+                            <div class="col-md-6">
+                                <select class="form-select" id="prompt-selecionado" name="prompt_id" required onchange="atualizarBotaoRegrasNegocio()">
                                     <option value="">Selecione um prompt...</option>
                                     {% for prompt in prompts %}
                                     <option value="{{ prompt.id }}" 
@@ -149,7 +149,16 @@
                                     Escolha um prompt para testar com as intimações selecionadas.
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-outline-info btn-sm" id="btn-regras-negocio" 
+                                            onclick="visualizarRegrasNegocio()" disabled>
+                                        <i class="bi bi-file-earmark-text"></i>
+                                        Regras de Negócio
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
                                 <div class="d-grid gap-2">
                                     <a href="{{ url_for('novo_prompt') }}" class="btn btn-outline-success btn-sm">
                                         <i class="bi bi-plus-circle"></i>
@@ -1204,15 +1213,32 @@
 {% endblock %}
 
 {% block extra_js %}
-<!-- Dados do servidor -->
-<script type="application/json" id="prompts-data">{{ prompts | tojson | safe }}</script>
+<!-- Script oculto com dados dos prompts -->
+<script type="application/json" id="prompts-data">
+{{ prompts|tojson }}
+</script>
+
 <script>
 console.log('=== DEBUG: Script de análise carregado ===');
+
+// Dados dos prompts passados do backend via JSON
+let prompts = [];
+try {
+    const promptsDataElement = document.getElementById('prompts-data');
+    if (promptsDataElement) {
+        prompts = JSON.parse(promptsDataElement.textContent);
+        console.log('=== DEBUG: Prompts carregados via JSON ===', prompts.length);
+    } else {
+        console.error('=== ERRO: Elemento prompts-data não encontrado ===');
+    }
+} catch (error) {
+        console.error('=== ERRO ao parsear prompts ===', error);
+        prompts = [];
+}
 
 // Variáveis globais
 let analiseAtual = null;
 let resultadosAnalise = [];
-const promptsData = JSON.parse(document.getElementById('prompts-data').textContent);
 let dadosCompletos = {}; // Objeto para armazenar prompt e resposta completos
 
 // Configuração de colunas
@@ -1263,7 +1289,7 @@ function atualizarConfigSummary() {
 
 // Função para mostrar preview do prompt
 function mostrarPreviewPrompt(promptId) {
-    const prompt = promptsData.find(p => p.id === promptId);
+    const prompt = prompts.find(p => p.id === promptId);
     
     if (prompt) {
         document.getElementById('prompt-content').textContent = prompt.conteudo;
@@ -1312,7 +1338,7 @@ function colapsarPromptPreview() {
 function mostrarPromptModal() {
     const promptSelecionado = document.getElementById('prompt-selecionado');
     if (promptSelecionado.value) {
-        const prompt = promptsData.find(p => p.id === promptSelecionado.value);
+        const prompt = prompts.find(p => p.id === promptSelecionado.value);
         if (prompt) {
             document.getElementById('modal-prompt-content').textContent = prompt.conteudo;
             const modal = new bootstrap.Modal(document.getElementById('modalPrompt'));
@@ -1554,7 +1580,7 @@ function atualizarResumo() {
 
 // Função para mostrar preview do prompt
 function mostrarPreviewPrompt(promptId) {
-    const prompt = promptsData.find(p => p.id === promptId);
+    const prompt = prompts.find(p => p.id === promptId);
     
     if (prompt) {
         document.getElementById('prompt-content').textContent = prompt.conteudo;
@@ -1603,7 +1629,7 @@ function colapsarPromptPreview() {
 function mostrarPromptModal() {
     const promptSelecionado = document.getElementById('prompt-selecionado');
     if (promptSelecionado.value) {
-        const prompt = promptsData.find(p => p.id === promptSelecionado.value);
+        const prompt = prompts.find(p => p.id === promptSelecionado.value);
         if (prompt) {
             document.getElementById('modal-prompt-content').textContent = prompt.conteudo;
             const modal = new bootstrap.Modal(document.getElementById('modalPrompt'));
@@ -2453,6 +2479,9 @@ document.addEventListener('DOMContentLoaded', function() {
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
     
+    // Inicializar botão de regras de negócio
+    atualizarBotaoRegrasNegocio();
+    
     // Adicionar event listeners para atalhos de teclado
 document.addEventListener('keydown', function(e) {
     // Ctrl+Enter para executar
@@ -3118,7 +3147,117 @@ function armazenarResultadosAtuais(resultados) {
     resultadosAtuais = resultados;
     console.log('=== DEBUG: Resultados armazenados ===', resultados.length);
 }
+
+// Função para atualizar botão de regras de negócio
+function atualizarBotaoRegrasNegocio() {
+    const selectPrompt = document.getElementById('prompt-selecionado');
+    const btnRegrasNegocio = document.getElementById('btn-regras-negocio');
+    
+    if (selectPrompt.value) {
+        btnRegrasNegocio.disabled = false;
+        btnRegrasNegocio.classList.remove('btn-outline-secondary');
+        btnRegrasNegocio.classList.add('btn-outline-info');
+    } else {
+        btnRegrasNegocio.disabled = true;
+        btnRegrasNegocio.classList.remove('btn-outline-info');
+        btnRegrasNegocio.classList.add('btn-outline-secondary');
+    }
+}
+
+// Função para visualizar regras de negócio
+function visualizarRegrasNegocio() {
+    const selectPrompt = document.getElementById('prompt-selecionado');
+    const promptId = selectPrompt.value;
+    
+    if (!promptId) {
+        showToast('Selecione um prompt primeiro!', 'warning');
+        return;
+    }
+    
+    // Buscar dados do prompt selecionado
+    const promptSelecionado = prompts.find(p => p.id === promptId);
+    if (!promptSelecionado) {
+        showToast('Prompt não encontrado!', 'error');
+        return;
+    }
+    
+    // Preencher modal com as regras de negócio
+    const modalRegrasNegocio = new bootstrap.Modal(document.getElementById('modalRegrasNegocio'));
+    const modalTitle = document.getElementById('modalRegrasNegocioLabel');
+    const modalBody = document.getElementById('modalRegrasNegocioBody');
+    
+    modalTitle.textContent = `Regras de Negócio - ${promptSelecionado.nome}`;
+    
+    // Verificar se tem regras de negócio
+    if (promptSelecionado.regra_negocio && promptSelecionado.regra_negocio.trim()) {
+        modalBody.innerHTML = `
+            <div class="mb-3">
+                <h6 class="text-primary">Descrição das Regras:</h6>
+                <div class="border rounded p-3 bg-light">
+                    ${promptSelecionado.regra_negocio.replace(/\n/g, '<br>')}
+                </div>
+            </div>
+        `;
+    } else {
+        modalBody.innerHTML = `
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Este prompt não possui regras de negócio definidas.</strong>
+                <br><br>
+                <p class="mb-2">Para adicionar regras de negócio, edite o prompt na página de prompts.</p>
+            </div>
+        `;
+    }
+    
+    modalRegrasNegocio.show();
+}
+
+// Função para editar prompt a partir do modal
+function editarPrompt() {
+    const selectPrompt = document.getElementById('prompt-selecionado');
+    const promptId = selectPrompt.value;
+    
+    if (!promptId) {
+        showToast('Selecione um prompt primeiro!', 'warning');
+        return;
+    }
+    
+    // Fechar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalRegrasNegocio'));
+    modal.hide();
+    
+    // Redirecionar para edição do prompt
+    window.location.href = `/prompts/${promptId}/editar`;
+}
 </script>
+
+<!-- Modal para Regras de Negócio -->
+<div class="modal fade" id="modalRegrasNegocio" tabindex="-1" aria-labelledby="modalRegrasNegocioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRegrasNegocioLabel">
+                    <i class="bi bi-file-earmark-text"></i>
+                    Regras de Negócio
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modalRegrasNegocioBody">
+                <!-- Conteúdo será preenchido via JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i>
+                    Fechar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="editarPrompt()">
+                    <i class="bi bi-pencil-square"></i>
+                    Editar Prompt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Marked.js para renderização de Markdown -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>

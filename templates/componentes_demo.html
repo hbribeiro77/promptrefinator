@@ -300,6 +300,73 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Nova seção: Demonstração de Alertas Persistentes -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-bell me-2"></i>
+                                        Demonstração de Alertas Persistentes
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted mb-3">
+                                        Os alertas persistentes só desaparecem quando você clica no botão 'x'. 
+                                        Use os botões abaixo para testar diferentes tipos de alertas.
+                                    </p>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-3 mb-2">
+                                            <button type="button" class="btn btn-success w-100" onclick="testarAlertaSucesso()">
+                                                <i class="bi bi-check-circle me-2"></i>
+                                                Sucesso
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3 mb-2">
+                                            <button type="button" class="btn btn-danger w-100" onclick="testarAlertaErro()">
+                                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                                Erro
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3 mb-2">
+                                            <button type="button" class="btn btn-warning w-100" onclick="testarAlertaAviso()">
+                                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                                Aviso
+                                            </button>
+                                        </div>
+                                        <div class="col-md-3 mb-2">
+                                            <button type="button" class="btn btn-info w-100" onclick="testarAlertaInfo()">
+                                                <i class="bi bi-info-circle me-2"></i>
+                                                Informação
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row mt-3">
+                                        <div class="col-md-6 mb-2">
+                                            <button type="button" class="btn btn-outline-primary w-100" onclick="testarAlertaCustomizado()">
+                                                <i class="bi bi-gear me-2"></i>
+                                                Alerta Customizado
+                                            </button>
+                                        </div>
+                                        <div class="col-md-6 mb-2">
+                                            <button type="button" class="btn btn-outline-secondary w-100" onclick="limparTodosAlertas()">
+                                                <i class="bi bi-trash me-2"></i>
+                                                Limpar Todos
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="alert alert-info mt-3" role="alert">
+                                        <i class="bi bi-lightbulb me-2"></i>
+                                        <strong>Dica:</strong> Os alertas persistentes são úteis para mensagens importantes que o usuário deve ver e decidir quando fechar.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -422,6 +489,37 @@ function copiarResposta() {
     navigator.clipboard.writeText(conteudo).then(() => {
         mostrarToast('Resposta copiada para a área de transferência!', 'success');
     });
+}
+
+// Funções para alertas persistentes (demonstração)
+function testarAlertaSucesso() {
+    showSuccessAlert('Operação realizada com sucesso! Este alerta só desaparece quando você clicar no X.');
+}
+
+function testarAlertaErro() {
+    showErrorAlert('Ocorreu um erro inesperado. Este alerta só desaparece quando você clicar no X.');
+}
+
+function testarAlertaAviso() {
+    showWarningAlert('Atenção: este é um aviso importante que requer sua atenção.');
+}
+
+function testarAlertaInfo() {
+    showInfoAlert('Esta é uma mensagem informativa que permanecerá visível até ser fechada.');
+}
+
+function testarAlertaCustomizado() {
+    showPersistentAlert('Este é um alerta personalizado com título customizado.', 'info', 'Sistema Personalizado');
+}
+
+function limparTodosAlertas() {
+    // Remover todos os alertas persistentes personalizados
+    const alertas = document.querySelectorAll('[id^="persistent-alert-"]');
+    alertas.forEach(alerta => {
+        const bsAlert = new bootstrap.Alert(alerta);
+        bsAlert.close();
+    });
+    mostrarToast('Alertas personalizados removidos!', 'info');
 }
 
 // Inicializar tooltips

@@ -47,7 +47,15 @@
                     <option value="uso" {% if request.args.get('ordenacao') == 'uso' %}selected{% endif %}>Mais usado</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">Todos os status</option>
+                    <option value="ativo" {% if request.args.get('status') == 'ativo' %}selected{% endif %}>Ativos</option>
+                    <option value="inativo" {% if request.args.get('status') == 'inativo' %}selected{% endif %}>Inativos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label for="tamanho" class="form-label">Tamanho</label>
                 <select class="form-select" id="tamanho" name="tamanho">
                     <option value="">Todos os tamanhos</option>
@@ -56,7 +64,7 @@
                     <option value="grande" {% if request.args.get('tamanho') == 'grande' %}selected{% endif %}>Grande (&gt; 2000 chars)</option>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="form-label">&nbsp;</label>
                 <div class="d-grid">
                     <button type="submit" class="btn btn-outline-primary">
@@ -71,7 +79,7 @@
 
 <!-- Estatísticas rápidas -->
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-primary">{{ stats.total }}</h5>
@@ -79,17 +87,27 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-success">
-                    {{ stats.pequenos }}
+                    {{ stats.ativos }}
                 </h5>
-                <p class="card-text">Prompts Pequenos</p>
+                <p class="card-text">Prompts Ativos</p>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-secondary">
+                    {{ stats.inativos }}
+                </h5>
+                <p class="card-text">Prompts Inativos</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-warning">
@@ -99,7 +117,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card text-center">
             <div class="card-body">
                 <h5 class="card-title text-info">
@@ -137,6 +155,7 @@
                         </th>
                         <th>Nome</th>
                         <th>Descrição</th>
+                        <th width="100">Status</th>
                         <th width="120">Tamanho</th>
                         <th width="100">Uso</th>
                         <th width="150">Data de Criação</th>
@@ -164,6 +183,28 @@
                         <td>
                             <div class="text-truncate-custom" style="max-width: 250px;" title="{{ prompt.descricao or 'Sem descrição' }}">
                                 {{ prompt.descricao or 'Sem descrição' }}
+                            </div>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if prompt.ativo %}
+                                <span class="badge bg-success me-2">
+                                    <i class="bi bi-check-circle"></i>
+                                    Ativo
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary me-2">
+                                    <i class="bi bi-x-circle"></i>
+                                    Inativo
+                                </span>
+                                {% endif %}
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-{% if prompt.ativo %}warning{% else %}success{% endif %}"
+                                        data-prompt-id="{{ prompt.id }}"
+                                        onclick="togglePromptAtivo(this.dataset.promptId)"
+                                        title="{% if prompt.ativo %}Desativar{% else %}Ativar{% endif %} prompt">
+                                    <i class="bi bi-{% if prompt.ativo %}pause{% else %}play{% endif %}"></i>
+                                </button>
                             </div>
                         </td>
                         <td>
@@ -483,6 +524,36 @@ document.getElementById('btn-confirmar-exclusao').addEventListener('click', func
         promptParaExcluir = null;
     }
 });
+
+// Função para alternar status ativo/inativo de um prompt
+function togglePromptAtivo(promptId) {
+    if (!confirm('Tem certeza que deseja alterar o status deste prompt?')) {
+        return;
+    }
+    
+    fetch(`/api/prompts/${promptId}/toggle-ativo`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('Status do prompt alterado com sucesso!', 'success');
+            // Recarregar a página para atualizar o status
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Erro ao alterar status do prompt!', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao alternar status:', error);
+        showToast('Erro ao alterar status do prompt!', 'error');
+    });
+}
 
 // Event listener para executar teste
 document.getElementById('btn-executar-teste').addEventListener('click', function() {

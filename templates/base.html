@@ -80,6 +80,82 @@
             text-overflow: ellipsis;
         }
         
+        /* Estilos para alertas persistentes */
+        .persistent-alert {
+            border-left: 4px solid;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+            animation: slideInDown 0.3s ease-out;
+        }
+        
+        .persistent-alert.alert-success {
+            border-left-color: #198754;
+            background-color: #d1e7dd;
+            border-color: #badbcc;
+            color: #0f5132;
+        }
+        
+        .persistent-alert.alert-danger {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+            border-color: #f5c2c7;
+            color: #842029;
+        }
+        
+        .persistent-alert.alert-warning {
+            border-left-color: #ffc107;
+            background-color: #fff3cd;
+            border-color: #ffecb5;
+            color: #664d03;
+        }
+        
+        .persistent-alert.alert-info {
+            border-left-color: #0dcaf0;
+            background-color: #cff4fc;
+            border-color: #b6effb;
+            color: #055160;
+        }
+        
+        .persistent-alert .btn-close {
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+        
+        .persistent-alert .btn-close:hover {
+            opacity: 1;
+        }
+        
+        .persistent-alert .bi {
+            flex-shrink: 0;
+        }
+        
+        /* Animações */
+        @keyframes slideInDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutUp {
+            from {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+        }
+        
+        .persistent-alert.fade-out {
+            animation: slideOutUp 0.3s ease-in forwards;
+        }
+        
         .badge-status {
             font-size: 0.75rem;
         }
@@ -222,7 +298,8 @@
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
                             {% for category, message in messages %}
-                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show persistent-alert" role="alert">
+                                    <i class="bi bi-{{ 'check-circle' if category == 'success' else 'exclamation-triangle' if category == 'warning' else 'info-circle' if category == 'info' else 'x-circle' }} me-2"></i>
                                     {{ message }}
                                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                                 </div>
@@ -304,15 +381,123 @@
             }).format(num / 100);
         }
         
-        // Auto-hide alerts após 5 segundos
+        // Função para mostrar alerta persistente
+        function showPersistentAlert(message, type = 'info', title = null) {
+            const alertContainer = document.querySelector('.main-content');
+            const alertId = 'persistent-alert-' + Date.now();
+            
+            // Determinar o título baseado no tipo
+            let alertTitle = title;
+            if (!alertTitle) {
+                switch(type) {
+                    case 'success':
+                        alertTitle = 'Sucesso';
+                        break;
+                    case 'error':
+                    case 'danger':
+                        alertTitle = 'Erro';
+                        break;
+                    case 'warning':
+                        alertTitle = 'Atenção';
+                        break;
+                    case 'info':
+                    default:
+                        alertTitle = 'Informação';
+                        break;
+                }
+            }
+            
+            // Determinar o ícone baseado no tipo
+            let iconClass = 'bi-info-circle';
+            switch(type) {
+                case 'success':
+                    iconClass = 'bi-check-circle';
+                    break;
+                case 'error':
+                case 'danger':
+                    iconClass = 'bi-exclamation-triangle';
+                    break;
+                case 'warning':
+                    iconClass = 'bi-exclamation-triangle-fill';
+                    break;
+                case 'info':
+                default:
+                    iconClass = 'bi-info-circle';
+                    break;
+            }
+            
+            const alertHtml = `
+                <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show persistent-alert" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="bi ${iconClass} me-2 fs-5"></i>
+                        <div class="flex-grow-1">
+                            <strong class="me-2">${alertTitle}:</strong>
+                            ${message}
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            `;
+            
+            // Inserir no início do conteúdo principal, após as mensagens flash
+            const flashMessages = alertContainer.querySelector('.alert');
+            if (flashMessages) {
+                flashMessages.insertAdjacentHTML('afterend', alertHtml);
+            } else {
+                alertContainer.insertAdjacentHTML('afterbegin', alertHtml);
+            }
+            
+            // Fazer scroll suave para o alerta
+            const alertElement = document.getElementById(alertId);
+            if (alertElement) {
+                alertElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        // Função para mostrar alerta de sucesso persistente
+        function showSuccessAlert(message, title = null) {
+            showPersistentAlert(message, 'success', title);
+        }
+
+        // Função para mostrar alerta de erro persistente
+        function showErrorAlert(message, title = null) {
+            showPersistentAlert(message, 'danger', title);
+        }
+
+        // Função para mostrar alerta de aviso persistente
+        function showWarningAlert(message, title = null) {
+            showPersistentAlert(message, 'warning', title);
+        }
+
+        // Função para mostrar alerta de informação persistente
+        function showInfoAlert(message, title = null) {
+            showPersistentAlert(message, 'info', title);
+        }
+        
+        // Configurar alertas persistentes - NÃO auto-hide
         document.addEventListener('DOMContentLoaded', function() {
+            // Marcar todos os alertas como persistentes
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(alert => {
-                setTimeout(() => {
-                    const bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                }, 5000);
+                alert.classList.add('persistent-alert');
             });
+            
+            // Adicionar listener para novos alertas
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1 && node.classList && node.classList.contains('alert')) {
+                            node.classList.add('persistent-alert');
+                        }
+                    });
+                });
+            });
+            
+            // Observar mudanças no DOM
+            const mainContent = document.querySelector('.main-content');
+            if (mainContent) {
+                observer.observe(mainContent, { childList: true, subtree: true });
+            }
         });
     </script>
     

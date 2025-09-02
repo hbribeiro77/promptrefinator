@@ -40,6 +40,7 @@ class SQLiteService:
                     conteudo TEXT NOT NULL,
                     categoria TEXT,
                     tags TEXT, -- JSON array
+                    ativo BOOLEAN DEFAULT 1,
                     data_criacao TEXT NOT NULL,
                     total_usos INTEGER DEFAULT 0,
                     acuracia_media REAL DEFAULT 0.0,
@@ -154,9 +155,9 @@ class SQLiteService:
             # Inserir ou atualizar
             conn.execute('''
                 INSERT OR REPLACE INTO prompts 
-                (id, nome, descricao, regra_negocio, conteudo, categoria, tags, data_criacao, 
+                (id, nome, descricao, regra_negocio, conteudo, categoria, tags, ativo, data_criacao, 
                  total_usos, acuracia_media, tempo_medio, custo_total)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 prompt['id'],
                 prompt.get('nome', ''),
@@ -165,6 +166,7 @@ class SQLiteService:
                 prompt.get('conteudo', ''),
                 prompt.get('categoria', ''),
                 tags_json,
+                prompt.get('ativo', True),
                 prompt['data_criacao'],
                 prompt.get('total_usos', 0),
                 prompt.get('acuracia_media', 0.0),
@@ -180,6 +182,39 @@ class SQLiteService:
             cursor = conn.execute('DELETE FROM prompts WHERE id = ?', (prompt_id,))
             conn.commit()
             return cursor.rowcount > 0
+    
+    def toggle_prompt_ativo(self, prompt_id: str) -> bool:
+        """Alternar status ativo/inativo de um prompt"""
+        with self.get_connection() as conn:
+            # Obter status atual
+            cursor = conn.execute('SELECT ativo FROM prompts WHERE id = ?', (prompt_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False
+            
+            # Inverter status
+            novo_status = not bool(row[0])
+            cursor.execute('UPDATE prompts SET ativo = ? WHERE id = ?', (novo_status, prompt_id))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_prompts_ativos(self) -> List[Dict[str, Any]]:
+        """Obter apenas prompts ativos"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('SELECT * FROM prompts WHERE ativo = 1 ORDER BY data_criacao DESC')
+            prompts = []
+            for row in cursor.fetchall():
+                prompt = dict(row)
+                # Converter tags de JSON string para lista
+                if prompt['tags']:
+                    try:
+                        prompt['tags'] = json.loads(prompt['tags'])
+                    except:
+                        prompt['tags'] = []
+                else:
+                    prompt['tags'] = []
+                prompts.append(prompt)
+            return prompts
     
     def criar_prompt(self, prompt_data: Dict[str, Any]) -> str:
         """Criar um novo prompt (compatibilidade com DataService)"""

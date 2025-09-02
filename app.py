@@ -250,12 +250,18 @@ def listar_intimacoes():
         pagina = int(request.args.get('pagina', 1))
         busca = request.args.get('busca', '')
         classificacao = request.args.get('classificacao', '')
+        defensor = request.args.get('defensor', '')
         ordenacao = request.args.get('ordenacao', 'data_desc')
+        itens_por_pagina_usuario = request.args.get('itens_por_pagina', '')
         
-        print(f"DEBUG: Parâmetros - Página: {pagina}, Busca: '{busca}', Classificação: '{classificacao}', Ordenação: '{ordenacao}'")
+        print(f"DEBUG: Parâmetros - Página: {pagina}, Busca: '{busca}', Classificação: '{classificacao}', Ordenação: '{ordenacao}', Itens por página: '{itens_por_pagina_usuario}'")
         
         config = data_service.get_config()
-        itens_por_pagina = config.get('itens_por_pagina', 25)
+        # Usar o valor selecionado pelo usuário ou o padrão da configuração
+        if itens_por_pagina_usuario and itens_por_pagina_usuario.isdigit():
+            itens_por_pagina = int(itens_por_pagina_usuario)
+        else:
+            itens_por_pagina = config.get('itens_por_pagina', 25)
         print(f"DEBUG: Itens por página: {itens_por_pagina}")
         
         print("DEBUG: Carregando todas as intimações...")
@@ -286,6 +292,10 @@ def listar_intimacoes():
         if classificacao:
             intimacoes = [i for i in intimacoes if i.get('classificacao_manual') == classificacao]
             print(f"DEBUG: Após filtro de classificação: {len(intimacoes)}")
+        
+        if defensor:
+            intimacoes = [i for i in intimacoes if i.get('defensor') == defensor]
+            print(f"DEBUG: Após filtro de defensor: {len(intimacoes)}")
         
         # Aplicar ordenação
         if ordenacao == 'data_desc':
@@ -325,7 +335,8 @@ def listar_intimacoes():
                              config=config,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
-                             filtros={'busca': busca, 'classificacao': classificacao, 'ordenacao': ordenacao})
+                             defensores=Config.DEFENSORES,
+                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao})
     except Exception as e:
         flash(f'Erro ao carregar intimações: {str(e)}', 'error')
         return render_template('intimacoes.html',
@@ -337,7 +348,8 @@ def listar_intimacoes():
                              config={},
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
-                             filtros={'busca': '', 'classificacao': '', 'ordenacao': 'data_desc'})
+                             defensores=Config.DEFENSORES,
+                             filtros={'busca': '', 'classificacao': '', 'defensor': '', 'ordenacao': 'data_desc'})
 
 @app.route('/intimacoes/nova', methods=['GET', 'POST'])
 def nova_intimacao():
@@ -547,6 +559,7 @@ def listar_prompts():
         # Parâmetros de filtro e paginação
         pagina = int(request.args.get('pagina', 1))
         busca = request.args.get('busca', '')
+        status = request.args.get('status', '')
         tamanho = request.args.get('tamanho', '')
         ordenacao = request.args.get('ordenacao', 'data_desc')
         
@@ -555,10 +568,20 @@ def listar_prompts():
         
         prompts = data_service.get_all_prompts()
         
+        # Filtrar apenas prompts ativos se não for admin
+        # Por enquanto, mostrar todos para permitir gerenciamento
+        # prompts = data_service.get_prompts_ativos()
+        
         # Aplicar filtros
         if busca:
             prompts = [p for p in prompts if busca.lower() in p.get('nome', '').lower() or 
                       busca.lower() in p.get('descricao', '').lower()]
+        
+        if status:
+            if status == 'ativo':
+                prompts = [p for p in prompts if p.get('ativo', True)]
+            elif status == 'inativo':
+                prompts = [p for p in prompts if not p.get('ativo', True)]
         
         if tamanho:
             prompts = [p for p in prompts if (
@@ -588,6 +611,8 @@ def listar_prompts():
         # Estatísticas rápidas
         stats = {
             'total': total_itens,
+            'ativos': len([p for p in prompts if p.get('ativo', True)]),
+            'inativos': len([p for p in prompts if not p.get('ativo', True)]),
             'pequenos': len([p for p in prompts if len(p.get('conteudo', '')) <= 500]),
             'medios': len([p for p in prompts if 500 < len(p.get('conteudo', '')) <= 2000]),
             'grandes': len([p for p in prompts if len(p.get('conteudo', '')) > 2000])
@@ -600,7 +625,7 @@ def listar_prompts():
                              total_itens=total_itens,
                              stats=stats,
                              classificacoes=Config.TIPOS_ACAO,
-                             filtros={'busca': busca, 'tamanho': tamanho, 'ordenacao': ordenacao})
+                             filtros={'busca': busca, 'status': status, 'tamanho': tamanho, 'ordenacao': ordenacao})
     except Exception as e:
         flash(f'Erro ao carregar prompts: {str(e)}', 'error')
         return render_template('prompts.html',
@@ -608,9 +633,9 @@ def listar_prompts():
                              pagina_atual=1,
                              total_paginas=1,
                              total_itens=0,
-                             stats={'total': 0, 'pequenos': 0, 'medios': 0, 'grandes': 0},
+                             stats={'total': 0, 'ativos': 0, 'inativos': 0, 'pequenos': 0, 'medios': 0, 'grandes': 0},
                              classificacoes=Config.TIPOS_ACAO,
-                             filtros={'busca': '', 'tamanho': '', 'ordenacao': 'data_desc'})
+                             filtros={'busca': '', 'status': '', 'tamanho': '', 'ordenacao': 'data_desc'})
 
 @app.route('/prompts/novo', methods=['GET', 'POST'])
 def novo_prompt():
@@ -704,7 +729,7 @@ def visualizar_prompt(id):
 def analise():
     """Página para testar prompts com intimações"""
     try:
-        prompts = data_service.get_all_prompts()
+        prompts = data_service.get_prompts_ativos()
         intimacoes = data_service.get_all_intimacoes()
         config = data_service.get_config()
         
@@ -2176,6 +2201,19 @@ def duplicar_prompt(id):
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/prompts/<id>/toggle-ativo', methods=['POST'])
+def toggle_prompt_ativo(id):
+    """Alternar status ativo/inativo de um prompt"""
+    try:
+        success = data_service.toggle_prompt_ativo(id)
+        if success:
+            return jsonify({'success': True, 'message': 'Status do prompt alterado com sucesso'})
+        else:
+            return jsonify({'success': False, 'error': 'Prompt não encontrado'}), 404
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/configuracoes/testar-conexao', methods=['POST'])
 def testar_conexao_ai():

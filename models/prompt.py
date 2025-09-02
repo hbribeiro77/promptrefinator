@@ -10,6 +10,7 @@ class Prompt:
                  conteudo: str,
                  descricao: Optional[str] = None,
                  regra_negocio: Optional[str] = None,
+                 ativo: bool = True,
                  id: Optional[str] = None,
                  data_criacao: Optional[datetime] = None):
         """
@@ -27,6 +28,7 @@ class Prompt:
         self.nome = nome
         self.descricao = descricao or ""
         self.regra_negocio = regra_negocio or ""
+        self.ativo = ativo
         self.conteudo = conteudo
         self.data_criacao = data_criacao or datetime.now()
     
@@ -37,6 +39,7 @@ class Prompt:
             'nome': self.nome,
             'descricao': self.descricao,
             'regra_negocio': self.regra_negocio,
+            'ativo': self.ativo,
             'conteudo': self.conteudo,
             'data_criacao': self.data_criacao.isoformat() if isinstance(self.data_criacao, datetime) else self.data_criacao
         }
@@ -58,6 +61,7 @@ class Prompt:
             nome=data.get('nome', ''),
             descricao=data.get('descricao', ''),
             regra_negocio=data.get('regra_negocio', ''),
+            ativo=data.get('ativo', True),
             conteudo=data.get('conteudo', ''),
             data_criacao=data_criacao
         )

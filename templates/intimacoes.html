@@ -36,13 +36,13 @@
 <div class="card mb-4">
     <div class="card-body">
         <form method="GET" class="row g-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label for="busca" class="form-label">Buscar no contexto</label>
                 <input type="text" class="form-control" id="busca" name="busca" 
                        value="{{ request.args.get('busca', '') }}" 
                        placeholder="Digite palavras-chave...">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="classificacao" class="form-label">Classificação</label>
                 <select class="form-select" id="classificacao" name="classificacao">
                     <option value="">Todas as classificações</option>
@@ -54,7 +54,19 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label for="defensor" class="form-label">Defensor</label>
+                <select class="form-select" id="defensor" name="defensor">
+                    <option value="">Todos os defensores</option>
+                    {% for defensor in defensores %}
+                        <option value="{{ defensor }}" 
+                                {% if request.args.get('defensor') == defensor %}selected{% endif %}>
+                            {{ defensor }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label for="ordenacao" class="form-label">Ordenar por</label>
                 <select class="form-select" id="ordenacao" name="ordenacao">
                     <option value="data_desc" {% if request.args.get('ordenacao', 'data_desc') == 'data_desc' %}selected{% endif %}>Data (mais recente)</option>
@@ -63,6 +75,15 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <label for="itens_por_pagina" class="form-label">Itens por página</label>
+                <select class="form-select" id="itens_por_pagina" name="itens_por_pagina" onchange="alterarItensPorPagina(this.value)">
+                    <option value="10" {% if request.args.get('itens_por_pagina', '25') == '10' %}selected{% endif %}>10</option>
+                    <option value="25" {% if request.args.get('itens_por_pagina', '25') == '25' %}selected{% endif %}>25</option>
+                    <option value="50" {% if request.args.get('itens_por_pagina', '25') == '50' %}selected{% endif %}>50</option>
+                    <option value="100" {% if request.args.get('itens_por_pagina', '25') == '100' %}selected{% endif %}>100</option>
+                </select>
+            </div>
+            <div class="col-md-1">
                 <label class="form-label">&nbsp;</label>
                 <div class="d-grid">
                     <button type="submit" class="btn btn-outline-primary">
@@ -228,12 +249,13 @@
                                 </th>
                                 <th style="width: 22%;">Card da Intimação</th>
                                 <th style="width: 12%;">Classificação Manual</th>
-                                <th style="width: 15%;">Informações Adicionais</th>
-                                <th style="width: 12%;">Defensor</th>
-                                <th style="width: 10%;">ID Tarefa</th>
-                                <th style="width: 8%;">Cor</th>
-                                <th style="width: 10%;">Data de Criação</th>
-                                <th style="width: 8%;">Ações</th>
+                                <th style="width: 12%;">Informações Adicionais</th>
+                                <th style="width: 10%;">Classe</th>
+                                <th style="width: 10%;">Defensor</th>
+                                <th style="width: 8%;">ID Tarefa</th>
+                                <th style="width: 6%;">Cor</th>
+                                <th style="width: 8%;">Data de Criação</th>
+                                <th style="width: 6%;">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -260,6 +282,15 @@
                                     <div class="info-adicional-text" title="{{ intimacao.informacao_adicional }}">
                                         {{ intimacao.informacao_adicional[:50] }}{% if intimacao.informacao_adicional|length > 50 %}...{% endif %}
                                     </div>
+                                    {% else %}
+                                    <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="classe-cell">
+                                    {% if intimacao.classe %}
+                                    <span class="badge bg-secondary" title="{{ intimacao.classe }}">
+                                        {{ intimacao.classe[:12] }}{% if intimacao.classe|length > 12 %}...{% endif %}
+                                    </span>
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
@@ -330,6 +361,66 @@
                         </tbody>
                     </table>
                 </div>
+                
+                <!-- Paginação -->
+                {% if total_paginas > 1 %}
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mt-3 gap-2">
+                    <div class="text-muted text-center text-md-start">
+                        <small>
+                            <i class="bi bi-info-circle me-1"></i>
+                            Mostrando {{ ((pagina_atual - 1) * config.get('itens_por_pagina', 25)) + 1 }} a 
+                            {{ [pagina_atual * config.get('itens_por_pagina', 25), total_itens] | min }} 
+                            de {{ total_itens }} intimações
+                            <span class="badge bg-primary ms-1">Página {{ pagina_atual }} de {{ total_paginas }}</span>
+                        </small>
+                    </div>
+                    
+                    <nav aria-label="Paginação das intimações">
+                        <ul class="pagination pagination-sm mb-0">
+                            <!-- Primeira página -->
+                            <li class="page-item {% if pagina_atual == 1 %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}" {% if pagina_atual == 1 %}aria-disabled="true"{% endif %}>
+                                    <i class="bi bi-chevron-double-left"></i>
+                                </a>
+                            </li>
+                            
+                            <!-- Página anterior -->
+                            {% if pagina_atual > 1 %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual-1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">
+                                    <i class="bi bi-chevron-left"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Páginas numeradas -->
+                            {% set inicio_paginas = [1, pagina_atual-2] | max %}
+                            {% set fim_paginas = [total_paginas+1, pagina_atual+3] | min %}
+                            {% for p in range(inicio_paginas, fim_paginas) %}
+                            <li class="page-item {% if p == pagina_atual %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=p, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">{{ p }}</a>
+                            </li>
+                            {% endfor %}
+                            
+                            <!-- Próxima página -->
+                            {% if pagina_atual < total_paginas %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual+1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">
+                                    <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Última página -->
+                            <li class="page-item {% if pagina_atual == total_paginas %}disabled{% endif %}">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=total_paginas, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}" {% if pagina_atual == total_paginas %}aria-disabled="true"{% endif %}>
+                                    <i class="bi bi-chevron-double-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -357,6 +448,14 @@
 {% block extra_js %}
 <script>
 let intimacaoParaExcluir = null;
+
+// Função para alterar itens por página
+function alterarItensPorPagina(valor) {
+    const url = new URL(window.location);
+    url.searchParams.set('itens_por_pagina', valor);
+    url.searchParams.set('pagina', '1'); // Voltar para primeira página
+    window.location.href = url.toString();
+}
 
 // Funções para gerenciamento de checkboxes
 function toggleTodasIntimacoes(checkbox) {
@@ -777,6 +876,10 @@ function copiarContexto() {
 
 /* Células da tabela */
 .classificacao-cell {
+    text-align: center;
+}
+
+.classe-cell {
     text-align: center;
 }
 
