@@ -2881,7 +2881,7 @@ def obter_informacoes_adicionais_intimacoes():
             if intimacao:
                 intimacoes.append({
                     'id': intimacao_id,
-                    'informacoes_adicionais': intimacao.get('informacao_adicional', '')
+                    'informacao_adicional': intimacao.get('informacao_adicional', '')
                 })
         
         return jsonify({
@@ -2893,6 +2893,43 @@ def obter_informacoes_adicionais_intimacoes():
         return jsonify({
             'success': False,
             'message': f'Erro ao buscar informações: {str(e)}'
+        }), 500
+
+@app.route('/api/analises/informacoes-adicionais', methods=['POST'])
+def obter_informacoes_adicionais_analises():
+    """Obter informações adicionais de múltiplas análises"""
+    try:
+        data = request.get_json()
+        analises_ids = data.get('analises_ids', [])
+        
+        if not analises_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhuma análise selecionada'
+            }), 400
+        
+        # Buscar análises no banco
+        analises = []
+        for analise_id in analises_ids:
+            analise = data_service.get_analise_by_id(analise_id)
+            if analise:
+                # Buscar intimação associada para obter informações adicionais
+                intimacao = data_service.get_intimacao_by_id(analise.get('intimacao_id'))
+                analises.append({
+                    'id': analise_id,
+                    'intimacao_id': analise.get('intimacao_id'),
+                    'informacao_adicional': intimacao.get('informacao_adicional', '') if intimacao else ''
+                })
+        
+        return jsonify({
+            'success': True,
+            'analises': analises
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter informações: {str(e)}'
         }), 500
 
 @app.route('/api/backup/restaurar', methods=['POST'])

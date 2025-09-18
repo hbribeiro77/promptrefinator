@@ -1,0 +1,131 @@
+<!-- Modal para visualizar informações adicionais em lote -->
+<div class="modal fade" id="modalInformacoesAdicionais" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle text-primary"></i>
+                    <span id="modal-titulo">Informações Adicionais</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge bg-primary" id="contador-modal">0 itens selecionados</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTodasInformacoes()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Todas
+                        </button>
+                    </div>
+                </div>
+                <div id="lista-informacoes-adicionais">
+                    <!-- Conteúdo será preenchido via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="copiarTodasInformacoes()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Todas as Informações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Funções reutilizáveis para modal de informações adicionais
+function mostrarModalInformacoesAdicionais(titulo, dados, tipoItem = 'item') {
+    const modal = document.getElementById('modalInformacoesAdicionais');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const contadorModal = document.getElementById('contador-modal');
+    const container = document.getElementById('lista-informacoes-adicionais');
+    
+    // Configurar título
+    modalTitulo.textContent = titulo;
+    contadorModal.textContent = `${dados.length} ${tipoItem}(s) selecionado(s)`;
+    
+    // Limpar container
+    container.innerHTML = '';
+    
+    // Preencher com dados
+    let html = '';
+    
+    dados.forEach((item, index) => {
+        const temInformacao = item.informacao_adicional && item.informacao_adicional.trim();
+        
+        html += `
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="bi bi-file-text text-primary"></i>
+                        ${tipoItem.charAt(0).toUpperCase() + tipoItem.slice(1)} ${index + 1} - ID: ${item.id}
+                    </h6>
+                    ${temInformacao ? `
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarInformacao('${item.id}')">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="card-body">
+                    ${temInformacao ? `
+                        <div class="mb-2">
+                            <strong>Informações Adicionais:</strong>
+                        </div>
+                        <div class="bg-light p-3 rounded" id="info-${item.id}">
+                            ${item.informacao_adicional.replace(/\n/g, '<br>')}
+                        </div>
+                    ` : `
+                        <div class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Nenhuma informação adicional cadastrada para este ${tipoItem}.
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Mostrar modal
+    const bootstrapModal = new bootstrap.Modal(modal);
+    bootstrapModal.show();
+}
+
+function copiarInformacao(itemId) {
+    const elemento = document.getElementById(`info-${itemId}`);
+    if (elemento) {
+        const texto = elemento.textContent || elemento.innerText;
+        navigator.clipboard.writeText(texto).then(() => {
+            showToast('Informação copiada para a área de transferência!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar informação!', 'error');
+        });
+    }
+}
+
+function copiarTodasInformacoes() {
+    const elementos = document.querySelectorAll('[id^="info-"]');
+    let todasInformacoes = '';
+    
+    elementos.forEach((elemento, index) => {
+        const texto = elemento.textContent || elemento.innerText;
+        if (texto.trim()) {
+            todasInformacoes += `=== INFORMAÇÃO ${index + 1} ===\n${texto}\n\n`;
+        }
+    });
+    
+    if (todasInformacoes.trim()) {
+        navigator.clipboard.writeText(todasInformacoes).then(() => {
+            showToast('Todas as informações foram copiadas para a área de transferência!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar informações!', 'error');
+        });
+    } else {
+        showToast('Nenhuma informação adicional encontrada!', 'warning');
+    }
+}
+</script>

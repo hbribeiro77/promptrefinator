@@ -160,41 +160,8 @@
     </div>
 </div>
 
-<!-- Modal para visualizar informações adicionais em lote -->
-<div class="modal fade" id="modalInformacoesAdicionais" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-info-circle text-primary"></i>
-                    Informações Adicionais das Intimações Selecionadas
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="badge bg-primary" id="contador-modal">0 intimações selecionadas</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTodasInformacoes()">
-                            <i class="bi bi-clipboard"></i>
-                            Copiar Todas
-                        </button>
-                    </div>
-                </div>
-                <div id="lista-informacoes-adicionais">
-                    <!-- Conteúdo será preenchido via JavaScript -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-outline-primary" onclick="copiarTodasInformacoes()">
-                    <i class="bi bi-clipboard"></i>
-                    Copiar Todas as Informações
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Incluir componente modal de informações adicionais -->
+{% include 'partials/modal_informacoes_adicionais.html' %}
 
 <!-- Modal para visualizar contexto da intimação -->
 <div class="modal fade" id="modalContextoIntimacao" tabindex="-1">
@@ -516,9 +483,11 @@ function mostrarInformacoesAdicionais() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            preencherModalInformacoes(data.intimacoes);
-            const modal = new bootstrap.Modal(document.getElementById('modalInformacoesAdicionais'));
-            modal.show();
+            mostrarModalInformacoesAdicionais(
+                'Informações Adicionais das Intimações Selecionadas',
+                data.intimacoes,
+                'intimação'
+            );
         } else {
             showToast(`Erro: ${data.message}`, 'error');
         }
@@ -529,86 +498,6 @@ function mostrarInformacoesAdicionais() {
     });
 }
 
-function preencherModalInformacoes(intimacoes) {
-    const container = document.getElementById('lista-informacoes-adicionais');
-    const contadorModal = document.getElementById('contador-modal');
-    
-    contadorModal.textContent = `${intimacoes.length} intimação(ões) selecionada(s)`;
-    
-    let html = '';
-    
-    intimacoes.forEach((intimacao, index) => {
-        const temInformacao = intimacao.informacoes_adicionais && intimacao.informacoes_adicionais.trim();
-        
-        html += `
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">
-                        <i class="bi bi-file-text text-primary"></i>
-                        Intimação ${index + 1} - ID: ${intimacao.id}
-                    </h6>
-                    ${temInformacao ? `
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarInformacao('${intimacao.id}')">
-                            <i class="bi bi-clipboard"></i>
-                            Copiar
-                        </button>
-                    ` : ''}
-                </div>
-                <div class="card-body">
-                    ${temInformacao ? `
-                        <div class="mb-2">
-                            <strong>Informações Adicionais:</strong>
-                        </div>
-                        <div class="bg-light p-3 rounded" id="info-${intimacao.id}">
-                            ${intimacao.informacoes_adicionais.replace(/\n/g, '<br>')}
-                        </div>
-                    ` : `
-                        <div class="text-muted">
-                            <i class="bi bi-info-circle"></i>
-                            Nenhuma informação adicional cadastrada para esta intimação.
-                        </div>
-                    `}
-                </div>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-}
-
-function copiarInformacao(intimacaoId) {
-    const elemento = document.getElementById(`info-${intimacaoId}`);
-    if (elemento) {
-        const texto = elemento.innerText;
-        navigator.clipboard.writeText(texto).then(() => {
-            showToast('Informação copiada para a área de transferência!', 'success');
-        }).catch(() => {
-            showToast('Erro ao copiar informação!', 'error');
-        });
-    }
-}
-
-function copiarTodasInformacoes() {
-    const elementos = document.querySelectorAll('#lista-informacoes-adicionais .bg-light');
-    if (elementos.length === 0) {
-        showToast('Nenhuma informação para copiar!', 'warning');
-        return;
-    }
-    
-    let todasInformacoes = '';
-    elementos.forEach((elemento, index) => {
-        const intimacaoId = elemento.id.replace('info-', '');
-        todasInformacoes += `=== INTIMAÇÃO ${index + 1} (ID: ${intimacaoId}) ===\n`;
-        todasInformacoes += elemento.innerText;
-        todasInformacoes += '\n\n';
-    });
-    
-    navigator.clipboard.writeText(todasInformacoes).then(() => {
-        showToast('Todas as informações copiadas para a área de transferência!', 'success');
-    }).catch(() => {
-        showToast('Erro ao copiar informações!', 'error');
-    });
-}
 
 
 

@@ -189,6 +189,89 @@
     </div>
     {% endif %}
 
+    <!-- Filtros -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="bi bi-funnel text-primary"></i>
+                Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Status</label>
+                    <select class="form-select" id="filtro-status" onchange="aplicarFiltros()">
+                        <option value="todos">Todos</option>
+                        <option value="acertou">Acertou</option>
+                        <option value="errou">Errou</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Taxa de Acerto</label>
+                    <select class="form-select" id="filtro-taxa-acerto" onchange="aplicarFiltros()">
+                        <option value="todos">Todas as taxas</option>
+                        <option value="0-25">0% - 25%</option>
+                        <option value="25-50">25% - 50%</option>
+                        <option value="50-75">50% - 75%</option>
+                        <option value="75-100">75% - 100%</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="button" class="btn btn-outline-secondary" onclick="limparFiltros()">
+                        <i class="bi bi-x-circle"></i>
+                        Limpar Filtros
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-12">
+                    <small class="text-muted">
+                        <span id="contador-filtrados">Carregando...</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de Ações em Lote -->
+    <div class="card mb-3" id="barra-acoes-lote" style="display: none;">
+        <div class="card-body py-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-primary me-2" id="contador-selecionadas">0 selecionadas</span>
+                    <span class="text-muted">Ações em lote:</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="reanalisarSelecionadas()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Re-analisar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="verInformacoesAdicionaisSelecionadas()">
+                        <i class="bi bi-info-circle"></i>
+                        Ver Informações Adicionais
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-success" onclick="exportarSelecionadas()">
+                        <i class="bi bi-download"></i>
+                        Exportar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" onclick="compararSelecionadas()">
+                        <i class="bi bi-bar-chart"></i>
+                        Comparar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirSelecionadas()">
+                        <i class="bi bi-trash"></i>
+                        Excluir
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limparSelecoes()">
+                        <i class="bi bi-x"></i>
+                        Limpar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Resultados das Análises -->
     <div class="card">
         <div class="card-header">
@@ -218,6 +301,10 @@
             <div class="row">
                 <div class="col-md-3">
                     <h6 class="text-muted mb-2">Colunas Básicas</h6>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-selecao" checked>
+                        <label class="form-check-label" for="col-selecao">Seleção</label>
+                    </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="col-intimacao" checked>
                         <label class="form-check-label" for="col-intimacao">Intimação</label>
@@ -256,6 +343,10 @@
                         <input class="form-check-input" type="checkbox" id="col-tokens" checked>
                         <label class="form-check-label" for="col-tokens">Tokens</label>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="col-acerto-individual" checked>
+                        <label class="form-check-label" for="col-acerto-individual">% de Acerto</label>
+                    </div>
                 </div>
                 <div class="col-md-3">
                     <h6 class="text-muted mb-2">Ações</h6>
@@ -283,6 +374,9 @@
                 <table class="table table-hover mb-0">
                     <thead class="table-light">
                         <tr>
+                            <th class="col-selecao" style="width: 30px; text-align: center;">
+                                <input type="checkbox" id="selecionar-todos" onchange="toggleSelecaoTodos()" title="Selecionar todos">
+                            </th>
                             <th class="col-intimacao">Intimação</th>
                             <th class="col-classificacao-manual">Classificação Manual</th>
                             <th class="col-informacao-adicional">Informação Adicional</th>
@@ -291,12 +385,19 @@
                             <th class="col-tempo">Tempo</th>
                             <th class="col-custo">Custo</th>
                             <th class="col-tokens">Tokens</th>
+                            <th class="col-acerto-individual">% de Acerto</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for analise in analises %}
-                        <tr>
+                        <tr class="linha-analise" 
+                            data-status="{% if analise.acertou %}acertou{% else %}errou{% endif %}"
+                            data-taxa-acerto="{{ analise.taxa_acerto_intimacao }}"
+                            data-analise-id="{{ analise.id }}">
+                            <td class="col-selecao" style="text-align: center;">
+                                <input type="checkbox" class="checkbox-analise" value="{{ analise.id }}" onchange="atualizarSelecoes()">
+                            </td>
                             <td class="col-intimacao">
                                 {% set intimacao = {
                                     'id': analise.intimacao_id,
@@ -347,6 +448,16 @@
                                 <small class="text-muted">
                                     {{ analise.tokens_input or 0 }}/{{ analise.tokens_output or 0 }}
                                 </small>
+                            </td>
+                            <td class="col-acerto-individual">
+                                <div class="d-flex flex-column align-items-center">
+                                    <span class="badge bg-primary mb-1">
+                                        {{ analise.taxa_acerto_intimacao }}%
+                                    </span>
+                                    <small class="text-muted">
+                                        {{ analise.acertos_intimacao }}/{{ analise.total_testes_intimacao }}
+                                    </small>
+                                </div>
                             </td>
                             <td>
                                 <div class="btn-group btn-group-sm">
@@ -452,8 +563,36 @@
 
 {% endblock %}
 
+<!-- Incluir componente modal de informações adicionais -->
+{% include 'partials/modal_informacoes_adicionais.html' %}
+
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+/* Coluna de seleção compacta */
+.col-selecao {
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+    padding: 8px 4px !important;
+}
+
+.col-selecao input[type="checkbox"] {
+    margin: 0;
+    transform: scale(0.9);
+}
+
+/* Garantir que a tabela não quebre com a coluna compacta */
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* Ajustar espaçamento das outras colunas */
+.table th:not(.col-selecao),
+.table td:not(.col-selecao) {
+    padding-left: 12px;
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -623,7 +762,212 @@ let configuracaoColunas = {};
 document.addEventListener('DOMContentLoaded', function() {
     carregarConfiguracaoColunas();
     aplicarConfiguracaoColunas();
+    inicializarFiltros();
 });
+
+// Funções de Filtro
+function inicializarFiltros() {
+    aplicarFiltros();
+}
+
+function aplicarFiltros() {
+    const filtroStatus = document.getElementById('filtro-status').value;
+    const filtroTaxaAcerto = document.getElementById('filtro-taxa-acerto').value;
+    const linhas = document.querySelectorAll('.linha-analise');
+    let contadorVisiveis = 0;
+    
+    linhas.forEach(linha => {
+        let mostrar = true;
+        
+        // Filtro por status
+        if (filtroStatus !== 'todos') {
+            const statusLinha = linha.getAttribute('data-status');
+            if (statusLinha !== filtroStatus) {
+                mostrar = false;
+            }
+        }
+        
+        // Filtro por taxa de acerto
+        if (filtroTaxaAcerto !== 'todos' && mostrar) {
+            const taxaAcerto = parseFloat(linha.getAttribute('data-taxa-acerto'));
+            const [min, max] = filtroTaxaAcerto.split('-').map(Number);
+            
+            if (taxaAcerto < min || taxaAcerto > max) {
+                mostrar = false;
+            }
+        }
+        
+        // Aplicar visibilidade
+        if (mostrar) {
+            linha.style.display = '';
+            contadorVisiveis++;
+        } else {
+            linha.style.display = 'none';
+        }
+    });
+    
+    // Atualizar contador
+    const totalLinhas = linhas.length;
+    document.getElementById('contador-filtrados').textContent = 
+        `Mostrando ${contadorVisiveis} de ${totalLinhas} análises`;
+    
+    // Atualizar estado das seleções após aplicar filtros
+    atualizarSelecoes();
+}
+
+function limparFiltros() {
+    document.getElementById('filtro-status').value = 'todos';
+    document.getElementById('filtro-taxa-acerto').value = 'todos';
+    aplicarFiltros();
+}
+
+// Funções de Seleção Múltipla
+function toggleSelecaoTodos() {
+    const selecionarTodos = document.getElementById('selecionar-todos');
+    const checkboxes = document.querySelectorAll('.checkbox-analise');
+    
+    // Selecionar apenas checkboxes de linhas visíveis
+    checkboxes.forEach(checkbox => {
+        const linha = checkbox.closest('.linha-analise');
+        if (linha && linha.style.display !== 'none') {
+            checkbox.checked = selecionarTodos.checked;
+        }
+    });
+    
+    atualizarSelecoes();
+}
+
+function atualizarSelecoes() {
+    const checkboxes = document.querySelectorAll('.checkbox-analise');
+    const selecionados = document.querySelectorAll('.checkbox-analise:checked');
+    const selecionarTodos = document.getElementById('selecionar-todos');
+    const barraAcoes = document.getElementById('barra-acoes-lote');
+    const contador = document.getElementById('contador-selecionadas');
+    
+    // Contar apenas checkboxes de linhas visíveis
+    const checkboxesVisiveis = Array.from(checkboxes).filter(checkbox => {
+        const linha = checkbox.closest('.linha-analise');
+        return linha && linha.style.display !== 'none';
+    });
+    
+    const selecionadosVisiveis = Array.from(selecionados).filter(checkbox => {
+        const linha = checkbox.closest('.linha-analise');
+        return linha && linha.style.display !== 'none';
+    });
+    
+    // Atualizar checkbox "Selecionar Todos" baseado apenas nas linhas visíveis
+    if (selecionadosVisiveis.length === 0) {
+        selecionarTodos.indeterminate = false;
+        selecionarTodos.checked = false;
+    } else if (selecionadosVisiveis.length === checkboxesVisiveis.length && checkboxesVisiveis.length > 0) {
+        selecionarTodos.indeterminate = false;
+        selecionarTodos.checked = true;
+    } else {
+        selecionarTodos.indeterminate = true;
+        selecionarTodos.checked = false;
+    }
+    
+    // Mostrar/ocultar barra de ações
+    if (selecionados.length > 0) {
+        barraAcoes.style.display = 'block';
+        contador.textContent = `${selecionados.length} selecionada${selecionados.length > 1 ? 's' : ''}`;
+    } else {
+        barraAcoes.style.display = 'none';
+    }
+}
+
+function limparSelecoes() {
+    const checkboxes = document.querySelectorAll('.checkbox-analise');
+    const selecionarTodos = document.getElementById('selecionar-todos');
+    
+    // Limpar apenas checkboxes de linhas visíveis
+    checkboxes.forEach(checkbox => {
+        const linha = checkbox.closest('.linha-analise');
+        if (linha && linha.style.display !== 'none') {
+            checkbox.checked = false;
+        }
+    });
+    
+    selecionarTodos.checked = false;
+    selecionarTodos.indeterminate = false;
+    
+    atualizarSelecoes();
+}
+
+// Funções de Ações em Lote
+function reanalisarSelecionadas() {
+    const selecionados = getAnalisesSelecionadas();
+    if (selecionados.length === 0) return;
+    
+    // TODO: Implementar modal para selecionar prompt e re-analisar
+    alert(`Re-analisar ${selecionados.length} análises selecionadas`);
+}
+
+function verInformacoesAdicionaisSelecionadas() {
+    const selecionados = getAnalisesSelecionadas();
+    if (selecionados.length === 0) {
+        showToast('Selecione pelo menos uma análise!', 'warning');
+        return;
+    }
+    
+    // Buscar informações das análises selecionadas
+    fetch('/api/analises/informacoes-adicionais', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            analises_ids: selecionados
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarModalInformacoesAdicionais(
+                'Informações Adicionais das Análises Selecionadas',
+                data.analises,
+                'análise'
+            );
+        } else {
+            showToast(`Erro: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao buscar informações:', error);
+        showToast('Erro ao buscar informações das análises!', 'error');
+    });
+}
+
+function exportarSelecionadas() {
+    const selecionados = getAnalisesSelecionadas();
+    if (selecionados.length === 0) return;
+    
+    // TODO: Implementar exportação das análises selecionadas
+    alert(`Exportar ${selecionados.length} análises selecionadas`);
+}
+
+function compararSelecionadas() {
+    const selecionados = getAnalisesSelecionadas();
+    if (selecionados.length === 0) return;
+    
+    // TODO: Implementar comparação das análises selecionadas
+    alert(`Comparar ${selecionados.length} análises selecionadas`);
+}
+
+function excluirSelecionadas() {
+    const selecionados = getAnalisesSelecionadas();
+    if (selecionados.length === 0) return;
+    
+    if (confirm(`Tem certeza que deseja excluir ${selecionados.length} análises selecionadas?`)) {
+        // TODO: Implementar exclusão das análises selecionadas
+        alert(`Excluir ${selecionados.length} análises selecionadas`);
+    }
+}
+
+function getAnalisesSelecionadas() {
+    const checkboxes = document.querySelectorAll('.checkbox-analise:checked');
+    return Array.from(checkboxes).map(checkbox => checkbox.value);
+}
 
 function carregarConfiguracaoColunas() {
     const configSalva = localStorage.getItem('configuracaoColunasSessao');
@@ -631,6 +975,7 @@ function carregarConfiguracaoColunas() {
         configuracaoColunas = JSON.parse(configSalva);
     } else {
         configuracaoColunas = {
+            selecao: true,
             intimacao: true,
             classificacao_manual: true,
             resultado_ia: true,
@@ -638,7 +983,8 @@ function carregarConfiguracaoColunas() {
             status: true,
             tempo: true,
             custo: true,
-            tokens: true
+            tokens: true,
+            acerto_individual: true
         };
     }
     
@@ -657,6 +1003,7 @@ function aplicarConfiguracaoColunas() {
         configuracaoColunas = JSON.parse(configSalva);
     } else {
         configuracaoColunas = {
+            selecao: true,
             intimacao: true,
             classificacao_manual: true,
             resultado_ia: true,
@@ -664,12 +1011,14 @@ function aplicarConfiguracaoColunas() {
             status: true,
             tempo: true,
             custo: true,
-            tokens: true
+            tokens: true,
+            acerto_individual: true
         };
     }
     
     // Aplicar visibilidade das colunas
     const colunas = {
+        'selecao': '.col-selecao',
         'intimacao': '.col-intimacao',
         'classificacao_manual': '.col-classificacao-manual',
         'resultado_ia': '.col-resultado-ia',
@@ -677,7 +1026,8 @@ function aplicarConfiguracaoColunas() {
         'status': '.col-status',
         'tempo': '.col-tempo',
         'custo': '.col-custo',
-        'tokens': '.col-tokens'
+        'tokens': '.col-tokens',
+        'acerto_individual': '.col-acerto-individual'
     };
     
     Object.keys(colunas).forEach(key => {

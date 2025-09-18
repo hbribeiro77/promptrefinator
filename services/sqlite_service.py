@@ -623,6 +623,18 @@ class SQLiteService:
                 return sessao
             return None
     
+    def get_analise_by_id(self, analise_id: str) -> Optional[Dict[str, Any]]:
+        """Obter uma análise específica por ID"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT * FROM analises WHERE id = ?
+            ''', (analise_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
     def get_analises_por_sessao(self, session_id: str) -> List[Dict[str, Any]]:
         """Obter todas as análises de uma sessão específica"""
         with self.get_connection() as conn:
@@ -634,7 +646,13 @@ class SQLiteService:
                     i.classificacao_manual,
                     i.informacao_adicional,
                     i.intimado,
-                    i.status as status_intimacao
+                    i.status as status_intimacao,
+                    -- Estatísticas do prompt para esta intimação específica
+                    (SELECT COUNT(*) FROM analises a2 WHERE a2.prompt_id = a.prompt_id AND a2.intimacao_id = a.intimacao_id) as total_testes_intimacao,
+                    (SELECT COUNT(*) FROM analises a3 WHERE a3.prompt_id = a.prompt_id AND a3.intimacao_id = a.intimacao_id AND a3.acertou = 1) as acertos_intimacao,
+                    -- Estatísticas gerais do prompt
+                    (SELECT COUNT(*) FROM analises a4 WHERE a4.prompt_id = a.prompt_id) as total_testes_prompt,
+                    (SELECT COUNT(*) FROM analises a5 WHERE a5.prompt_id = a.prompt_id AND a5.acertou = 1) as acertos_prompt
                 FROM analises a
                 LEFT JOIN intimacoes i ON a.intimacao_id = i.id
                 WHERE a.session_id = ?
@@ -643,7 +661,25 @@ class SQLiteService:
             
             analises = []
             for row in cursor.fetchall():
-                analises.append(dict(row))
+                analise = dict(row)
+                
+                # Calcular taxa de acerto individual (para esta intimação específica)
+                total_testes_intimacao = analise.get('total_testes_intimacao', 0)
+                acertos_intimacao = analise.get('acertos_intimacao', 0)
+                if total_testes_intimacao > 0:
+                    analise['taxa_acerto_intimacao'] = round((acertos_intimacao / total_testes_intimacao) * 100, 1)
+                else:
+                    analise['taxa_acerto_intimacao'] = 0.0
+                
+                # Calcular taxa de acerto geral do prompt
+                total_testes_prompt = analise.get('total_testes_prompt', 0)
+                acertos_prompt = analise.get('acertos_prompt', 0)
+                if total_testes_prompt > 0:
+                    analise['taxa_acerto_prompt'] = round((acertos_prompt / total_testes_prompt) * 100, 1)
+                else:
+                    analise['taxa_acerto_prompt'] = 0.0
+                
+                analises.append(analise)
             return analises
     
     def criar_sessao_analise(self, session_id: str, prompt_id: str, prompt_nome: str, 
