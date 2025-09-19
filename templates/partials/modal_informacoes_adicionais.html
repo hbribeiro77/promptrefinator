@@ -11,13 +11,19 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="badge bg-primary" id="contador-modal">0 itens selecionados</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTodasInformacoes()">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="badge bg-primary" id="contador-modal">0 itens selecionados</span>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarTodasInformacoes()">
                             <i class="bi bi-clipboard"></i>
-                            Copiar Todas
+                            Copiar Todas as Infos
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="copiarTodosContextoEInfo()">
+                            <i class="bi bi-clipboard-plus"></i>
+                            Copiar Todos Contexto + Info
                         </button>
                     </div>
+                </div>
                 </div>
                 <div id="lista-informacoes-adicionais">
                     <!-- Conteúdo será preenchido via JavaScript -->
@@ -25,10 +31,6 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-outline-primary" onclick="copiarTodasInformacoes()">
-                    <i class="bi bi-clipboard"></i>
-                    Copiar Todas as Informações
-                </button>
             </div>
         </div>
     </div>
@@ -63,19 +65,48 @@ function mostrarModalInformacoesAdicionais(titulo, dados, tipoItem = 'item') {
                         ${tipoItem.charAt(0).toUpperCase() + tipoItem.slice(1)} ${index + 1} - ID: ${item.id}
                     </h6>
                     ${temInformacao ? `
-                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarInformacao('${item.id}')">
-                            <i class="bi bi-clipboard"></i>
-                            Copiar
-                        </button>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-primary" onclick="copiarInformacao('${item.id}')">
+                                <i class="bi bi-clipboard"></i>
+                                Copiar Info
+                            </button>
+                            ${item.contexto ? `
+                                <button type="button" class="btn btn-outline-success" onclick="copiarContextoEInfo('${item.id}')">
+                                    <i class="bi bi-clipboard-plus"></i>
+                                    Copiar Contexto + Info
+                                </button>
+                            ` : ''}
+                        </div>
                     ` : ''}
                 </div>
                 <div class="card-body">
+                    ${item.contexto ? `
+                        <div class="mb-3">
+                            <div class="mb-2">
+                                <strong>Contexto da Intimação:</strong>
+                            </div>
+                            <div class="bg-light p-3 rounded" id="contexto-${item.id}" style="max-height: 200px; overflow-y: auto;">
+                                ${item.contexto.replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
                     ${temInformacao ? `
                         <div class="mb-2">
-                            <strong>Informações Adicionais:</strong>
-                        </div>
-                        <div class="bg-light p-3 rounded" id="info-${item.id}">
-                            ${item.informacao_adicional.replace(/\n/g, '<br>')}
+                            <div class="mb-2">
+                                <strong>Informação Adicional:</strong>
+                            </div>
+                            <div class="bg-light p-3 rounded" id="info-${item.id}">
+                                ${item.informacao_adicional.replace(/\n/g, '<br>')}
+                            </div>
+                            ${item.contexto ? `
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i>
+                                        A informação adicional é um complemento/síntese do contexto da intimação.
+                                    </small>
+                                </div>
+                            ` : ''}
                         </div>
                     ` : `
                         <div class="text-muted">
@@ -107,14 +138,34 @@ function copiarInformacao(itemId) {
     }
 }
 
+
+function copiarContextoEInfo(itemId) {
+    const contextoElemento = document.getElementById(`contexto-${itemId}`);
+    const infoElemento = document.getElementById(`info-${itemId}`);
+    
+    if (contextoElemento && infoElemento) {
+        const contexto = contextoElemento.textContent || contextoElemento.innerText;
+        const informacao = infoElemento.textContent || infoElemento.innerText;
+        
+        const textoCompleto = `=== CONTEXTO DA INTIMAÇÃO ===\n\n${contexto}\n\n=== INFORMAÇÃO ADICIONAL ===\n\n${informacao}`;
+        
+        navigator.clipboard.writeText(textoCompleto).then(() => {
+            showToast('Contexto + Informação copiados para a área de transferência!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar contexto e informação!', 'error');
+        });
+    }
+}
+
 function copiarTodasInformacoes() {
-    const elementos = document.querySelectorAll('[id^="info-"]');
+    const elementosInfo = document.querySelectorAll('[id^="info-"]');
     let todasInformacoes = '';
     
-    elementos.forEach((elemento, index) => {
-        const texto = elemento.textContent || elemento.innerText;
-        if (texto.trim()) {
-            todasInformacoes += `=== INFORMAÇÃO ${index + 1} ===\n${texto}\n\n`;
+    elementosInfo.forEach((elemento, index) => {
+        const infoTexto = elemento.textContent || elemento.innerText;
+        
+        if (infoTexto.trim()) {
+            todasInformacoes += `=== INFORMAÇÃO ${index + 1} ===\n${infoTexto}\n\n`;
         }
     });
     
@@ -125,7 +176,43 @@ function copiarTodasInformacoes() {
             showToast('Erro ao copiar informações!', 'error');
         });
     } else {
-        showToast('Nenhuma informação adicional encontrada!', 'warning');
+        showToast('Nenhuma informação encontrada!', 'warning');
+    }
+}
+
+function copiarTodosContextoEInfo() {
+    const elementosInfo = document.querySelectorAll('[id^="info-"]');
+    let todasInformacoes = '';
+    
+    elementosInfo.forEach((elemento, index) => {
+        const itemId = elemento.id.replace('info-', '');
+        const contextoElemento = document.getElementById(`contexto-${itemId}`);
+        const infoTexto = elemento.textContent || elemento.innerText;
+        const contextoTexto = contextoElemento ? (contextoElemento.textContent || contextoElemento.innerText) : '';
+        
+        if (infoTexto.trim() || contextoTexto.trim()) {
+            todasInformacoes += `=== ITEM ${index + 1} ===\n`;
+            
+            if (contextoTexto.trim()) {
+                todasInformacoes += `CONTEXTO DA INTIMAÇÃO:\n${contextoTexto}\n\n`;
+            }
+            
+            if (infoTexto.trim()) {
+                todasInformacoes += `INFORMAÇÃO ADICIONAL:\n${infoTexto}\n\n`;
+            }
+            
+            todasInformacoes += '---\n\n';
+        }
+    });
+    
+    if (todasInformacoes.trim()) {
+        navigator.clipboard.writeText(todasInformacoes).then(() => {
+            showToast('Todos os contextos + informações foram copiados para a área de transferência!', 'success');
+        }).catch(() => {
+            showToast('Erro ao copiar contextos e informações!', 'error');
+        });
+    } else {
+        showToast('Nenhuma informação encontrada!', 'warning');
     }
 }
 </script>

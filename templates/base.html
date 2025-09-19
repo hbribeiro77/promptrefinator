@@ -66,7 +66,14 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            z-index: 1055;
+            z-index: 99999 !important;
+            pointer-events: none;
+        }
+        
+        .toast-container .toast {
+            pointer-events: auto;
+            margin-bottom: 10px;
+            z-index: 99999 !important;
         }
         
         .loading-spinner {
@@ -324,18 +331,41 @@
     <script>
         // Função para mostrar toast
         function showToast(message, type = 'info') {
-            const toastContainer = document.querySelector('.toast-container');
+            console.log('Toast:', message, type); // Debug
+            
+            // Tentar encontrar o container
+            let toastContainer = document.querySelector('.toast-container');
+            console.log('Container encontrado:', toastContainer); // Debug
+            
+            // Se não encontrar, criar um
+            if (!toastContainer) {
+                console.log('Criando novo container...');
+                toastContainer = document.createElement('div');
+                toastContainer.className = 'toast-container';
+                toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 99999; pointer-events: none;';
+                document.body.appendChild(toastContainer);
+            }
+            
             const toastId = 'toast-' + Date.now();
             
+            // Mapear tipos para cores Bootstrap
+            const typeMap = {
+                'success': 'success',
+                'error': 'danger', 
+                'warning': 'warning',
+                'info': 'info'
+            };
+            
+            const toastClass = typeMap[type] || 'info';
+            
             const toastHtml = `
-                <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="toast-header">
-                        <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-                        <strong class="me-auto">${type === 'success' ? 'Sucesso' : type === 'error' ? 'Erro' : 'Informação'}</strong>
-                        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-                    </div>
-                    <div class="toast-body">
-                        ${message}
+                <div id="${toastId}" class="toast align-items-center text-white bg-${toastClass} border-0" role="alert" aria-live="assertive" aria-atomic="true" style="pointer-events: auto; margin-bottom: 10px;">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
                     </div>
                 </div>
             `;
@@ -343,13 +373,30 @@
             toastContainer.insertAdjacentHTML('beforeend', toastHtml);
             
             const toastElement = document.getElementById(toastId);
-            const toast = new bootstrap.Toast(toastElement);
-            toast.show();
+            console.log('Toast element criado:', toastElement); // Debug
             
-            // Remover toast do DOM após ser ocultado
-            toastElement.addEventListener('hidden.bs.toast', () => {
-                toastElement.remove();
-            });
+            if (toastElement) {
+                // Tentar usar Bootstrap Toast
+                try {
+                    const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+                    console.log('Toast Bootstrap criado:', toast); // Debug
+                    toast.show();
+                    
+                    // Remover toast do DOM após ser ocultado
+                    toastElement.addEventListener('hidden.bs.toast', () => {
+                        toastElement.remove();
+                    });
+                } catch (error) {
+                    console.error('Erro ao criar toast Bootstrap:', error);
+                    // Fallback: mostrar por 3 segundos e remover
+                    toastElement.style.display = 'block';
+                    setTimeout(() => {
+                        toastElement.remove();
+                    }, 3000);
+                }
+            } else {
+                console.error('Erro ao criar elemento toast!');
+            }
         }
         
         // Função para mostrar/ocultar loading

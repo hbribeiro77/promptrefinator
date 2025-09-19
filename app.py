@@ -2881,6 +2881,7 @@ def obter_informacoes_adicionais_intimacoes():
             if intimacao:
                 intimacoes.append({
                     'id': intimacao_id,
+                    'contexto': intimacao.get('contexto', ''),
                     'informacao_adicional': intimacao.get('informacao_adicional', '')
                 })
         
@@ -2913,11 +2914,12 @@ def obter_informacoes_adicionais_analises():
         for analise_id in analises_ids:
             analise = data_service.get_analise_by_id(analise_id)
             if analise:
-                # Buscar intimação associada para obter informações adicionais
+                # Buscar intimação associada para obter informações adicionais e contexto
                 intimacao = data_service.get_intimacao_by_id(analise.get('intimacao_id'))
                 analises.append({
                     'id': analise_id,
                     'intimacao_id': analise.get('intimacao_id'),
+                    'contexto': intimacao.get('contexto', '') if intimacao else '',
                     'informacao_adicional': intimacao.get('informacao_adicional', '') if intimacao else ''
                 })
         
