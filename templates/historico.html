@@ -187,6 +187,25 @@
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Paginação -->
+            {% if total_sessoes > itens_por_pagina %}
+            <div class="card-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="text-muted">
+                        Mostrando {{ ((pagina_atual - 1) * itens_por_pagina) + 1 }} a 
+                        {{ [pagina_atual * itens_por_pagina, total_sessoes] | min }} de 
+                        {{ total_sessoes }} sessões
+                    </div>
+                    <nav aria-label="Paginação do histórico">
+                        <ul class="pagination pagination-sm mb-0" id="paginacao-historico">
+                            <!-- Será preenchido via JavaScript -->
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+            {% endif %}
+            
             {% else %}
             <div class="text-center py-5">
                 <i class="bi bi-inbox display-1 text-muted"></i>
@@ -227,6 +246,9 @@
 <script>
 // Variáveis globais
 let sessaoParaExcluir = null;
+let paginaAtual = {{ pagina_atual | default(1) }};
+let totalPaginas = {{ ((total_sessoes | default(0)) + (itens_por_pagina | default(20)) - 1) // (itens_por_pagina | default(20)) }};
+let itensPorPagina = {{ itens_por_pagina | default(20) }};
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
@@ -235,6 +257,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configurar filtros
     configurarFiltros();
     
+    // Configurar paginação
+    configurarPaginacao();
+    
     // Aplicar filtros iniciais
     aplicarFiltros();
 });
@@ -242,83 +267,242 @@ document.addEventListener('DOMContentLoaded', function() {
 // Configurar filtros
 function configurarFiltros() {
     // Filtro de data
-    document.getElementById('filtro-data').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-data').addEventListener('change', carregarPagina);
     
     // Filtro de prompt
-    document.getElementById('filtro-prompt').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-prompt').addEventListener('change', carregarPagina);
     
     // Filtro de status
-    document.getElementById('filtro-status').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-status').addEventListener('change', carregarPagina);
     
     // Filtro de acurácia
-    document.getElementById('filtro-acuracia').addEventListener('change', aplicarFiltros);
+    document.getElementById('filtro-acuracia').addEventListener('change', carregarPagina);
 }
 
-// Aplicar filtros
-function aplicarFiltros() {
+// Configurar paginação
+function configurarPaginacao() {
+    if (totalPaginas > 1) {
+        gerarPaginacao();
+    }
+}
+
+// Gerar controles de paginação
+function gerarPaginacao() {
+    const paginacao = document.getElementById('paginacao-historico');
+    if (!paginacao) return;
+    
+    paginacao.innerHTML = '';
+    
+    // Botão anterior
+    const liAnterior = document.createElement('li');
+    liAnterior.className = `page-item ${paginaAtual === 1 ? 'disabled' : ''}`;
+    liAnterior.innerHTML = `<a class="page-link" href="#" onclick="irParaPagina(${paginaAtual - 1})">Anterior</a>`;
+    paginacao.appendChild(liAnterior);
+    
+    // Páginas
+    const inicio = Math.max(1, paginaAtual - 2);
+    const fim = Math.min(totalPaginas, paginaAtual + 2);
+    
+    for (let i = inicio; i <= fim; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === paginaAtual ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="irParaPagina(${i})">${i}</a>`;
+        paginacao.appendChild(li);
+    }
+    
+    // Botão próximo
+    const liProximo = document.createElement('li');
+    liProximo.className = `page-item ${paginaAtual === totalPaginas ? 'disabled' : ''}`;
+    liProximo.innerHTML = `<a class="page-link" href="#" onclick="irParaPagina(${paginaAtual + 1})">Próximo</a>`;
+    paginacao.appendChild(liProximo);
+}
+
+// Ir para página específica
+function irParaPagina(pagina) {
+    if (pagina < 1 || pagina > totalPaginas || pagina === paginaAtual) return;
+    
+    paginaAtual = pagina;
+    carregarPagina();
+}
+
+// Carregar página via AJAX
+function carregarPagina() {
     const filtroData = document.getElementById('filtro-data').value;
     const filtroPrompt = document.getElementById('filtro-prompt').value;
     const filtroStatus = document.getElementById('filtro-status').value;
     const filtroAcuracia = document.getElementById('filtro-acuracia').value;
     
-    const linhas = document.querySelectorAll('.sessao-row');
-    let visiveis = 0;
+    // Mostrar loading
+    const tbody = document.querySelector('tbody');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="bi bi-hourglass-split"></i> Carregando...</td></tr>';
+    }
     
-    linhas.forEach(linha => {
-        let mostrar = true;
-        
-        // Filtro de data
-        if (filtroData && !filtrarPorData(linha.dataset.data, filtroData)) {
-            mostrar = false;
-        }
-        
-        // Filtro de prompt
-        if (filtroPrompt && linha.dataset.prompt !== filtroPrompt) {
-            mostrar = false;
-        }
-        
-        // Filtro de status
-        if (filtroStatus && linha.dataset.status !== filtroStatus) {
-            mostrar = false;
-        }
-        
-        // Filtro de acurácia
-        if (filtroAcuracia && parseFloat(linha.dataset.acuracia) < parseFloat(filtroAcuracia)) {
-            mostrar = false;
-        }
-        
-        if (mostrar) {
-            linha.style.display = '';
-            visiveis++;
-        } else {
-            linha.style.display = 'none';
-        }
+    // Construir URL com parâmetros
+    const params = new URLSearchParams({
+        itens_por_pagina: itensPorPagina
     });
     
-    // Atualizar contador
-    document.getElementById('contador-sessoes').textContent = `${visiveis} sessões`;
+    if (filtroData) params.append('data_inicio', obterDataInicio(filtroData));
+    if (filtroData) params.append('data_fim', obterDataFim(filtroData));
+    if (filtroPrompt) params.append('prompt_id', filtroPrompt);
+    if (filtroStatus) params.append('status', filtroStatus);
+    if (filtroAcuracia) params.append('acuracia_min', filtroAcuracia);
+    
+    // Fazer requisição AJAX
+    fetch(`/api/historico/pagina/${paginaAtual}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                atualizarTabela(data.sessoes);
+                totalPaginas = data.total_paginas;
+                atualizarContador(data.total_sessoes);
+                gerarPaginacao();
+            } else {
+                console.error('Erro ao carregar página:', data.message);
+                if (tbody) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro ao carregar dados</td></tr>';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro na requisição:', error);
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro na requisição</td></tr>';
+            }
+        });
 }
 
-// Filtrar por data
-function filtrarPorData(dataSessao, filtro) {
-    const hoje = new Date();
-    const dataSessaoObj = new Date(dataSessao);
+// Atualizar tabela com novos dados
+function atualizarTabela(sessoes) {
+    const tbody = document.querySelector('tbody');
+    if (!tbody) return;
     
-    switch (filtro) {
-        case 'hoje':
-            return dataSessaoObj.toDateString() === hoje.toDateString();
-        case 'semana':
-            const umaSemanaAtras = new Date(hoje.getTime() - 7 * 24 * 60 * 60 * 1000);
-            return dataSessaoObj >= umaSemanaAtras;
-        case 'mes':
-            const umMesAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1000);
-            return dataSessaoObj >= umMesAtras;
-        case 'trimestre':
-            const tresMesesAtras = new Date(hoje.getTime() - 90 * 24 * 60 * 60 * 1000);
-            return dataSessaoObj >= tresMesesAtras;
-        default:
-            return true;
+    if (sessoes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Nenhuma sessão encontrada</td></tr>';
+        return;
     }
+    
+    tbody.innerHTML = sessoes.map(sessao => `
+        <tr class="sessao-row" 
+            data-data="${sessao.data_inicio}"
+            data-prompt="${sessao.prompt_id}"
+            data-status="${sessao.status}"
+            data-acuracia="${sessao.acuracia}"
+            data-session-id="${sessao.session_id}">
+            <td>
+                <div class="d-flex flex-column">
+                    <small class="text-muted">${sessao.data_inicio_formatada}</small>
+                    ${sessao.data_fim_formatada ? `<small class="text-muted">Fim: ${sessao.data_fim_formatada}</small>` : ''}
+                </div>
+            </td>
+            <td>
+                <div class="d-flex flex-column">
+                    <strong>${sessao.prompt_nome}</strong>
+                    <small class="text-muted">Temp: ${sessao.temperatura}</small>
+                </div>
+            </td>
+            <td>
+                <span class="badge bg-info">${sessao.modelo}</span>
+            </td>
+            <td>
+                <div class="d-flex flex-column">
+                    <span>${sessao.intimações_processadas}/${sessao.total_intimacoes}</span>
+                    <small class="text-muted">Processadas</small>
+                </div>
+            </td>
+            <td>
+                ${sessao.acuracia >= 80 ? 
+                    `<span class="badge bg-success">${sessao.acuracia}%</span>` :
+                    sessao.acuracia >= 60 ?
+                    `<span class="badge bg-warning">${sessao.acuracia}%</span>` :
+                    `<span class="badge bg-danger">${sessao.acuracia}%</span>`
+                }
+                <br>
+                <small class="text-muted">${sessao.acertos}/${sessao.intimações_processadas}</small>
+            </td>
+            <td>
+                <div class="d-flex flex-column">
+                    <span>${(sessao.tempo_total || 0).toFixed(2)}s</span>
+                    <small class="text-muted">Total</small>
+                </div>
+            </td>
+            <td>
+                <div class="d-flex flex-column">
+                    <span>$${(sessao.custo_total || 0).toFixed(4)}</span>
+                    <small class="text-muted">${sessao.tokens_total || 0} tokens</small>
+                </div>
+            </td>
+            <td>
+                ${sessao.status === 'concluida' ? 
+                    '<span class="badge bg-success">Concluída</span>' :
+                    sessao.status === 'em_andamento' ?
+                    '<span class="badge bg-warning">Em andamento</span>' :
+                    '<span class="badge bg-danger">Erro</span>'
+                }
+            </td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <a href="/historico/${sessao.session_id}" 
+                       class="btn btn-outline-primary" title="Visualizar detalhes">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <button class="btn btn-outline-secondary" 
+                            onclick="copiarResumoSessao('${sessao.session_id}')" 
+                            title="Copiar resumo">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" 
+                            onclick="excluirSessao('${sessao.session_id}')" 
+                            title="Excluir sessão">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// Atualizar contador de sessões
+function atualizarContador(total) {
+    const contador = document.getElementById('contador-sessoes');
+    if (contador) {
+        contador.textContent = `${total} sessões`;
+    }
+}
+
+// Funções auxiliares para filtros de data
+function obterDataInicio(filtro) {
+    const hoje = new Date();
+    switch (filtro) {
+        case 'hoje': return hoje.toISOString().split('T')[0];
+        case 'semana': 
+            const semana = new Date(hoje);
+            semana.setDate(hoje.getDate() - 7);
+            return semana.toISOString().split('T')[0];
+        case 'mes':
+            const mes = new Date(hoje);
+            mes.setMonth(hoje.getMonth() - 1);
+            return mes.toISOString().split('T')[0];
+        case 'trimestre':
+            const trimestre = new Date(hoje);
+            trimestre.setMonth(hoje.getMonth() - 3);
+            return trimestre.toISOString().split('T')[0];
+        default: return '';
+    }
+}
+
+function obterDataFim(filtro) {
+    if (filtro === 'hoje') {
+        return new Date().toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+}
+
+// Aplicar filtros (agora usa AJAX)
+function aplicarFiltros() {
+    paginaAtual = 1; // Reset para primeira página
+    carregarPagina();
 }
 
 // Limpar filtros
@@ -327,7 +511,8 @@ function limparFiltros() {
     document.getElementById('filtro-prompt').value = '';
     document.getElementById('filtro-status').value = '';
     document.getElementById('filtro-acuracia').value = '';
-    aplicarFiltros();
+    paginaAtual = 1; // Reset para primeira página
+    carregarPagina();
 }
 
 // Copiar resumo da sessão

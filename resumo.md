@@ -114,6 +114,7 @@ promptrefinator2/
 - `/api/prompts/<id>/excluir` - Excluir prompt via API (NOVO)
 - `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
 - `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
+- `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO)
 
 **Funcionalidades Especiais:**
 - Paginação AJAX para relatórios
@@ -139,6 +140,9 @@ promptrefinator2/
 - **NOVO**: Regra de negócio exibida nas sessões
 - **NOVO**: Link clicável para prompt nas sessões
 - **NOVO**: Proporção de acertos nas estatísticas
+- **NOVO**: Paginação AJAX para histórico de análises
+- **NOVO**: Configuração de análises paralelas para Azure OpenAI
+- **NOVO**: Correção de prompt_nome nas análises (resolvido problema "N/A")
 
 ### **2. Configurações (`config.py`)**
 
@@ -171,7 +175,8 @@ promptrefinator2/
 - `get_all_prompts()` - Listar todos os prompts
 - `save_prompt()` - Salvar prompt
 - `delete_prompt()` - Excluir prompt
-- `get_sessoes_analise()` - Listar sessões de análise
+- `get_sessoes_analise()` - Listar sessões de análise com filtros e paginação
+- `get_total_sessoes_analise()` - Contar total de sessões com filtros
 - `get_sessao_analise()` - Obter sessão específica
 - `criar_sessao_analise()` - Criar nova sessão
 - `get_analises_por_sessao()` - Obter análises de uma sessão
@@ -265,6 +270,17 @@ promptrefinator2/
 - Teste de conexão
 - **NOVO**: Campo de chave da API readonly (carregado de .env)
 - **NOVO**: Instruções para configuração via variável de ambiente
+- **NOVO**: Configuração de análises paralelas para Azure OpenAI
+- **NOVO**: Campos de delay entre lotes para Azure OpenAI
+
+#### **Histórico (`templates/historico.html`)**
+- Listagem de sessões de análise
+- Filtros por data, prompt, status, acurácia
+- Visualização de estatísticas por sessão
+- Ações: visualizar, copiar resumo, excluir
+- **NOVO**: Paginação AJAX com 20 itens por página
+- **NOVO**: Filtros integrados com paginação
+- **NOVO**: Carregamento dinâmico sem recarregar página
 
 ### **Componentes Reutilizáveis**
 
@@ -555,6 +571,19 @@ promptrefinator2/
 - ✅ Gerenciador unificado de IA
 - ✅ Seleção automática do melhor serviço
 - ✅ Interface padronizada para múltiplos provedores
+- ✅ Configuração de análises paralelas para Azure OpenAI
+- ✅ Campos de delay entre lotes para Azure OpenAI
+
+### **Paginação e Performance**
+- ✅ Paginação AJAX para histórico de análises
+- ✅ Filtros integrados com paginação
+- ✅ Carregamento dinâmico sem recarregar página
+- ✅ Performance otimizada com 20 itens por página
+
+### **Correções e Melhorias**
+- ✅ Correção de prompt_nome nas análises (resolvido problema "N/A")
+- ✅ Remoção de "informação adicional" do prompt enviado à IA
+- ✅ Correção de templating de prompts em análises paralelas
 
 ---
 
@@ -623,5 +652,9 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - 🔗 Link clicável para prompt nas sessões
 - 📊 Proporção de acertos nas estatísticas
 - 🎨 Layout otimizado das configurações
+- ⚡ Paginação AJAX para histórico de análises
+- 🔧 Configuração de análises paralelas para Azure OpenAI
+- 🐛 Correção de prompt_nome nas análises (resolvido "N/A")
+- 🚫 Remoção de "informação adicional" do prompt enviado à IA
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.

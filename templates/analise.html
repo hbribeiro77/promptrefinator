@@ -4,6 +4,28 @@
 
 {% block extra_head %}
 <!-- Marked.js será carregado no final da página -->
+<style>
+/* Botão Voltar ao Topo */
+#btn-voltar-topo {
+    transition: all 0.3s ease;
+    border: none;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+}
+
+#btn-voltar-topo:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+    background: linear-gradient(135deg, #0056b3, #004085);
+}
+
+#btn-voltar-topo:active {
+    transform: translateY(0);
+}
+
+#btn-voltar-topo i {
+    font-size: 1.2rem;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -2092,6 +2114,9 @@ function finalizarAnalise() {
     setTimeout(() => {
         showToast('📊 Análise adicionada ao histórico! Clique em "Histórico" no menu para visualizar.', 'info');
     }, 1500);
+    
+    // Mostrar botão "Voltar ao Topo" após análise
+    mostrarBotaoVoltarTopo();
 }
 
 // Função para exibir resultados
@@ -3270,6 +3295,42 @@ function editarPrompt() {
             console.error('❌ Marked.js não foi carregado!');
         }
     });
+</script>
+
+<!-- Botão Voltar ao Topo -->
+<button id="btn-voltar-topo" class="btn btn-primary btn-floating" 
+        onclick="voltarAoTopo()" 
+        title="Voltar ao topo"
+        style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 1000; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
+    <i class="bi bi-arrow-up"></i>
+</button>
+
+<script>
+// Função para voltar ao topo
+function voltarAoTopo() {
+    window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+}
+
+// Mostrar/ocultar botão baseado no scroll
+window.addEventListener('scroll', function() {
+    const btnVoltarTopo = document.getElementById('btn-voltar-topo');
+    if (window.pageYOffset > 300) {
+        btnVoltarTopo.style.display = 'block';
+    } else {
+        btnVoltarTopo.style.display = 'none';
+    }
+});
+
+// Mostrar botão após análise (quando a página rola para baixo)
+function mostrarBotaoVoltarTopo() {
+    setTimeout(() => {
+        const btnVoltarTopo = document.getElementById('btn-voltar-topo');
+        btnVoltarTopo.style.display = 'block';
+    }, 1000);
+}
 </script>
 
 {% endblock %}

@@ -1,5 +1,7 @@
 import os
 import time
+import asyncio
+import concurrent.futures
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, Response
 from werkzeug.utils import secure_filename
@@ -510,7 +512,8 @@ def visualizar_intimacao(id):
                              stats=stats,
                              config=config,
                              classificacoes=Config.TIPOS_ACAO,
-                             tipos_acao=Config.TIPOS_ACAO)
+                             tipos_acao=Config.TIPOS_ACAO,
+                             defensores=Config.DEFENSORES)
                              
     except Exception as e:
         flash(f'Erro ao carregar intimação: {str(e)}', 'error')
@@ -789,13 +792,20 @@ def analise():
 def historico_analises():
     """Página para visualizar histórico de análises"""
     try:
-        # Obter lista de sessões de análise
-        sessoes = data_service.get_sessoes_analise(limit=50)
+        # Obter lista de sessões de análise (primeira página)
+        sessoes = data_service.get_sessoes_analise(limit=20, offset=0)
         
-        return render_template('historico.html', sessoes=sessoes)
+        # Calcular total de sessões para paginação
+        total_sessoes = data_service.get_total_sessoes_analise()
+        
+        return render_template('historico.html', 
+                             sessoes=sessoes, 
+                             total_sessoes=total_sessoes,
+                             pagina_atual=1,
+                             itens_por_pagina=20)
     except Exception as e:
         flash(f'Erro ao carregar histórico: {str(e)}', 'error')
-        return render_template('historico.html', sessoes=[])
+        return render_template('historico.html', sessoes=[], total_sessoes=0, pagina_atual=1, itens_por_pagina=20)
 
 @app.route('/historico/<session_id>')
 def visualizar_sessao_analise(session_id):
@@ -814,6 +824,59 @@ def visualizar_sessao_analise(session_id):
     except Exception as e:
         flash(f'Erro ao carregar sessão: {str(e)}', 'error')
         return redirect(url_for('historico_analises'))
+
+@app.route('/api/historico/pagina/<int:pagina>')
+def api_historico_pagina(pagina):
+    """API para carregar dados de uma página específica do histórico via AJAX"""
+    try:
+        # Parâmetros de filtro
+        data_inicio = request.args.get('data_inicio', '')
+        data_fim = request.args.get('data_fim', '')
+        prompt_id = request.args.get('prompt_id', '')
+        status = request.args.get('status', '')
+        acuracia_min = request.args.get('acuracia_min', '')
+        itens_por_pagina = int(request.args.get('itens_por_pagina', 20))
+        
+        # Calcular offset
+        offset = (pagina - 1) * itens_por_pagina
+        
+        # Obter sessões com filtros
+        sessoes = data_service.get_sessoes_analise(
+            limit=itens_por_pagina, 
+            offset=offset,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            status=status,
+            acuracia_min=acuracia_min
+        )
+        
+        # Calcular total de sessões para paginação
+        total_sessoes = data_service.get_total_sessoes_analise(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            status=status,
+            acuracia_min=acuracia_min
+        )
+        
+        # Calcular informações de paginação
+        total_paginas = (total_sessoes + itens_por_pagina - 1) // itens_por_pagina
+        
+        return jsonify({
+            'success': True,
+            'sessoes': sessoes,
+            'pagina_atual': pagina,
+            'total_paginas': total_paginas,
+            'total_sessoes': total_sessoes,
+            'itens_por_pagina': itens_por_pagina
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao carregar página: {str(e)}'
+        }), 500
 
 @app.route('/api/historico/excluir-sessao', methods=['POST'])
 def excluir_sessao_analise():
@@ -938,6 +1001,164 @@ def exportar_sessao_analise():
         print(f"Erro ao exportar sessão: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+def executar_analise_paralela(intimacao_ids, prompt, modelo, temperatura, max_tokens, 
+                              salvar_resultados, calcular_acuracia, session_id, 
+                              analise_paralela, delay_entre_lotes):
+    """Executar análise de intimações em paralelo"""
+    resultados = []
+    
+    # Dividir intimações em lotes
+    lotes = [intimacao_ids[i:i + analise_paralela] for i in range(0, len(intimacao_ids), analise_paralela)]
+    
+    print(f"=== DEBUG: Executando {len(lotes)} lotes de até {analise_paralela} análises ===")
+    
+    for lote_idx, lote in enumerate(lotes, 1):
+        # Verificar cancelamento antes de cada lote
+        if verificar_cancelamento(session_id):
+            print(f"=== DEBUG: Análise cancelada no lote {lote_idx} ===")
+            break
+            
+        print(f"=== DEBUG: Processando lote {lote_idx}/{len(lotes)} com {len(lote)} intimações ===")
+        
+        # Executar análises do lote em paralelo
+        with concurrent.futures.ThreadPoolExecutor(max_workers=analise_paralela) as executor:
+            # Criar tasks para cada intimação do lote
+            futures = []
+            for intimacao_id in lote:
+                future = executor.submit(
+                    analisar_intimacao_individual,
+                    intimacao_id, prompt, modelo, temperatura, max_tokens,
+                    salvar_resultados, calcular_acuracia, session_id
+                )
+                futures.append(future)
+            
+            # Coletar resultados do lote
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    resultado = future.result()
+                    if resultado:
+                        resultados.append(resultado)
+                        # Atualizar progresso
+                        atualizar_progresso_analise(session_id, len(resultados))
+                except Exception as e:
+                    print(f"=== DEBUG: Erro na análise paralela: {str(e)} ===")
+        
+        # Delay entre lotes (exceto no último lote)
+        if lote_idx < len(lotes) and delay_entre_lotes > 0:
+            print(f"=== DEBUG: Aguardando {delay_entre_lotes}s antes do próximo lote ===")
+            time.sleep(delay_entre_lotes)
+    
+    return resultados
+
+def analisar_intimacao_individual(intimacao_id, prompt, modelo, temperatura, max_tokens,
+                                 salvar_resultados, calcular_acuracia, session_id):
+    """Analisar uma intimação individual (para uso em paralelo)"""
+    try:
+        intimacao = data_service.get_intimacao_by_id(intimacao_id)
+        if not intimacao:
+            print(f"=== DEBUG: Intimação {intimacao_id} não encontrada ===")
+            return None
+            
+        print(f"=== DEBUG: Analisando intimação {intimacao_id} ===")
+        
+        # Preparar o prompt final
+        contexto = f"""
+Contexto da Intimação:
+{intimacao.get('contexto', '')}
+"""
+        
+        # Substituir variáveis no prompt (mesma lógica da análise sequencial)
+        prompt_final = prompt['conteudo']
+        
+        # Substituir {REGRADENEGOCIO} se existir
+        if prompt.get('regra_negocio') and '{REGRADENEGOCIO}' in prompt_final:
+            prompt_final = prompt_final.replace('{REGRADENEGOCIO}', prompt['regra_negocio'])
+        
+        # Substituir {CONTEXTO}
+        prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
+        
+        print(f"=== DEBUG: Prompt final preparado (primeiros 200 chars): {prompt_final[:200]}... ===")
+        
+        # Preparar parâmetros para a IA
+        parametros = {
+            'model': modelo,
+            'temperature': temperatura,
+            'max_tokens': max_tokens,
+            'top_p': 1.0
+        }
+        
+        # Chamar IA
+        inicio_analise = time.time()
+        resultado_ia, resposta_ia, tokens_info = ai_manager_service.analisar_intimacao(
+            contexto, prompt_final, parametros
+        )
+        fim_analise = time.time()
+        tempo_processamento = fim_analise - inicio_analise
+        
+        # Calcular acurácia se solicitado
+        acertou = None
+        if calcular_acuracia and intimacao.get('classificacao_manual'):
+            acertou = resultado_ia.strip().upper() == intimacao['classificacao_manual'].strip().upper()
+            print(f"=== DEBUG: Comparação - Manual: {intimacao['classificacao_manual']}, IA: {resultado_ia}, Acertou: {acertou} ===")
+        
+        # Usar tokens reais da API
+        tokens_input = tokens_info.get('input', 0)
+        tokens_output = tokens_info.get('output', 0)
+        tokens_usados = tokens_info.get('total', tokens_input + tokens_output)
+        
+        # Calcular custo real baseado nos tokens
+        provider = ai_manager_service.get_current_provider()
+        custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
+        
+        # Preparar resultado
+        resultado = {
+            'prompt_id': prompt['id'],
+            'prompt_nome': prompt['nome'],
+            'regra_negocio': prompt.get('regra_negocio', ''),
+            'intimacao_id': intimacao_id,
+            'resultado_ia': resultado_ia,
+            'classificacao_manual': intimacao.get('classificacao_manual'),
+            'informacao_adicional': intimacao.get('informacao_adicional'),
+            'tempo_processamento': round(tempo_processamento, 2),
+            'acertou': acertou,
+            'prompt_completo': prompt_final,
+            'resposta_completa': resposta_ia,
+            'modelo': modelo,
+            'temperatura': temperatura,
+            'tokens_input': tokens_input,
+            'tokens_output': tokens_output,
+            'tokens_usados': tokens_usados,
+            'custo_real': custo_real,
+            'provider': provider,
+            'intimacao': intimacao
+        }
+        
+        # Salvar no banco se solicitado
+        if salvar_resultados:
+            analise_data = {
+                'session_id': session_id,
+                'intimacao_id': intimacao_id,
+                'prompt_id': prompt['id'],
+                'prompt_nome': prompt['nome'],
+                'resultado_ia': resultado_ia,
+                'acertou': acertou,
+                'tempo_processamento': tempo_processamento,
+                'modelo': modelo,
+                'temperatura': temperatura,
+                'tokens_input': tokens_input,
+                'tokens_output': tokens_output,
+                'custo_real': custo_real,
+                'prompt_completo': prompt_final,
+                'resposta_completa': resposta_ia
+            }
+            data_service.save_analise(analise_data)
+        
+        return resultado
+        
+    except Exception as e:
+        print(f"=== DEBUG: Erro ao analisar intimação {intimacao_id}: {str(e)} ===")
+        return None
+
 @app.route('/executar-analise', methods=['POST'])
 def executar_analise():
     """Executar análise de intimações com prompts selecionados"""
@@ -1005,171 +1226,158 @@ def executar_analise():
         salvar_resultados = configuracoes.get('salvar_resultados', True)
         calcular_acuracia = configuracoes.get('calcular_acuracia', True)
         
-        print(f"=== DEBUG: Configurações - Modelo: {modelo}, Temp: {temperatura}, Tokens: {max_tokens} ===")
+        # Configurações de análise paralela (específicas por provider)
+        provider_atual = ai_manager_service.get_current_provider()
+        if provider_atual == 'azure':
+            analise_paralela = int(config.get('azure_analise_paralela', 1))
+            delay_entre_lotes = float(config.get('azure_delay_entre_lotes', 0.5))
+        else:
+            analise_paralela = int(config.get('analise_paralela', 1))
+            delay_entre_lotes = float(config.get('delay_entre_lotes', 0.5))
+        
+        print(f"=== DEBUG: Provider: {provider_atual}, Modelo: {modelo}, Temp: {temperatura}, Tokens: {max_tokens} ===")
+        print(f"=== DEBUG: Análise Paralela: {analise_paralela}, Delay: {delay_entre_lotes}s ===")
         
         resultados = []
         
         print(f"=== DEBUG: Prompt encontrado: {prompt['nome']} ===")
-            
-        for i, intimacao_id in enumerate(intimacao_ids, 1):
-            # Verificar se a análise foi cancelada
-            if verificar_cancelamento(session_id):
-                print(f"=== DEBUG: Análise cancelada pelo usuário - Session ID: {session_id} ===")
-                finalizar_analise(session_id)
-                return jsonify({
-                    'success': False,
-                    'cancelado': True,
-                    'message': 'Análise cancelada pelo usuário'
-                })
-            
-            # Atualizar progresso
-            atualizar_progresso_analise(session_id, i)
-            
-            intimacao = data_service.get_intimacao_by_id(intimacao_id)
-            if not intimacao:
-                print(f"=== DEBUG: Intimação {intimacao_id} não encontrada ===")
-                continue
-                
-            print(f"=== DEBUG: Analisando intimação {intimacao_id} ({i}/{len(intimacao_ids)}) ===")
-            print(f"=== DEBUG: Classificação manual: {intimacao.get('classificacao_manual')} ===")
-                
-            try:
-                # Preparar o prompt final
-                contexto = f"""
-                Contexto da Intimação:
-                {intimacao['contexto']}
-                """
-                
-                # Substituir variáveis no prompt
-                prompt_final = prompt['conteudo']
-                
-                # Substituir {REGRADENEGOCIO} se existir
-                if prompt.get('regra_negocio') and '{REGRADENEGOCIO}' in prompt_final:
-                    prompt_final = prompt_final.replace('{REGRADENEGOCIO}', prompt['regra_negocio'])
-                
-                # Substituir {CONTEXTO}
-                prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
-                
-                print(f"=== DEBUG: Prompt final preparado (primeiros 200 chars): {prompt_final[:200]}... ===")
-                
-                import time
-                
-                inicio = time.time()
-                
-                # Preparar parâmetros para a OpenAI
-                parametros = {
-                    'model': modelo,
-                    'temperature': temperatura,
-                    'max_tokens': max_tokens,
-                    'top_p': 1.0  # Adicionar top_p padrão
-                }
-                
-                print(f"=== DEBUG: Chamando OpenAI com parâmetros: {parametros} ===")
-                print(f"=== DEBUG: Prompt final (primeiros 500 chars): {prompt_final[:500]}... ===")
-                print(f"=== DEBUG: Prompt final (últimos 500 chars): ...{prompt_final[-500:]} ===")
-                
-                # Fazer chamada para IA usando o gerenciador
-                resultado_ia, resposta_completa, tokens_info = ai_manager_service.analisar_intimacao(
-                    contexto=contexto,
-                    prompt_template=prompt_final,
-                    parametros=parametros
-                )
-                
-                print(f"=== DEBUG: Resposta completa da OpenAI: {resposta_completa} ===")
-                print(f"=== DEBUG: Classificação extraída: {resultado_ia} ===")
-                print(f"=== DEBUG: Tokens info: {tokens_info} ===")
-                
-                tempo_processamento = time.time() - inicio
-                
-                # Calcular acurácia se possível
-                acertou = False
-                if calcular_acuracia and intimacao.get('classificacao_manual'):
-                    # Normalizar para comparação (remover underscores e espaços)
-                    classificacao_manual = intimacao['classificacao_manual'].upper().strip().replace('_', ' ').replace('-', ' ')
-                    resultado_ia_normalizado = resultado_ia.upper().strip().replace('_', ' ').replace('-', ' ')
-                    acertou = resultado_ia_normalizado == classificacao_manual
-                    print(f"=== DEBUG: Comparação - Manual: {classificacao_manual}, IA: {resultado_ia_normalizado}, Acertou: {acertou} ===")
-                
-                # Usar tokens reais da API
-                tokens_input = tokens_info.get('input', 0)
-                tokens_output = tokens_info.get('output', 0)
-                tokens_usados = tokens_info.get('total', tokens_input + tokens_output)
         
+        # Executar análise paralela ou sequencial
+        if analise_paralela > 1:
+            resultados = executar_analise_paralela(
+                intimacao_ids, prompt, modelo, temperatura, max_tokens, 
+                salvar_resultados, calcular_acuracia, session_id, 
+                analise_paralela, delay_entre_lotes
+            )
+        else:
+            # Análise sequencial (comportamento original)
+            for i, intimacao_id in enumerate(intimacao_ids, 1):
+                # Verificar se a análise foi cancelada
+                if verificar_cancelamento(session_id):
+                    print(f"=== DEBUG: Análise cancelada pelo usuário - Session ID: {session_id} ===")
+                    finalizar_analise(session_id)
+                    return jsonify({
+                        'success': False,
+                        'cancelado': True,
+                        'message': 'Análise cancelada pelo usuário'
+                    })
                 
-                # Debug para verificar campos da intimação
-                print(f"=== DEBUG: Campos da intimação {intimacao_id} ===")
-                print(f"Campos disponíveis: {list(intimacao.keys())}")
-                print(f"Informações adicionais: {intimacao.get('informacao_adicional')}")
-                print(f"Informações adicionais (alt): {intimacao.get('informacao_adicional')}")
+                # Atualizar progresso
+                atualizar_progresso_analise(session_id, i)
                 
-
-                
-                resultado = {
-                    'prompt_id': prompt_id,
-                    'prompt_nome': prompt['nome'],
-                    'regra_negocio': prompt.get('regra_negocio', '').replace('\r\n', '\n') if prompt.get('regra_negocio') else None,
-                    'intimacao_id': intimacao_id,
-                    'contexto': intimacao['contexto'][:100] + '...' if len(intimacao['contexto']) > 100 else intimacao['contexto'],
-                    'classificacao_manual': intimacao.get('classificacao_manual'),
-                    'informacao_adicional': intimacao.get('informacao_adicional') or intimacao.get('informacao_adicional'),
-                    'resultado_ia': resultado_ia,
-                    'acertou': acertou,
-                    'tempo_processamento': round(tempo_processamento, 3),
-                    'modelo': modelo,
-                    'temperatura': temperatura,
-                    'tokens_usados': tokens_usados,
-                    'tokens_input': tokens_input,
-                    'tokens_output': tokens_output,
-                    'prompt_completo': prompt_final,
-                    'resposta_completa': resposta_completa,
-                    # Incluir dados completos da intimação para o card compacto
-                    'intimacao': intimacao
-                }
-                
-                # Calcular custo real baseado nos tokens
-                provider = ai_manager_service.get_current_provider()
-                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
-                
-                # Adicionar provider e custo ao resultado
-                resultado['provider'] = provider
-                resultado['custo_real'] = custo_real
-                
-                resultados.append(resultado)
-                
-                # Salvar resultado se solicitado
-                if salvar_resultados:
+                intimacao = data_service.get_intimacao_by_id(intimacao_id)
+                if not intimacao:
+                    print(f"=== DEBUG: Intimação {intimacao_id} não encontrada ===")
+                    continue
                     
-                    # Adicionar análise à intimação
-                    analise_data = {
-                        'session_id': session_id,  # Adicionar session_id
-                        'data_analise': datetime.now().isoformat(),
-                        'prompt_id': prompt_id,
-                        'prompt_nome': prompt['nome'],
-                        'resultado_ia': resultado_ia,
-                        'acertou': acertou,
-                        'tempo_processamento': tempo_processamento,
-                        'modelo': modelo,
-                        'temperatura': temperatura,
-                        'tokens_usados': resultado['tokens_usados'],
-                        'tokens_input': tokens_input,
-                        'tokens_output': tokens_output,
-                        'custo_real': custo_real,  # Custo real calculado
-                        'prompt_completo': prompt_final,
-                        'resposta_completa': resposta_completa
+                print(f"=== DEBUG: Analisando intimação {intimacao_id} ({i}/{len(intimacao_ids)}) ===")
+                print(f"=== DEBUG: Classificação manual: {intimacao.get('classificacao_manual')} ===")
+                    
+                try:
+                    # Preparar o prompt final
+                    contexto = f"""
+Contexto da Intimação:
+{intimacao.get('contexto', '')}
+"""
+                    
+                    # Substituir variáveis no prompt
+                    prompt_final = prompt['conteudo']
+                    
+                    # Substituir {REGRADENEGOCIO} se existir
+                    if prompt.get('regra_negocio') and '{REGRADENEGOCIO}' in prompt_final:
+                        prompt_final = prompt_final.replace('{REGRADENEGOCIO}', prompt['regra_negocio'])
+                    
+                    # Substituir {CONTEXTO}
+                    prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
+                    
+                    print(f"=== DEBUG: Prompt final preparado (primeiros 200 chars): {prompt_final[:200]}... ===")
+                    
+                    inicio = time.time()
+                    
+                    # Preparar parâmetros para a IA
+                    parametros = {
+                        'model': modelo,
+                        'temperature': temperatura,
+                        'max_tokens': max_tokens,
+                        'top_p': 1.0
                     }
                     
-                    data_service.adicionar_analise_intimacao(intimacao_id, analise_data)
-                    print(f"=== DEBUG: Resultado salvo no banco ===")
-                
-            except Exception as e:
-                print(f"=== ERRO ao analisar intimação {intimacao_id}: {e} ===")
-                resultado = {
-                    'prompt_id': prompt_id,
-                    'prompt_nome': prompt['nome'],
-                    'intimacao_id': intimacao_id,
-                    'erro': str(e)
-                }
-                resultados.append(resultado)
+                    # Fazer chamada para IA usando o gerenciador
+                    resultado_ia, resposta_ia, tokens_info = ai_manager_service.analisar_intimacao(
+                        contexto, prompt_final, parametros
+                    )
+                    
+                    tempo_processamento = time.time() - inicio
+                    
+                    # Usar tokens reais da API
+                    tokens_input = tokens_info.get('input', 0)
+                    tokens_output = tokens_info.get('output', 0)
+                    tokens_usados = tokens_info.get('total', tokens_input + tokens_output)
+                    
+                    # Calcular acurácia se possível
+                    acertou = None
+                    if calcular_acuracia and intimacao.get('classificacao_manual'):
+                        acertou = resultado_ia.strip().upper() == intimacao['classificacao_manual'].strip().upper()
+                        print(f"=== DEBUG: Comparação - Manual: {intimacao['classificacao_manual']}, IA: {resultado_ia}, Acertou: {acertou} ===")
+                    
+                    # Calcular custo real baseado nos tokens
+                    provider = ai_manager_service.get_current_provider()
+                    custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
+                    
+                    resultado = {
+                        'prompt_id': prompt['id'],
+                        'prompt_nome': prompt['nome'],
+                        'regra_negocio': prompt.get('regra_negocio', ''),
+                        'intimacao_id': intimacao_id,
+                        'resultado_ia': resultado_ia,
+                        'classificacao_manual': intimacao.get('classificacao_manual'),
+                        'informacao_adicional': intimacao.get('informacao_adicional'),
+                        'tempo_processamento': round(tempo_processamento, 2),
+                        'acertou': acertou,
+                        'prompt_completo': prompt_final,
+                        'resposta_completa': resposta_ia,
+                        'modelo': modelo,
+                        'temperatura': temperatura,
+                        'tokens_input': tokens_input,
+                        'tokens_output': tokens_output,
+                        'tokens_usados': tokens_usados,
+                        'custo_real': custo_real,
+                        'provider': provider,
+                        'intimacao': intimacao
+                    }
+                    
+                    # Salvar resultado se solicitado
+                    if salvar_resultados:
+                        analise_data = {
+                            'session_id': session_id,
+                            'intimacao_id': intimacao_id,
+                            'prompt_id': prompt['id'],
+                            'prompt_nome': prompt['nome'],
+                            'resultado_ia': resultado_ia,
+                            'acertou': acertou,
+                            'tempo_processamento': tempo_processamento,
+                            'modelo': modelo,
+                            'temperatura': temperatura,
+                            'tokens_input': tokens_input,
+                            'tokens_output': tokens_output,
+                            'custo_real': custo_real,
+                            'prompt_completo': prompt_final,
+                            'resposta_completa': resposta_ia
+                        }
+                        data_service.save_analise(analise_data)
+                        print(f"=== DEBUG: Resultado salvo no banco ===")
+                    
+                    resultados.append(resultado)
+                    
+                except Exception as e:
+                    print(f"=== ERRO ao analisar intimação {intimacao_id}: {e} ===")
+                    resultado = {
+                        'prompt_id': prompt['id'],
+                        'prompt_nome': prompt['nome'],
+                        'intimacao_id': intimacao_id,
+                        'erro': str(e)
+                    }
+                    resultados.append(resultado)
         
         # Finalizar análise
         finalizar_analise(session_id)
@@ -2359,7 +2567,9 @@ def salvar_configuracao_azure():
             'azure_deployment': data.get('azure_deployment', 'gpt-4'),
             'azure_temperatura': float(data.get('azure_temperatura', 0.7)),
             'azure_max_tokens': int(data.get('azure_max_tokens', 500)),
-            'azure_timeout': int(data.get('azure_timeout', 30))
+            'azure_timeout': int(data.get('azure_timeout', 30)),
+            'azure_analise_paralela': int(data.get('azure_analise_paralela', 1)),
+            'azure_delay_entre_lotes': float(data.get('azure_delay_entre_lotes', 0.5))
         })
         
         # Salvar configuração

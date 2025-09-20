@@ -635,7 +635,7 @@ function editarCampo(campo) {
         `;
     } else if (campo === 'defensor') {
         // Para defensor, criar select com lista de defensores
-        const defensores = ['Rodrigo Ahlert Weirich', 'André Iglésias e Silva Borges', 'Walter Luchese Willig'];
+        const defensores = {{ defensores | tojson | safe }};
         inputHtml = `
             <select class="form-select form-select-sm" id="${campo}-edit">
                 <option value="">Selecione o defensor...</option>

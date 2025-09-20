@@ -470,63 +470,17 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Auto-save no localStorage (rascunho)
+// Auto-save no localStorage (rascunho) - DESABILITADO
 let autoSaveTimeout;
 function autoSave() {
+    // Auto-save desabilitado - sempre começar com campos vazios
     clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(function() {
-        const formData = {
-            contexto: document.getElementById('contexto').value,
-            classificacao_manual: document.getElementById('classificacao_manual').value,
-            informacoes_adicionais: document.getElementById('informacoes_adicionais').value,
-            processo: document.getElementById('processo').value,
-            orgao_julgador: document.getElementById('orgao_julgador').value,
-            classe: document.getElementById('classe').value,
-            disponibilizacao: document.getElementById('disponibilizacao').value,
-            intimado: document.getElementById('intimado').value,
-            status: document.getElementById('status').value,
-            prazo: document.getElementById('prazo').value,
-            timestamp: new Date().toISOString()
-        };
-        
-        localStorage.setItem('rascunho_intimacao', JSON.stringify(formData));
-    }, 2000);
 }
 
 // Carregar rascunho se existir
 function carregarRascunho() {
-    const rascunho = localStorage.getItem('rascunho_intimacao');
-    if (rascunho) {
-        try {
-            const data = JSON.parse(rascunho);
-            const timestamp = new Date(data.timestamp);
-            const agora = new Date();
-            const diffHoras = (agora - timestamp) / (1000 * 60 * 60);
-            
-            // Só carregar se o rascunho for de menos de 24 horas
-            if (diffHoras < 24) {
-                if (confirm('Encontrei um rascunho salvo. Deseja carregá-lo?')) {
-                    document.getElementById('contexto').value = data.contexto || '';
-                    document.getElementById('classificacao_manual').value = data.classificacao_manual || '';
-                    document.getElementById('informacoes_adicionais').value = data.informacoes_adicionais || '';
-                    document.getElementById('processo').value = data.processo || '';
-                    document.getElementById('orgao_julgador').value = data.orgao_julgador || '';
-                    document.getElementById('classe').value = data.classe || '';
-                    document.getElementById('disponibilizacao').value = data.disponibilizacao || '';
-                    document.getElementById('intimado').value = data.intimado || '';
-                    document.getElementById('status').value = data.status || '';
-                    document.getElementById('prazo').value = data.prazo || '';
-                    updateTextStats();
-                }
-            } else {
-                // Remover rascunho antigo
-                localStorage.removeItem('rascunho_intimacao');
-            }
-        } catch (e) {
-            console.error('Erro ao carregar rascunho:', e);
-            localStorage.removeItem('rascunho_intimacao');
-        }
-    }
+    // Remover qualquer rascunho existente para sempre começar com campos vazios
+    localStorage.removeItem('rascunho_intimacao');
 }
 
 // Função para extrair informações do contexto
@@ -606,9 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     carregarRascunho();
     
-            ['contexto', 'classificacao_manual', 'informacoes_adicionais', 'processo', 'orgao_julgador', 'classe', 'disponibilizacao', 'intimado', 'status', 'prazo'].forEach(id => {
-        document.getElementById(id).addEventListener('input', autoSave);
-    });
+            // Auto-save desabilitado - event listeners removidos
 });
 
 // Limpar rascunho quando formulário for enviado com sucesso

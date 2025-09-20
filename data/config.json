@@ -32,5 +32,7 @@
   "azure_temperatura": 0.0,
   "azure_max_tokens": 500,
   "azure_timeout": 30,
-  "ai_provider": "azure"
+  "ai_provider": "azure",
+  "azure_analise_paralela": 5,
+  "azure_delay_entre_lotes": 0.5
 }

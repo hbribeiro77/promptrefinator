@@ -61,7 +61,9 @@ class Config:
         'Rodrigo Ahlert Weirich',
         'André Iglésias e Silva Borges',
         'Walter Luchese Willig',
-        'Felipe Frota Aguiar Pizarro Drummond'
+        'Felipe Frota Aguiar Pizarro Drummond',
+        'Marcus de Freitas Gregorio',
+        'Eugenio Pedro Gomes de Oliveira Junior'
     ]
     
     @staticmethod

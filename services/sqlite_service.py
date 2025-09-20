@@ -305,7 +305,7 @@ class SQLiteService:
         """Obter todas as análises"""
         with self.get_connection() as conn:
             cursor = conn.execute('''
-                SELECT a.*, i.contexto, i.classificacao_manual, p.regra_negocio
+                SELECT a.*, i.contexto, i.classificacao_manual, p.regra_negocio, p.nome as prompt_nome
                 FROM analises a 
                 LEFT JOIN intimacoes i ON a.intimacao_id = i.id 
                 LEFT JOIN prompts p ON a.prompt_id = p.id
@@ -317,7 +317,7 @@ class SQLiteService:
         """Obter análises de uma intimação"""
         with self.get_connection() as conn:
             cursor = conn.execute('''
-                SELECT a.*, p.regra_negocio
+                SELECT a.*, p.regra_negocio, p.nome as prompt_nome
                 FROM analises a 
                 LEFT JOIN prompts p ON a.prompt_id = p.id
                 WHERE a.intimacao_id = ? 
@@ -333,7 +333,7 @@ class SQLiteService:
         """Obter análises de um prompt"""
         with self.get_connection() as conn:
             cursor = conn.execute('''
-                SELECT a.*, p.regra_negocio
+                SELECT a.*, p.regra_negocio, p.nome as prompt_nome
                 FROM analises a 
                 LEFT JOIN prompts p ON a.prompt_id = p.id
                 WHERE a.prompt_id = ? 
@@ -482,10 +482,34 @@ class SQLiteService:
             json.dump(config, f, indent=2, ensure_ascii=False)
     
     # Métodos para Sessões de Análise
-    def get_sessoes_analise(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Obter lista de sessões de análise"""
+    def get_sessoes_analise(self, limit: int = 50, offset: int = 0, 
+                           data_inicio: str = None, data_fim: str = None,
+                           prompt_id: str = None, status: str = None,
+                           acuracia_min: str = None) -> List[Dict[str, Any]]:
+        """Obter lista de sessões de análise com filtros e paginação"""
         with self.get_connection() as conn:
-            cursor = conn.execute('''
+            # Construir query com filtros
+            where_conditions = []
+            params = []
+            
+            if data_inicio:
+                where_conditions.append("DATE(data_inicio) >= ?")
+                params.append(data_inicio)
+            
+            if data_fim:
+                where_conditions.append("DATE(data_inicio) <= ?")
+                params.append(data_fim)
+            
+            if prompt_id:
+                where_conditions.append("prompt_id = ?")
+                params.append(prompt_id)
+            
+            if status:
+                where_conditions.append("status = ?")
+                params.append(status)
+            
+            # Construir query base
+            query = '''
                 SELECT 
                     session_id,
                     data_inicio,
@@ -506,9 +530,24 @@ class SQLiteService:
                     status,
                     configuracoes
                 FROM sessoes_analise 
-                ORDER BY data_inicio DESC 
-                LIMIT ?
-            ''', (limit,))
+            '''
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            # Adicionar filtro de acurácia se necessário
+            if acuracia_min:
+                if where_conditions:
+                    query += " AND "
+                else:
+                    query += " WHERE "
+                query += "CASE WHEN intimações_processadas > 0 THEN (acertos * 100.0 / intimações_processadas) ELSE 0 END >= ?"
+                params.append(float(acuracia_min))
+            
+            query += " ORDER BY data_inicio DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+            
+            cursor = conn.execute(query, params)
             
             sessoes = []
             for row in cursor.fetchall():
@@ -552,6 +591,49 @@ class SQLiteService:
                 
                 sessoes.append(sessao)
             return sessoes
+    
+    def get_total_sessoes_analise(self, data_inicio: str = None, data_fim: str = None,
+                                 prompt_id: str = None, status: str = None,
+                                 acuracia_min: str = None) -> int:
+        """Contar total de sessões de análise com filtros"""
+        with self.get_connection() as conn:
+            # Construir query com filtros
+            where_conditions = []
+            params = []
+            
+            if data_inicio:
+                where_conditions.append("DATE(data_inicio) >= ?")
+                params.append(data_inicio)
+            
+            if data_fim:
+                where_conditions.append("DATE(data_inicio) <= ?")
+                params.append(data_fim)
+            
+            if prompt_id:
+                where_conditions.append("prompt_id = ?")
+                params.append(prompt_id)
+            
+            if status:
+                where_conditions.append("status = ?")
+                params.append(status)
+            
+            # Construir query base
+            query = "SELECT COUNT(*) FROM sessoes_analise"
+            
+            if where_conditions:
+                query += " WHERE " + " AND ".join(where_conditions)
+            
+            # Adicionar filtro de acurácia se necessário
+            if acuracia_min:
+                if where_conditions:
+                    query += " AND "
+                else:
+                    query += " WHERE "
+                query += "CASE WHEN intimações_processadas > 0 THEN (acertos * 100.0 / intimações_processadas) ELSE 0 END >= ?"
+                params.append(float(acuracia_min))
+            
+            cursor = conn.execute(query, params)
+            return cursor.fetchone()[0]
     
     def get_sessao_analise(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Obter detalhes de uma sessão específica"""
