@@ -83,6 +83,9 @@ def finalizar_analise(session_id):
 app = Flask(__name__)
 app.secret_key = 'sua_chave_secreta_aqui_mude_em_producao'
 
+# Configurar limite de upload para 100MB
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
+
 # Configurações padrão
 DEFAULT_CONFIG = {
     'openai_api_key': '',
@@ -3286,8 +3289,8 @@ def restaurar_backup_banco():
                 'message': 'Arquivo deve ter extensão .db'
             }), 400
         
-        # Verificar tamanho do arquivo (máximo 50MB)
-        max_size = 50 * 1024 * 1024  # 50MB
+        # Verificar tamanho do arquivo (máximo 100MB)
+        max_size = 100 * 1024 * 1024  # 100MB
         file.seek(0, 2)  # Ir para o final do arquivo
         file_size = file.tell()
         file.seek(0)  # Voltar para o início
@@ -3295,7 +3298,7 @@ def restaurar_backup_banco():
         if file_size > max_size:
             return jsonify({
                 'success': False,
-                'message': 'Arquivo muito grande. Máximo 50MB.'
+                'message': 'Arquivo muito grande. Máximo 100MB.'
             }), 400
         
         # Caminhos dos arquivos
@@ -3457,6 +3460,39 @@ def copiar_prompt(id):
         
     except Exception as e:
         flash(f'Erro ao copiar prompt: {str(e)}', 'error')
+        return redirect(url_for('listar_prompts'))
+
+@app.route('/comparar-prompts')
+def comparar_prompts():
+    """Página de comparação de prompts"""
+    try:
+        # Obter IDs dos prompts da query string
+        prompt_ids = request.args.getlist('prompt_ids')
+        
+        if not prompt_ids:
+            flash('Nenhum prompt selecionado para comparação', 'warning')
+            return redirect(url_for('listar_prompts'))
+        
+        # Buscar dados dos prompts
+        prompts = []
+        for prompt_id in prompt_ids:
+            prompt = data_service.get_prompt_by_id(prompt_id)
+            if prompt:
+                # Garantir que data_criacao seja uma string se não for datetime
+                if prompt.get('data_criacao') and hasattr(prompt['data_criacao'], 'strftime'):
+                    prompt['data_criacao'] = prompt['data_criacao'].strftime('%d/%m/%Y %H:%M')
+                prompts.append(prompt)
+        
+        if len(prompts) < 2:
+            flash('É necessário selecionar pelo menos 2 prompts para comparação', 'warning')
+            return redirect(url_for('listar_prompts'))
+        
+        return render_template('comparar_prompts.html', 
+                             prompts=prompts,
+                             total_prompts=len(prompts))
+        
+    except Exception as e:
+        flash(f'Erro ao carregar comparação: {str(e)}', 'error')
         return redirect(url_for('listar_prompts'))
 
 if __name__ == '__main__':

@@ -2544,23 +2544,49 @@ function carregarDetalhesPrompts(intimacaoId, popoverElement) {
                     
                     content += `
                         <div class="mb-2 p-2 border rounded prompt-card" 
-                             onclick="window.open('/prompts/${prompt.prompt_id}', '_blank')" 
-                             style="cursor: pointer; transition: all 0.2s ease;">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1">
-                                    <div class="fw-semibold text-primary prompt-name">${prompt.prompt_nome}</div>
-                                    <small class="text-muted">
-                                        ${prompt.modelo} • Temp: ${prompt.temperatura}
-                                    </small>
+                             style="transition: all 0.2s ease;">
+                            <div class="d-flex align-items-start">
+                                <div class="me-2 mt-1">
+                                    <input type="checkbox" 
+                                           class="form-check-input prompt-checkbox" 
+                                           data-prompt-id="${prompt.prompt_id}"
+                                           data-prompt-nome="${prompt.prompt_nome}"
+                                           onchange="updateCompareButton()">
                                 </div>
-                                <span class="badge ${badgeClass} ms-2">${taxa}%</span>
-                            </div>
-                            <div class="mt-1">
-                                <small class="text-muted">${prompt.acertos}/${prompt.total_analises} acertos</small>
+                                <div class="flex-grow-1" 
+                                     onclick="window.open('/prompts/${prompt.prompt_id}', '_blank')" 
+                                     style="cursor: pointer;">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <div class="fw-semibold text-primary prompt-name">${prompt.prompt_nome}</div>
+                                            <small class="text-muted">
+                                                ${prompt.modelo} • Temp: ${prompt.temperatura}
+                                            </small>
+                                        </div>
+                                        <span class="badge ${badgeClass} ms-2">${taxa}%</span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <small class="text-muted">${prompt.acertos}/${prompt.total_analises} acertos</small>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     `;
                 });
+                
+                // Adicionar botão de comparação
+                content += `
+                    <div class="mt-3 pt-2 border-top">
+                        <button type="button" 
+                                class="btn btn-primary btn-sm w-100" 
+                                id="btn-compare-prompts"
+                                onclick="compareSelectedPrompts()"
+                                disabled>
+                            <i class="bi bi-arrow-left-right"></i>
+                            Comparar Prompts Selecionados
+                        </button>
+                    </div>
+                `;
                 
                 content += '</div>';
                 
@@ -4047,6 +4073,43 @@ function editarPrompt() {
             console.error('❌ Marked.js não foi carregado!');
         }
     });
+    
+    // Função para atualizar estado do botão de comparação
+    function updateCompareButton() {
+        const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
+        const compareButton = document.getElementById('btn-compare-prompts');
+        
+        if (compareButton) {
+            if (checkboxes.length >= 2) {
+                compareButton.disabled = false;
+                compareButton.textContent = `Comparar ${checkboxes.length} Prompts Selecionados`;
+            } else {
+                compareButton.disabled = true;
+                compareButton.innerHTML = '<i class="bi bi-arrow-left-right"></i> Comparar Prompts Selecionados';
+            }
+        }
+    }
+    
+    // Função para comparar prompts selecionados
+    function compareSelectedPrompts() {
+        const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
+        
+        if (checkboxes.length < 2) {
+            showToast('Selecione pelo menos 2 prompts para comparar', 'warning');
+            return;
+        }
+        
+        // Coletar IDs dos prompts selecionados
+        const promptIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptId);
+        const promptNomes = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptNome);
+        
+        // Criar URL com parâmetros
+        const params = new URLSearchParams();
+        promptIds.forEach(id => params.append('prompt_ids', id));
+        
+        // Redirecionar para página de comparação
+        window.open(`/comparar-prompts?${params.toString()}`, '_blank');
+    }
 </script>
 
 <style>
