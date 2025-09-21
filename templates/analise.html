@@ -5,26 +5,6 @@
 {% block extra_head %}
 <!-- Marked.js será carregado no final da página -->
 <style>
-/* Botão Voltar ao Topo */
-#btn-voltar-topo {
-    transition: all 0.3s ease;
-    border: none;
-    background: linear-gradient(135deg, #007bff, #0056b3);
-}
-
-#btn-voltar-topo:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-    background: linear-gradient(135deg, #0056b3, #004085);
-}
-
-#btn-voltar-topo:active {
-    transform: translateY(0);
-}
-
-#btn-voltar-topo i {
-    font-size: 1.2rem;
-}
 </style>
 {% endblock %}
 
@@ -238,6 +218,10 @@
                                         <i class="bi bi-funnel"></i>
                                         Filtrar
                                     </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="configurarColunasIntimacoes()">
+                                        <i class="bi bi-gear"></i>
+                                        Colunas
+                                    </button>
                                     <a href="{{ url_for('nova_intimacao') }}" class="btn btn-outline-success btn-sm">
                                         <i class="bi bi-plus-circle"></i>
                                     Nova
@@ -252,30 +236,50 @@
                                     <table class="table table-hover intimacoes-cards-table mb-0">
                                         <thead class="table-light">
                                             <tr>
-                                                <th style="width: 50px;">
+                                                <th style="width: 20px;">
                                                     <input type="checkbox" id="select-all-intimacoes" onchange="toggleSelectAllIntimacoes()">
                                                 </th>
-                                                <th style="width: 30%;">Card da Intimação</th>
-                                                <th style="width: 12%;">Classificação Manual</th>
-                                                <th style="width: 15%;">Informações Adicionais</th>
-                                                <th style="width: 10%;">Taxa de Acerto</th>
-                                                <th style="width: 12%;">Data de Criação</th>
-                                                <th style="width: 12%;">Ações</th>
+                                                <th class="col-checkbox" style="width: 25%;">Card da Intimação</th>
+                                                <th class="col-defensor" style="width: 10%;">Defensor</th>
+                                                <th class="col-classe" style="width: 10%;">Classe</th>
+                                                <th class="col-classificacao" style="width: 12%;">Classificação Manual</th>
+                                                <th class="col-informacoes" style="width: 15%;">Informações Adicionais</th>
+                                                <th class="col-taxa" style="width: 10%;">Taxa de Acerto</th>
+                                                <th class="col-data" style="width: 10%;">Data de Criação</th>
+                                                <th class="col-acoes" style="width: 8%;">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}">
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
                                                            data-classificacao="{{ intimacao.classificacao_manual or '' }}"
                                                            onchange="updateIntimacoesSelection()">
                                                 </td>
-                                                <td class="card-cell">
+                                                <td class="col-checkbox card-cell">
                                                     {% include 'partials/card_intimacao_compact.html' %}
                                                 </td>
-                                                <td class="classificacao-cell">
+                                                <td class="col-defensor">
+                                                    {% if intimacao.defensor %}
+                                                    <span class="badge bg-info" title="{{ intimacao.defensor }}">
+                                                        {{ intimacao.defensor[:20] }}{% if intimacao.defensor|length > 20 %}...{% endif %}
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="col-classe">
+                                                    {% if intimacao.classe %}
+                                                    <span class="badge bg-secondary" title="{{ intimacao.classe }}">
+                                                        {{ intimacao.classe[:20] }}{% if intimacao.classe|length > 20 %}...{% endif %}
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="col-classificacao classificacao-cell">
                                                     {% set badge_class = {
                                                         'URGÊNCIA': 'danger',
                                                         'ELABORAR PEÇA': 'success',
@@ -293,7 +297,7 @@
                                                     <span class="text-muted">-</span>
                                                     {% endif %}
                                                 </td>
-                                                <td class="info-cell">
+                                                <td class="col-informacoes info-cell">
                                                     {% if intimacao.informacao_adicional %}
                                                     <div class="info-adicional-text" title="{{ intimacao.informacao_adicional }}">
                                                         {{ intimacao.informacao_adicional[:80] }}{% if intimacao.informacao_adicional|length > 80 %}...{% endif %}
@@ -302,13 +306,13 @@
                                                     <span class="text-muted">-</span>
                                                     {% endif %}
                                                 </td>
-                                                <td class="taxa-acerto-cell">
+                                                <td class="col-taxa taxa-acerto-cell">
                                                     <div id="taxa-acerto-{{ intimacao.id }}" class="taxa-acerto-placeholder">
                                                         <i class="bi bi-hourglass-split text-muted"></i>
                                                         <small class="text-muted">Carregando...</small>
                                                     </div>
                                                 </td>
-                                                <td class="data-cell">
+                                                <td class="col-data data-cell">
                                                     {% if intimacao.data_criacao %}
                                                         {% set data = intimacao.data_criacao.split('T')[0] if 'T' in intimacao.data_criacao else intimacao.data_criacao %}
                                                         {% set hora = intimacao.data_criacao.split('T')[1][:8] if 'T' in intimacao.data_criacao else '' %}
@@ -319,7 +323,7 @@
                                                         <small class="text-muted">N/A</small>
                                                     {% endif %}
                                                 </td>
-                                                <td class="acoes-cell">
+                                                <td class="col-acoes acoes-cell">
                                                     <div class="btn-group btn-group-sm" role="group">
                                                         <button type="button" class="btn btn-outline-primary btn-sm" 
                                                                 data-intimacao-id="{{ intimacao.id }}" 
@@ -603,6 +607,51 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- Filtro por Classe -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-book text-warning"></i>
+                        <strong>Classe:</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todas-classes" checked>
+                        <label class="form-check-label" for="filtro-todas-classes">
+                            <strong>Todas as classes</strong>
+                        </label>
+                    </div>
+                    <hr>
+                    <div id="filtros-classes">
+                        <div class="text-center py-3">
+                            <i class="bi bi-hourglass-split"></i>
+                            Carregando classes...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtro por Taxa de Acerto -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <strong>Taxa de Acerto:</strong>
+                        </label>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="taxa-minima" class="form-label">Mínima (%)</label>
+                            <input type="number" class="form-control" id="taxa-minima" min="0" max="100" placeholder="0">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="taxa-maxima" class="form-label">Máxima (%)</label>
+                            <input type="number" class="form-control" id="taxa-maxima" min="0" max="100" placeholder="100">
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltroTaxa()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Limpar
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" onclick="limparFiltros()">
@@ -613,6 +662,90 @@
                 <button type="button" class="btn btn-primary" onclick="aplicarFiltro()">
                     <i class="bi bi-funnel"></i>
                     Aplicar Filtro
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Configuração de Colunas -->
+<div class="modal fade" id="modalConfigColunas" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-gear text-warning"></i>
+                    Configurar Colunas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">Selecione quais colunas deseja exibir na tabela de intimações:</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                    <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-checkbox" checked>
+                            <label class="form-check-label" for="col-checkbox">
+                                Card da Intimação
+                        </label>
+                    </div>
+                    <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-defensor" checked>
+                            <label class="form-check-label" for="col-defensor">
+                                Defensor
+                        </label>
+                    </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-classe" checked>
+                            <label class="form-check-label" for="col-classe">
+                                Classe
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-classificacao" checked>
+                            <label class="form-check-label" for="col-classificacao">
+                                Classificação Manual
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-informacoes" checked>
+                            <label class="form-check-label" for="col-informacoes">
+                                Informações Adicionais
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-taxa" checked>
+                            <label class="form-check-label" for="col-taxa">
+                                Taxa de Acerto
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-data" checked>
+                            <label class="form-check-label" for="col-data">
+                                Data de Criação
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-acoes" checked>
+                            <label class="form-check-label" for="col-acoes">
+                                Ações
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="resetarColunasIntimacoes()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Resetar
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="aplicarConfigColunasIntimacoes()">
+                    <i class="bi bi-check"></i>
+                    Aplicar
                 </button>
             </div>
         </div>
@@ -756,6 +889,53 @@
         padding: 8px;
         vertical-align: top;
         border-bottom: 1px solid #dee2e6;
+    }
+
+    /* Forçar largura da primeira coluna */
+    .intimacoes-cards-table th:first-child,
+    .intimacoes-cards-table td:first-child {
+        width: 20px !important;
+        min-width: 20px !important;
+        max-width: 20px !important;
+        padding: 4px 2px !important;
+        text-align: center !important;
+        overflow: hidden !important;
+    }
+
+    /* Forçar largura da tabela */
+    .intimacoes-cards-table {
+        width: 100% !important;
+    }
+
+    /* Ajustar largura das outras colunas */
+    .intimacoes-cards-table th:nth-child(2),
+    .intimacoes-cards-table td:nth-child(2) {
+        width: 35% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(3),
+    .intimacoes-cards-table td:nth-child(3) {
+        width: 15% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(4),
+    .intimacoes-cards-table td:nth-child(4) {
+        width: 20% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(5),
+    .intimacoes-cards-table td:nth-child(5) {
+        width: 12% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(6),
+    .intimacoes-cards-table td:nth-child(6) {
+        width: 10% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(7),
+    .intimacoes-cards-table td:nth-child(7) {
+        width: 8% !important;
     }
 
     .intimacao-row:hover {
@@ -1843,6 +2023,99 @@ function filtrarPorClassificacao() {
     modal.show();
 }
 
+// Função para configurar colunas
+function configurarColunasIntimacoes() {
+    const modal = new bootstrap.Modal(document.getElementById('modalConfigColunas'));
+    modal.show();
+}
+
+// Função para aplicar configuração de colunas
+function aplicarConfigColunasIntimacoes() {
+    const colunas = [
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
+    ];
+    
+    colunas.forEach(coluna => {
+        const checkbox = document.getElementById(coluna);
+        const elementos = document.querySelectorAll(`.${coluna}`);
+        
+        if (checkbox.checked) {
+            elementos.forEach(el => el.style.display = '');
+        } else {
+            elementos.forEach(el => el.style.display = 'none');
+        }
+    });
+    
+    // Salvar configuração no localStorage
+    const config = {};
+    colunas.forEach(coluna => {
+        config[coluna] = document.getElementById(coluna).checked;
+    });
+    localStorage.setItem('configColunasIntimacoes', JSON.stringify(config));
+    
+    // Fechar modal se estiver aberto
+    const modalElement = document.getElementById('modalConfigColunas');
+    if (modalElement) {
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+    }
+    
+    showToast('Configuração de colunas aplicada!', 'success');
+}
+
+// Função para resetar colunas
+function resetarColunasIntimacoes() {
+    const colunas = [
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
+    ];
+    
+    colunas.forEach(coluna => {
+        const checkbox = document.getElementById(coluna);
+        checkbox.checked = true;
+    });
+}
+
+// Função para carregar configuração de colunas
+function carregarConfigColunasIntimacoes() {
+    const config = localStorage.getItem('configColunasIntimacoes');
+    if (config) {
+        const configObj = JSON.parse(config);
+        Object.keys(configObj).forEach(coluna => {
+            const checkbox = document.getElementById(coluna);
+            if (checkbox) {
+                checkbox.checked = configObj[coluna];
+            }
+        });
+        // Aplicar configuração sem fechar modal (já que não há modal aberto)
+        aplicarConfigColunasIntimacoesSemFecharModal();
+    }
+}
+
+// Função para aplicar configuração sem fechar modal
+function aplicarConfigColunasIntimacoesSemFecharModal() {
+    const colunas = [
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
+    ];
+    
+    colunas.forEach(coluna => {
+        const checkbox = document.getElementById(coluna);
+        const elementos = document.querySelectorAll(`.${coluna}`);
+        
+        if (checkbox && elementos.length > 0) {
+            if (checkbox.checked) {
+                elementos.forEach(el => el.style.display = '');
+            } else {
+                elementos.forEach(el => el.style.display = 'none');
+            }
+        }
+    });
+}
+
 // Carregar filtros dinamicamente do banco
 function carregarFiltros() {
     fetch('/api/filtros/analise')
@@ -1851,6 +2124,7 @@ function carregarFiltros() {
             if (data.success) {
                 carregarDefensores(data.defensores);
                 carregarClassificacoes(data.classificacoes);
+                carregarClasses(data.classes);
             } else {
                 console.error('Erro ao carregar filtros:', data.message);
                 showToast('Erro ao carregar filtros', 'error');
@@ -1954,6 +2228,58 @@ function carregarClassificacoes(classificacoes) {
     });
 }
 
+// Carregar classes na modal
+function carregarClasses(classes) {
+    const container = document.getElementById('filtros-classes');
+    
+    if (classes.length === 0) {
+        container.innerHTML = '<div class="text-muted"><em>Nenhuma classe encontrada</em></div>';
+        return;
+    }
+    
+    container.innerHTML = classes.map((classe, index) => `
+        <div class="form-check">
+            <input class="form-check-input filtro-classe" type="checkbox" id="filtro-classe-${index}" value="${classe}" checked>
+            <label class="form-check-label" for="filtro-classe-${index}">
+                ${classe}
+            </label>
+        </div>
+    `).join('');
+    
+    // Adicionar event listener para o check "Todas as classes"
+    const checkTodasClasses = document.getElementById('filtro-todas-classes');
+    checkTodasClasses.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.filtro-classe');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+    
+    // Adicionar event listeners para os checkboxes individuais de classes
+    const checkboxesClasses = document.querySelectorAll('.filtro-classe');
+    checkboxesClasses.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const todosMarcados = document.querySelectorAll('.filtro-classe:checked').length === checkboxesClasses.length;
+            const nenhumMarcado = document.querySelectorAll('.filtro-classe:checked').length === 0;
+            
+            if (todosMarcados) {
+                checkTodasClasses.checked = true;
+                checkTodasClasses.indeterminate = false;
+            } else if (nenhumMarcado) {
+                checkTodasClasses.checked = false;
+                checkTodasClasses.indeterminate = false;
+            } else {
+                checkTodasClasses.checked = false;
+                checkTodasClasses.indeterminate = true;
+            }
+        });
+    });
+}
+
+// Função para limpar filtro de taxa
+function limparFiltroTaxa() {
+    document.getElementById('taxa-minima').value = '';
+    document.getElementById('taxa-maxima').value = '';
+}
+
 // Função para aplicar filtro
 function aplicarFiltro() {
     // Obter filtros de defensores
@@ -1974,6 +2300,19 @@ function aplicarFiltro() {
         checkboxesClassificacoes.forEach(cb => classificacoesSelecionadas.push(cb.value));
     }
     
+    // Obter filtros de classes
+    const todasClasses = document.getElementById('filtro-todas-classes').checked;
+    const classesSelecionadas = [];
+    
+    if (!todasClasses) {
+        const checkboxesClasses = document.querySelectorAll('.filtro-classe:checked');
+        checkboxesClasses.forEach(cb => classesSelecionadas.push(cb.value));
+    }
+    
+    // Obter filtros de taxa de acerto
+    const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
+    const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
+    
     // Aplicar filtros nos checkboxes de intimações
     const checkboxes = document.querySelectorAll('.intimacao-checkbox');
     checkboxes.forEach(checkbox => {
@@ -1981,10 +2320,23 @@ function aplicarFiltro() {
         const classificacao = checkbox.dataset.classificacao || '';
         const defensor = row.dataset.defensor || '';
         
+        // Obter classe da linha (precisamos adicionar data-classe)
+        const classe = row.dataset.classe || '';
+        
+        // Obter taxa de acerto da intimação
+        const taxaAcertoElement = row.querySelector('.taxa-acerto-cell .badge');
+        let taxaAcerto = 0;
+        if (taxaAcertoElement) {
+            const taxaText = taxaAcertoElement.textContent.replace('%', '');
+            taxaAcerto = parseFloat(taxaText) || 0;
+        }
+        
         let mostrarDefensor = todosDefensores || defensoresSelecionados.includes(defensor);
         let mostrarClassificacao = todasClassificacoes || classificacoesSelecionadas.includes(classificacao);
+        let mostrarClasse = todasClasses || classesSelecionadas.includes(classe);
+        let mostrarTaxa = taxaAcerto >= taxaMinima && taxaAcerto <= taxaMaxima;
         
-        if (mostrarDefensor && mostrarClassificacao) {
+        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
@@ -2005,10 +2357,16 @@ function limparFiltros() {
     // Marcar todos os checkboxes como selecionados
     document.getElementById('filtro-todos-defensores').checked = true;
     document.getElementById('filtro-todas-classificacoes').checked = true;
+    document.getElementById('filtro-todas-classes').checked = true;
+    
+    // Limpar filtros de taxa
+    document.getElementById('taxa-minima').value = '';
+    document.getElementById('taxa-maxima').value = '';
     
     // Marcar todos os checkboxes individuais (já que "Todos" está marcado)
     document.querySelectorAll('.filtro-defensor').forEach(cb => cb.checked = true);
     document.querySelectorAll('.filtro-classificacao').forEach(cb => cb.checked = true);
+    document.querySelectorAll('.filtro-classe').forEach(cb => cb.checked = true);
     
     // Mostrar todas as intimações
     const checkboxes = document.querySelectorAll('.intimacao-checkbox');
@@ -2023,24 +2381,32 @@ function limparFiltros() {
 
 // Carregar taxas de acerto das intimações
 function carregarTaxasAcerto() {
+    console.log('🔄 Carregando taxas de acerto...');
     fetch('/api/intimacoes/taxa-acerto')
-        .then(response => response.json())
+        .then(response => {
+            console.log('📡 Resposta da API:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('📊 Dados recebidos:', data);
             if (data.success) {
+                console.log('✅ Taxas de acerto carregadas:', data.taxas_acerto);
                 atualizarTaxasAcerto(data.taxas_acerto);
             } else {
-                console.error('Erro ao carregar taxas de acerto:', data.message);
+                console.error('❌ Erro ao carregar taxas de acerto:', data.message);
             }
         })
         .catch(error => {
-            console.error('Erro na requisição de taxas de acerto:', error);
+            console.error('❌ Erro na requisição de taxas de acerto:', error);
         });
 }
 
 // Atualizar taxas de acerto na interface
 function atualizarTaxasAcerto(taxasAcerto) {
+    console.log('🎯 Atualizando taxas de acerto na interface:', taxasAcerto);
     Object.keys(taxasAcerto).forEach(intimacaoId => {
         const elemento = document.getElementById(`taxa-acerto-${intimacaoId}`);
+        console.log(`🔍 Procurando elemento para intimação ${intimacaoId}:`, elemento);
         if (elemento) {
             const dados = taxasAcerto[intimacaoId];
             const taxa = dados.taxa_acerto;
@@ -2498,8 +2864,6 @@ function finalizarAnalise() {
         showToast('📊 Análise adicionada ao histórico! Clique em "Histórico" no menu para visualizar.', 'info');
     }, 1500);
     
-    // Mostrar botão "Voltar ao Topo" após análise
-    mostrarBotaoVoltarTopo();
 }
 
 // Função para exibir resultados
@@ -2886,6 +3250,7 @@ document.addEventListener('DOMContentLoaded', function() {
     atualizarResumo();
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
+    carregarConfigColunasIntimacoes();
     
     
     // Inicializar botão de regras de negócio
@@ -3755,40 +4120,8 @@ function editarPrompt() {
 }
 </style>
 
-<!-- Botão Voltar ao Topo -->
-<button id="btn-voltar-topo" class="btn btn-primary btn-floating" 
-        onclick="voltarAoTopo()" 
-        title="Voltar ao topo"
-        style="display: none; position: fixed; bottom: 20px; right: 20px; z-index: 1000; border-radius: 50%; width: 50px; height: 50px; box-shadow: 0 4px 8px rgba(0,0,0,0.3);">
-    <i class="bi bi-arrow-up"></i>
-</button>
 
 <script>
-// Função para voltar ao topo
-function voltarAoTopo() {
-    window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-    });
-}
-
-// Mostrar/ocultar botão baseado no scroll
-window.addEventListener('scroll', function() {
-    const btnVoltarTopo = document.getElementById('btn-voltar-topo');
-    if (window.pageYOffset > 300) {
-        btnVoltarTopo.style.display = 'block';
-    } else {
-        btnVoltarTopo.style.display = 'none';
-    }
-});
-
-// Mostrar botão após análise (quando a página rola para baixo)
-function mostrarBotaoVoltarTopo() {
-    setTimeout(() => {
-        const btnVoltarTopo = document.getElementById('btn-voltar-topo');
-        btnVoltarTopo.style.display = 'block';
-    }, 1000);
-}
 </script>
 
 {% endblock %}

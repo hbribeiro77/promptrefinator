@@ -616,6 +616,58 @@ class SQLiteService:
             ''')
             return [row[0] for row in cursor.fetchall()]
     
+    def get_classes_unicas(self) -> List[str]:
+        """Obter lista de classes únicas das intimações"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT DISTINCT classe 
+                FROM intimacoes 
+                WHERE classe IS NOT NULL 
+                AND classe != ''
+                ORDER BY classe
+            ''')
+            return [row[0] for row in cursor.fetchall()]
+    
+    def get_intimacoes_por_prompt(self, prompt_id: str) -> List[Dict[str, Any]]:
+        """Obter intimações que foram analisadas com um prompt específico"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT DISTINCT i.*
+                FROM intimacoes i
+                INNER JOIN analises a ON i.id = a.intimacao_id
+                WHERE a.prompt_id = ?
+                ORDER BY i.data_criacao DESC
+            ''', (prompt_id,))
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def get_taxa_acerto_prompt(self, prompt_id: str) -> Dict[str, Any]:
+        """Obter taxa de acerto de um prompt específico"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto
+                FROM analises 
+                WHERE prompt_id = ?
+            ''', (prompt_id,))
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'total_analises': result[0],
+                    'acertos': result[1],
+                    'taxa_acerto': result[2] if result[0] > 0 else 0.0
+                }
+            return {
+                'total_analises': 0,
+                'acertos': 0,
+                'taxa_acerto': 0.0
+            }
+    
+    
     def get_taxa_acerto_por_intimacao(self) -> Dict[str, Dict[str, Any]]:
         """Obter taxa de acerto de cada intimação"""
         with self.get_connection() as conn:

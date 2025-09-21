@@ -700,27 +700,32 @@ def visualizar_prompt(id):
             flash('Prompt não encontrado.', 'error')
             return redirect(url_for('listar_prompts'))
         
-        # Obter histórico de uso
-        historico = prompt.get('historico_uso', [])
+        # Obter sessões de análise relacionadas ao prompt
+        sessoes = data_service.get_sessoes_analise(limit=50, prompt_id=id)
         
-        # Calcular estatísticas
+        # Obter intimações que foram analisadas com este prompt
+        intimacoes_historico = data_service.get_intimacoes_por_prompt(id)
+        
+        # Calcular estatísticas das sessões
         stats = {
-            'total_usos': len(historico),
-            'acuracia_media': prompt.get('acuracia_media', 0),
-            'tempo_medio': prompt.get('tempo_medio', 0),
-            'custo_total': prompt.get('custo_total', 0),
-            'distribuicao_resultados': {},
-            'ultimos_usos': historico[-10:] if historico else []  # Últimos 10 usos
+            'total_sessoes': len(sessoes),
+            'total_intimacoes_processadas': sum(s.get('intimações_processadas', 0) for s in sessoes),
+            'total_acertos': sum(s.get('acertos', 0) for s in sessoes),
+            'tempo_total': sum(s.get('tempo_total', 0) for s in sessoes),
+            'custo_total': sum(s.get('custo_total', 0) for s in sessoes),
+            'tokens_total': sum(s.get('tokens_total', 0) for s in sessoes),
+            'acuracia_media': 0,
+            'ultimas_sessoes': sessoes[:10]  # Últimas 10 sessões
         }
         
-        # Distribuição de resultados
-        for uso in historico:
-            resultado = uso.get('resultado_ia', 'Não classificado')
-            stats['distribuicao_resultados'][resultado] = stats['distribuicao_resultados'].get(resultado, 0) + 1
+        # Calcular acurácia média
+        if stats['total_intimacoes_processadas'] > 0:
+            stats['acuracia_media'] = (stats['total_acertos'] * 100.0) / stats['total_intimacoes_processadas']
         
         return render_template('visualizar_prompt.html',
                              prompt=prompt,
-                             analises=historico,
+                             sessoes=sessoes,
+                             intimacoes_historico=intimacoes_historico,
                              stats=stats,
                              classificacoes=Config.TIPOS_ACAO)
                              
@@ -3238,10 +3243,14 @@ def obter_filtros_analise():
         # Buscar defensores únicos do banco
         defensores = data_service.get_defensores_unicos()
         
+        # Buscar classes únicas do banco
+        classes = data_service.get_classes_unicas()
+        
         return jsonify({
             'success': True,
             'classificacoes': classificacoes,
-            'defensores': defensores
+            'defensores': defensores,
+            'classes': classes
         })
         
     except Exception as e:

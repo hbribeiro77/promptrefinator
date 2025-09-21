@@ -16,6 +16,7 @@ class Intimacao:
                  intimado: Optional[str] = None,
                  status: Optional[str] = None,
                  prazo: Optional[str] = None,
+                 defensor: Optional[str] = None,
                  id: Optional[str] = None,
                  data_criacao: Optional[datetime] = None):
         """
@@ -32,6 +33,7 @@ class Intimacao:
             intimado: Nome do intimado
             status: Status da intimação
             prazo: Prazo da intimação
+            defensor: Nome do defensor responsável
             id: ID único da intimação (gerado automaticamente se não fornecido)
             data_criacao: Data de criação (atual se não fornecida)
         """
@@ -46,6 +48,7 @@ class Intimacao:
         self.intimado = intimado or ""
         self.status = status or ""
         self.prazo = prazo or ""
+        self.defensor = defensor or ""
         self.data_criacao = data_criacao or datetime.now()
     
     def to_dict(self) -> dict:
@@ -62,6 +65,7 @@ class Intimacao:
             'intimado': self.intimado,
             'status': self.status,
             'prazo': self.prazo,
+            'defensor': self.defensor,
             'data_criacao': self.data_criacao.isoformat() if isinstance(self.data_criacao, datetime) else self.data_criacao
         }
     
@@ -89,6 +93,7 @@ class Intimacao:
             intimado=data.get('intimado', ''),
             status=data.get('status', ''),
             prazo=data.get('prazo', ''),
+            defensor=data.get('defensor', ''),
             data_criacao=data_criacao
         )
     

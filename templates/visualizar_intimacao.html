@@ -2,6 +2,21 @@
 
 {% block title %}Intimação #{{ intimacao.id }} - Sistema Analisador de Prompts{% endblock %}
 
+{% block extra_css %}
+<style>
+.color-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    display: inline-block;
+}
+.color-indicator[data-color="#ffe500"] { background-color: #ffe500; }
+.color-indicator[data-color="#80ff00"] { background-color: #80ff00; }
+.color-indicator[data-color="#00ffff"] { background-color: #00ffff; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
@@ -216,7 +231,7 @@
                     <div class="col-sm-9">
                         <div class="d-flex align-items-center">
                             {% if intimacao.cor_etiqueta %}
-                                <div class="color-indicator me-2" style="background-color: {{ intimacao.cor_etiqueta }}; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #ccc;" title="Cor: {{ intimacao.cor_etiqueta }}"></div>
+                                <div class="color-indicator me-2" data-color="{{ intimacao.cor_etiqueta }}" title="Cor: {{ intimacao.cor_etiqueta }}"></div>
                                 <span id="cor_etiqueta-display">{{ intimacao.cor_etiqueta }}</span>
                             {% else %}
                                 <span id="cor_etiqueta-display">Não informado</span>
@@ -579,7 +594,29 @@
 {% endblock %}
 
 {% block extra_js %}
+<script type="application/json" id="intimacao-data">
+{
+    "id": {{ intimacao.id | tojson | safe }},
+    "contexto": {{ intimacao.contexto | tojson | safe }},
+    "classificacao_manual": {{ intimacao.classificacao_manual | tojson | safe }},
+    "informacao_adicional": {{ (intimacao.informacao_adicional or "") | tojson | safe }},
+    "data_criacao": {{ intimacao.data_criacao | tojson | safe }}
+}
+</script>
+
+<script type="application/json" id="analises-data">
+{{ analises | tojson | safe }}
+</script>
+
+<script type="application/json" id="defensores-data">
+{{ defensores | tojson | safe }}
+</script>
+
 <script>
+// Carregar dados do JSON
+const intimacaoData = JSON.parse(document.getElementById('intimacao-data').textContent);
+const analisesData = JSON.parse(document.getElementById('analises-data').textContent);
+const defensoresData = JSON.parse(document.getElementById('defensores-data').textContent);
 // Função para copiar texto
 function copiarTexto(elementId) {
     const elemento = document.getElementById(elementId);
@@ -635,11 +672,11 @@ function editarCampo(campo) {
         `;
     } else if (campo === 'defensor') {
         // Para defensor, criar select com lista de defensores
-        const defensores = {{ defensores | tojson | safe }};
+        const listaDefensores = defensoresData;
         inputHtml = `
             <select class="form-select form-select-sm" id="${campo}-edit">
                 <option value="">Selecione o defensor...</option>
-                ${defensores.map(defensor => 
+                ${listaDefensores.map(defensor => 
                     `<option value="${defensor}" ${valueToEdit === defensor ? 'selected' : ''}>${defensor}</option>`
                 ).join('')}
             </select>
@@ -845,23 +882,13 @@ function atualizarDisplay(campo, valor) {
 // Função para exportar intimação
 function exportarIntimacao() {
     const dados = {
-        id: '{{ intimacao.id }}',
-        contexto: {{ intimacao.contexto | tojson | safe }},
-        classificacao_manual: {{ intimacao.classificacao_manual | tojson | safe }},
-        informacao_adicional: {{ (intimacao.informacao_adicional or "") | tojson | safe }},
-        data_criacao: {{ intimacao.data_criacao | tojson | safe }},
-        total_analises: {{ analises | length }},
-        analises: [
-            {% for analise in analises %}
-            {
-                id: {{ analise.id | tojson | safe }},
-                data_analise: {{ analise.data_analise | tojson | safe }},
-                resultado_ia: {{ (analise.resultado_ia or "") | tojson | safe }},
-                acertou: {{ 'true' if analise.acertou else 'false' if analise.acertou is not none else 'null' }},
-                tempo_processamento: {{ analise.tempo_processamento or 0 }}
-            }{% if not loop.last %},{% endif %}
-            {% endfor %}
-        ]
+        id: intimacaoData.id,
+        contexto: intimacaoData.contexto,
+        classificacao_manual: intimacaoData.classificacao_manual,
+        informacao_adicional: intimacaoData.informacao_adicional,
+        data_criacao: intimacaoData.data_criacao,
+        total_analises: analisesData.length,
+        analises: analisesData
     };
     
     const dataStr = JSON.stringify(dados, null, 2);

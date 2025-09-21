@@ -76,23 +76,6 @@
                 </div>
                 {% endif %}
                 
-                {% if prompt.regra_negocio %}
-                <div class="row mb-3">
-                    <div class="col-sm-3">
-                        <strong>Regra de Negócio:</strong>
-                    </div>
-                    <div class="col-sm-9">
-                        <div class="d-flex align-items-start">
-                            <div id="regra-negocio" class="bg-light p-2 rounded flex-grow-1 me-2">
-                                {{ prompt.regra_negocio }}
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('regra-negocio').textContent && navigator.clipboard.writeText(document.getElementById('regra-negocio').textContent.trim().replace(/\s+/g, ' ')).then(() => showToast('Regra de negócio copiada!', 'success')).catch(() => showToast('Erro ao copiar', 'error'))" title="Copiar">
-                                <i class="bi bi-clipboard"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
                 
                 <div class="row mb-3">
                     <div class="col-sm-3">
@@ -112,6 +95,41 @@
                 </div>
             </div>
         </div>
+
+        <!-- Regra de Negócio -->
+        {% if prompt.regra_negocio %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-gear"></i>
+                    Regra de Negócio
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTexto('regra-negocio')">
+                        <i class="bi bi-clipboard"></i>
+                        Copiar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleWrap('regra-negocio')">
+                        <i class="bi bi-text-wrap"></i>
+                        Quebra de Linha
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="position-relative">
+                    <pre id="regra-negocio" class="bg-light p-3 rounded" style="white-space: pre-wrap; max-height: 500px; overflow-y: auto;">{{ prompt.regra_negocio }}</pre>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Caracteres: <span id="regra-char-count">{{ prompt.regra_negocio | length }}</span> | 
+                        Palavras: <span id="regra-word-count">{{ prompt.regra_negocio.split() | length }}</span> | 
+                        Linhas: <span id="regra-line-count">{{ prompt.regra_negocio.split('\n') | length }}</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Conteúdo do Prompt -->
         <div class="card mb-4">
@@ -178,12 +196,788 @@
             </div>
         </div>
 
-        <!-- Histórico de Uso -->
+        <!-- Histórico nas Intimações -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i>
+                    Histórico nas Intimações
+                </h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltrosHistorico()">
+                        <i class="bi bi-x-circle"></i>
+                        Limpar
+                    </button>
+                    <button type="button" class="btn btn-outline-info btn-sm" onclick="filtrarPorClassificacaoHistorico()">
+                        <i class="bi bi-funnel"></i>
+                        Filtrar
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="configurarColunasIntimacoesHistorico()">
+                        <i class="bi bi-gear"></i>
+                        Colunas
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="verInformacoesAdicionaisIntimacoesSelecionadas()">
+                        <i class="bi bi-info-circle"></i>
+                        Ver Informações Adicionais
+                    </button>
+                </div>
+                
+                <script>
+                // Função para ver informações adicionais das intimações selecionadas
+                function verInformacoesAdicionaisIntimacoesSelecionadas() {
+                    const selecionados = getIntimacoesSelecionadasHistorico();
+                    if (selecionados.length === 0) {
+                        showToast('Selecione pelo menos uma intimação!', 'warning');
+                        return;
+                    }
+                    
+                    // Buscar informações das intimações selecionadas
+                    fetch('/api/intimacoes/informacoes-adicionais', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            intimacoes_ids: selecionados
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            mostrarModalInformacoesAdicionais(
+                                'Informações Adicionais das Intimações Selecionadas',
+                                data.intimacoes,
+                                'intimação'
+                            );
+                        } else {
+                            showToast(`Erro: ${data.message}`, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao buscar informações:', error);
+                        showToast('Erro ao buscar informações das intimações!', 'error');
+                    });
+                }
+
+                // Função para obter intimações selecionadas no histórico
+                function getIntimacoesSelecionadasHistorico() {
+                    const checkboxes = document.querySelectorAll('.intimacao-checkbox-historico:checked');
+                    return Array.from(checkboxes).map(checkbox => checkbox.value);
+                }
+                </script>
+            </div>
+            <div class="card-body">
+                {% if intimacoes_historico %}
+                    <div class="table-responsive">
+                        <table class="table table-hover intimacoes-cards-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="col-checkbox-compact" style="width: 2%;">
+                                        <input type="checkbox" id="select-all-intimacoes-historico" onchange="toggleSelectAllIntimacoesHistorico()">
+                                    </th>
+                                    <th class="col-checkbox" style="width: 25%;">Card da Intimação</th>
+                                    <th class="col-defensor" style="width: 10%;">Defensor</th>
+                                    <th class="col-classe" style="width: 10%;">Classe</th>
+                                    <th class="col-classificacao-manual" style="width: 15%;">Classificação Manual</th>
+                                    <th class="col-informacao-adicional" style="width: 20%;">Informações Adicionais</th>
+                                    <th class="col-resultado-ia" style="width: 10%;">Taxa de Acerto</th>
+                                    <th class="col-acoes" style="width: 10%;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for intimacao in intimacoes_historico %}
+                                <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}">
+                                    <td class="col-checkbox-compact">
+                                        <input type="checkbox" class="intimacao-checkbox-historico" value="{{ intimacao.id }}">
+                                    </td>
+                                    <td class="col-checkbox card-cell">
+                                        {% include 'partials/card_intimacao_compact.html' %}
+                                    </td>
+                                    <td class="col-defensor">
+                                        {% if intimacao.defensor %}
+                                        <span class="badge bg-info" title="{{ intimacao.defensor }}">
+                                            {{ intimacao.defensor[:20] }}{% if intimacao.defensor|length > 20 %}...{% endif %}
+                                        </span>
+                                            {% else %}
+                                        <span class="text-muted">-</span>
+                                            {% endif %}
+                                    </td>
+                                    <td class="col-classe">
+                                        {% if intimacao.classe %}
+                                        <span class="badge bg-secondary" title="{{ intimacao.classe }}">
+                                            {{ intimacao.classe[:20] }}{% if intimacao.classe|length > 20 %}...{% endif %}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="col-classificacao-manual">
+                                        {% if intimacao.classificacao_manual %}
+                                            {% set badge_class = {
+                                                'URGÊNCIA': 'danger',
+                                                'ELABORAR PEÇA': 'success',
+                                                'ANALISAR PROCESSO': 'info',
+                                                'CONTATAR ASSISTIDO': 'warning',
+                                                'RENUNCIAR PRAZO': 'secondary',
+                                                'OCULTAR': 'dark',
+                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                            } %}
+                                            <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
+                                                {{ intimacao.classificacao_manual }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="col-informacao-adicional">
+                                        {% if intimacao.informacao_adicional %}
+                                        <div class="text-truncate" style="max-width: 200px;" title="{{ intimacao.informacao_adicional }}">
+                                            {{ intimacao.informacao_adicional[:100] }}{% if intimacao.informacao_adicional|length > 100 %}...{% endif %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="col-resultado-ia">
+                                        <span class="badge bg-secondary" id="taxa-acerto-{{ intimacao.id }}">Carregando...</span>
+                                    </td>
+                                    <td class="col-acoes">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" class="btn btn-outline-primary" title="Ver detalhes">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger" onclick="confirmarExclusaoIntimacao('{{ intimacao.id }}')" title="Excluir">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- JavaScript para funcionalidades do histórico -->
+                    <script>
+                    function toggleSelectAllIntimacoesHistorico() {
+                        const selectAll = document.getElementById('select-all-intimacoes-historico');
+                        const checkboxes = document.querySelectorAll('.intimacao-checkbox-historico');
+                        
+                        checkboxes.forEach(checkbox => {
+                            // Verificar se a linha está visível (não filtrada)
+                            const row = checkbox.closest('.intimacao-row');
+                            if (row && row.style.display !== 'none') {
+                                checkbox.checked = selectAll.checked;
+                            }
+                        });
+                        
+                        // Atualizar estado do checkbox "Selecionar Todas"
+                        updateSelectAllStateHistorico();
+                    }
+                    
+                    function updateSelectAllStateHistorico() {
+                        const selectAll = document.getElementById('select-all-intimacoes-historico');
+                        const visibleCheckboxes = document.querySelectorAll('.intimacao-checkbox-historico');
+                        const visibleChecked = Array.from(visibleCheckboxes).filter(checkbox => {
+                            const row = checkbox.closest('.intimacao-row');
+                            return row && row.style.display !== 'none' && checkbox.checked;
+                        });
+                        const visibleTotal = Array.from(visibleCheckboxes).filter(checkbox => {
+                            const row = checkbox.closest('.intimacao-row');
+                            return row && row.style.display !== 'none';
+                        });
+                        
+                        if (visibleTotal.length === 0) {
+                            selectAll.checked = false;
+                            selectAll.indeterminate = false;
+                        } else if (visibleChecked.length === visibleTotal.length) {
+                            selectAll.checked = true;
+                            selectAll.indeterminate = false;
+                        } else if (visibleChecked.length > 0) {
+                            selectAll.checked = false;
+                            selectAll.indeterminate = true;
+                        } else {
+                            selectAll.checked = false;
+                            selectAll.indeterminate = false;
+                        }
+                    }
+                    
+                    // Carregar taxas de acerto das intimações
+                    function carregarTaxasAcerto() {
+                        console.log('🔄 Carregando taxas de acerto...');
+                        fetch('/api/intimacoes/taxa-acerto')
+                            .then(response => {
+                                console.log('📡 Resposta da API:', response.status);
+                                return response.json();
+                            })
+                            .then(data => {
+                                console.log('📊 Dados recebidos:', data);
+                                if (data.success) {
+                                    console.log('✅ Taxas de acerto carregadas:', data.taxas_acerto);
+                                    atualizarTaxasAcerto(data.taxas_acerto);
+                                } else {
+                                    console.error('❌ Erro ao carregar taxas de acerto:', data.message);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('❌ Erro na requisição de taxas de acerto:', error);
+                            });
+                    }
+                    
+                    // Atualizar taxas de acerto na interface
+                    function atualizarTaxasAcerto(taxasAcerto) {
+                        console.log('🎯 Atualizando taxas de acerto na interface:', taxasAcerto);
+                        Object.keys(taxasAcerto).forEach(intimacaoId => {
+                            const elemento = document.getElementById(`taxa-acerto-${intimacaoId}`);
+                            console.log(`🔍 Procurando elemento para intimação ${intimacaoId}:`, elemento);
+                            if (elemento) {
+                                const dados = taxasAcerto[intimacaoId];
+                                const taxa = dados.taxa_acerto;
+                                const total = dados.total_analises;
+                                const acertos = dados.acertos;
+                                
+                                // Determinar cor da badge baseada na taxa
+                                let badgeClass = 'bg-secondary';
+                                if (taxa >= 80) {
+                                    badgeClass = 'bg-success';
+                                } else if (taxa >= 60) {
+                                    badgeClass = 'bg-warning';
+                                } else if (taxa > 0) {
+                                    badgeClass = 'bg-danger';
+                                }
+                                
+                                // Atualizar elemento
+                                elemento.className = `badge ${badgeClass}`;
+                                elemento.textContent = `${taxa}% (${acertos}/${total})`;
+                                elemento.title = `${acertos} acertos de ${total} análises`;
+                                
+                                console.log(`✅ Taxa atualizada para intimação ${intimacaoId}: ${taxa}%`);
+                            }
+                        });
+                    }
+                    
+                    // Carregar taxas quando a página carregar
+                    document.addEventListener('DOMContentLoaded', function() {
+                        carregarTaxasAcerto();
+                        carregarConfigColunasHistorico();
+                    });
+                    
+                    // Funções para os botões de controle da tabela
+                    function limparFiltrosHistorico() {
+                        // Resetar todos os filtros
+                        document.getElementById('filtro-todos-defensores-historico').checked = true;
+                        document.getElementById('filtro-todas-classificacoes-historico').checked = true;
+                        document.getElementById('filtro-todas-classes-historico').checked = true;
+                        document.getElementById('taxa-minima-historico').value = '';
+                        document.getElementById('taxa-maxima-historico').value = '';
+                        
+                        // Mostrar todas as linhas
+                        document.querySelectorAll('.intimacao-row').forEach(row => {
+                            row.style.display = '';
+                        });
+                        
+                        // Atualizar estado do checkbox "Selecionar Todas"
+                        updateSelectAllStateHistorico();
+                        
+                        showToast('Filtros limpos!', 'info');
+                    }
+                    
+                    function filtrarPorClassificacaoHistorico() {
+                        // Carregar filtros dinâmicos
+                        carregarFiltrosHistorico();
+                        // Mostrar modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalFiltroHistorico'));
+                        modal.show();
+                    }
+                    
+                    function configurarColunasIntimacoesHistorico() {
+                        // Carregar configuração salva
+                        carregarConfigColunasHistorico();
+                        // Mostrar modal
+                        const modal = new bootstrap.Modal(document.getElementById('modalConfigColunasHistorico'));
+                        modal.show();
+                    }
+                    
+                    function carregarFiltrosHistorico() {
+                        fetch('/api/filtros/analise')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    carregarDefensoresHistorico(data.defensores);
+                                    carregarClassificacoesHistorico(data.classificacoes);
+                                    carregarClassesHistorico(data.classes);
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Erro ao carregar filtros:', error);
+                            });
+                    }
+                    
+                    function carregarDefensoresHistorico(defensores) {
+                        const container = document.getElementById('filtros-defensores-historico');
+                        container.innerHTML = '';
+                        
+                        defensores.forEach(defensor => {
+                            const div = document.createElement('div');
+                            div.className = 'form-check';
+                            div.innerHTML = `
+                                <input class="form-check-input" type="checkbox" id="defensor-${defensor.replace(/\s+/g, '-')}-historico" checked>
+                                <label class="form-check-label" for="defensor-${defensor.replace(/\s+/g, '-')}-historico">
+                                    ${defensor}
+                                </label>
+                            `;
+                            container.appendChild(div);
+                        });
+                    }
+                    
+                    function carregarClassificacoesHistorico(classificacoes) {
+                        const container = document.getElementById('filtros-classificacoes-historico');
+                        container.innerHTML = '';
+                        
+                        classificacoes.forEach(classificacao => {
+                            const div = document.createElement('div');
+                            div.className = 'form-check';
+                            div.innerHTML = `
+                                <input class="form-check-input" type="checkbox" id="classificacao-${classificacao.replace(/\s+/g, '-')}-historico" checked>
+                                <label class="form-check-label" for="classificacao-${classificacao.replace(/\s+/g, '-')}-historico">
+                                    ${classificacao}
+                                </label>
+                            `;
+                            container.appendChild(div);
+                        });
+                    }
+                    
+                    function carregarClassesHistorico(classes) {
+                        const container = document.getElementById('filtros-classes-historico');
+                        container.innerHTML = '';
+                        
+                        classes.forEach(classe => {
+                            const div = document.createElement('div');
+                            div.className = 'form-check';
+                            div.innerHTML = `
+                                <input class="form-check-input" type="checkbox" id="classe-${classe.replace(/\s+/g, '-')}-historico" checked>
+                                <label class="form-check-label" for="classe-${classe.replace(/\s+/g, '-')}-historico">
+                                    ${classe}
+                                </label>
+                            `;
+                            container.appendChild(div);
+                        });
+                    }
+                    
+                    // Função para escapar caracteres especiais em seletores CSS
+                    function escapeCssSelector(str) {
+                        return str.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
+                    }
+                    
+                    function aplicarFiltroHistorico() {
+                        const rows = document.querySelectorAll('.intimacao-row');
+                        
+                        rows.forEach(row => {
+                            let show = true;
+                            
+                            // Filtro por defensor
+                            const defensor = row.dataset.defensor || '';
+                            if (defensor) {
+                                const defensorEscaped = escapeCssSelector(defensor.replace(/\s+/g, '-'));
+                                const defensorCheckbox = document.querySelector(`#defensor-${defensorEscaped}-historico`);
+                                if (defensorCheckbox && !defensorCheckbox.checked) {
+                                    show = false;
+                                }
+                            }
+                            
+                            // Filtro por classe
+                            const classe = row.dataset.classe || '';
+                            if (classe) {
+                                const classeEscaped = escapeCssSelector(classe.replace(/\s+/g, '-'));
+                                const classeCheckbox = document.querySelector(`#classe-${classeEscaped}-historico`);
+                                if (classeCheckbox && !classeCheckbox.checked) {
+                                    show = false;
+                                }
+                            }
+                            
+                            // Filtro por taxa de acerto
+                            const taxaMinima = document.getElementById('taxa-minima-historico').value;
+                            const taxaMaxima = document.getElementById('taxa-maxima-historico').value;
+                            if (taxaMinima || taxaMaxima) {
+                                const taxaElement = row.querySelector('.col-resultado-ia .badge');
+                                if (taxaElement) {
+                                    const taxaText = taxaElement.textContent;
+                                    const taxa = parseFloat(taxaText.split('%')[0]);
+                                    
+                                    if (taxaMinima && taxa < parseFloat(taxaMinima)) {
+                                        show = false;
+                                    }
+                                    if (taxaMaxima && taxa > parseFloat(taxaMaxima)) {
+                                        show = false;
+                                    }
+                                }
+                            }
+                            
+                            row.style.display = show ? '' : 'none';
+                        });
+                        
+                        // Atualizar estado do checkbox "Selecionar Todas"
+                        updateSelectAllStateHistorico();
+                        
+                        // Fechar modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalFiltroHistorico'));
+                        modal.hide();
+                        
+                        showToast('Filtros aplicados!', 'success');
+                    }
+                    
+                    function limparFiltroTaxaHistorico() {
+                        document.getElementById('taxa-minima-historico').value = '';
+                        document.getElementById('taxa-maxima-historico').value = '';
+                    }
+                    
+                    function carregarConfigColunasHistorico() {
+                        const config = localStorage.getItem('configColunasHistorico');
+                        if (config) {
+                            const colunas = JSON.parse(config);
+                            Object.keys(colunas).forEach(coluna => {
+                                const checkbox = document.getElementById(coluna);
+                                if (checkbox) {
+                                    checkbox.checked = colunas[coluna];
+                                }
+                            });
+                            
+                            // Aplicar configuração automaticamente
+                            aplicarConfigColunasHistoricoSemFecharModal();
+                        }
+                    }
+                    
+                    function aplicarConfigColunasHistorico() {
+                        const colunas = {
+                            'col-checkbox-compact-historico': document.getElementById('col-checkbox-compact-historico').checked,
+                            'col-checkbox-historico': document.getElementById('col-checkbox-historico').checked,
+                            'col-defensor-historico': document.getElementById('col-defensor-historico').checked,
+                            'col-classe-historico': document.getElementById('col-classe-historico').checked,
+                            'col-classificacao-manual-historico': document.getElementById('col-classificacao-manual-historico').checked,
+                            'col-informacao-adicional-historico': document.getElementById('col-informacao-adicional-historico').checked,
+                            'col-resultado-ia-historico': document.getElementById('col-resultado-ia-historico').checked,
+                            'col-acoes-historico': document.getElementById('col-acoes-historico').checked
+                        };
+                        
+                        // Salvar configuração
+                        localStorage.setItem('configColunasHistorico', JSON.stringify(colunas));
+                        
+                        // Aplicar configuração
+                        aplicarConfigColunasHistoricoSemFecharModal();
+                        
+                        // Fechar modal
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfigColunasHistorico'));
+                        modal.hide();
+                        
+                        showToast('Configuração de colunas aplicada!', 'success');
+                    }
+                    
+                    function aplicarConfigColunasHistoricoSemFecharModal() {
+                        const colunas = {
+                            'col-checkbox-compact-historico': document.getElementById('col-checkbox-compact-historico')?.checked ?? true,
+                            'col-checkbox-historico': document.getElementById('col-checkbox-historico')?.checked ?? true,
+                            'col-defensor-historico': document.getElementById('col-defensor-historico')?.checked ?? true,
+                            'col-classe-historico': document.getElementById('col-classe-historico')?.checked ?? true,
+                            'col-classificacao-manual-historico': document.getElementById('col-classificacao-manual-historico')?.checked ?? true,
+                            'col-informacao-adicional-historico': document.getElementById('col-informacao-adicional-historico')?.checked ?? true,
+                            'col-resultado-ia-historico': document.getElementById('col-resultado-ia-historico')?.checked ?? true,
+                            'col-acoes-historico': document.getElementById('col-acoes-historico')?.checked ?? true
+                        };
+                        
+                        // Aplicar configuração
+                        Object.keys(colunas).forEach(coluna => {
+                            const colunaClass = coluna.replace('-historico', '');
+                            const elements = document.querySelectorAll(`.${colunaClass}`);
+                            elements.forEach(el => {
+                                el.style.display = colunas[coluna] ? '' : 'none';
+                            });
+                        });
+                    }
+                    
+                    function resetarColunasHistorico() {
+                        // Resetar para configuração padrão
+                        const checkboxes = document.querySelectorAll('#modalConfigColunasHistorico input[type="checkbox"]');
+                        checkboxes.forEach(checkbox => {
+                            checkbox.checked = true;
+                        });
+                        
+                        // Aplicar configuração padrão
+                        aplicarConfigColunasHistorico();
+                    }
+                    </script>
+                    
+                    <style>
+                    /* Estilos para a tabela de intimações do histórico */
+                    .intimacoes-cards-table {
+                        border-collapse: separate;
+                        border-spacing: 0;
+                        table-layout: fixed !important;
+                        width: 100% !important;
+                    }
+
+                    .intimacoes-cards-table th {
+                        border-bottom: 2px solid #dee2e6;
+                        font-weight: 600;
+                        color: #495057;
+                        padding: 12px 8px;
+                        background: #f8f9fa;
+                    }
+
+                    .intimacoes-cards-table td {
+                        padding: 8px;
+                        vertical-align: top;
+                        border-bottom: 1px solid #dee2e6;
+                    }
+
+
+                    /* Coluna de checkbox compacta */
+                    .intimacoes-cards-table th:nth-child(1),
+                    .intimacoes-cards-table td:nth-child(1),
+                    .col-checkbox-compact {
+                        width: 2% !important;
+                        text-align: center !important;
+                    }
+                    
+                    /* Ajustar largura das outras colunas */
+                    .intimacoes-cards-table th:nth-child(2),
+                    .intimacoes-cards-table td:nth-child(2) {
+                        width: 38% !important;
+                    }
+
+                    .intimacoes-cards-table th:nth-child(3),
+                    .intimacoes-cards-table td:nth-child(3) {
+                        width: 15% !important;
+                    }
+
+                    .intimacoes-cards-table th:nth-child(4),
+                    .intimacoes-cards-table td:nth-child(4) {
+                        width: 15% !important;
+                    }
+
+                    .intimacoes-cards-table th:nth-child(5),
+                    .intimacoes-cards-table td:nth-child(5) {
+                        width: 20% !important;
+                    }
+
+                    .intimacoes-cards-table th:nth-child(6),
+                    .intimacoes-cards-table td:nth-child(6) {
+                        width: 10% !important;
+                    }
+
+                    .intimacoes-cards-table th:nth-child(7),
+                    .intimacoes-cards-table td:nth-child(7) {
+                        width: 10% !important;
+                    }
+
+                    .intimacao-row:hover {
+                        background-color: #f8f9fa;
+                    }
+                    </style>
+                    
+                    <!-- Modal de Filtro para Histórico -->
+                    <div class="modal fade" id="modalFiltroHistorico" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="bi bi-funnel text-info"></i>
+                                        Filtrar Intimações do Histórico
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <!-- Filtro por Defensor -->
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="bi bi-person text-primary"></i>
+                                            <strong>Defensor:</strong>
+                                        </label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filtro-todos-defensores-historico" checked>
+                                            <label class="form-check-label" for="filtro-todos-defensores-historico">
+                                                <strong>Todos os defensores</strong>
+                                            </label>
+                                        </div>
+                                        <hr>
+                                        <div id="filtros-defensores-historico">
+                                            <div class="text-center py-3">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                Carregando defensores...
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Filtro por Classificação -->
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="bi bi-tags text-success"></i>
+                                            <strong>Classificação:</strong>
+                                        </label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filtro-todas-classificacoes-historico" checked>
+                                            <label class="form-check-label" for="filtro-todas-classificacoes-historico">
+                                                <strong>Todas as classificações</strong>
+                                            </label>
+                                        </div>
+                                        <hr>
+                                        <div id="filtros-classificacoes-historico">
+                                            <div class="text-center py-3">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                Carregando classificações...
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Filtro por Classe -->
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="bi bi-book text-warning"></i>
+                                            <strong>Classe:</strong>
+                                        </label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="filtro-todas-classes-historico" checked>
+                                            <label class="form-check-label" for="filtro-todas-classes-historico">
+                                                <strong>Todas as classes</strong>
+                                            </label>
+                                        </div>
+                                        <hr>
+                                        <div id="filtros-classes-historico">
+                                            <div class="text-center py-3">
+                                                <i class="bi bi-hourglass-split"></i>
+                                                Carregando classes...
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Filtro por Taxa de Acerto -->
+                                    <div class="mb-3">
+                                        <label class="form-label">
+                                            <i class="bi bi-graph-up text-primary"></i>
+                                            <strong>Taxa de Acerto:</strong>
+                                        </label>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <label for="taxa-minima-historico" class="form-label">Mínima (%)</label>
+                                                <input type="number" class="form-control" id="taxa-minima-historico" min="0" max="100" placeholder="0">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="taxa-maxima-historico" class="form-label">Máxima (%)</label>
+                                                <input type="number" class="form-control" id="taxa-maxima-historico" min="0" max="100" placeholder="100">
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltroTaxaHistorico()">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                                Limpar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="button" class="btn btn-primary" onclick="aplicarFiltroHistorico()">
+                                                    <i class="bi bi-check-circle"></i>
+                                        Aplicar Filtros
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal de Configuração de Colunas para Histórico -->
+                    <div class="modal fade" id="modalConfigColunasHistorico" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="bi bi-gear text-warning"></i>
+                                        Configurar Colunas - Histórico
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <h6>Colunas Disponíveis:</h6>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-checkbox-compact-historico" checked>
+                                            <label class="form-check-label" for="col-checkbox-compact-historico">
+                                                Checkbox
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-checkbox-historico" checked>
+                                            <label class="form-check-label" for="col-checkbox-historico">
+                                                Card da Intimação
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-defensor-historico" checked>
+                                            <label class="form-check-label" for="col-defensor-historico">
+                                                Defensor
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-classe-historico" checked>
+                                            <label class="form-check-label" for="col-classe-historico">
+                                                Classe
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-classificacao-manual-historico" checked>
+                                            <label class="form-check-label" for="col-classificacao-manual-historico">
+                                                Classificação Manual
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-informacao-adicional-historico" checked>
+                                            <label class="form-check-label" for="col-informacao-adicional-historico">
+                                                Informações Adicionais
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-resultado-ia-historico" checked>
+                                            <label class="form-check-label" for="col-resultado-ia-historico">
+                                                Taxa de Acerto
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="col-acoes-historico" checked>
+                                            <label class="form-check-label" for="col-acoes-historico">
+                                                Ações
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" onclick="resetarColunasHistorico()">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                        Resetar
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <button type="button" class="btn btn-primary" onclick="aplicarConfigColunasHistorico()">
+                                        <i class="bi bi-check-circle"></i>
+                                        Aplicar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                                            {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox fa-2x text-muted mb-3"></i>
+                        <h6 class="text-muted">Nenhuma intimação encontrada</h6>
+                        <p class="text-muted">Este prompt ainda não foi usado para analisar nenhuma intimação.</p>
+                    </div>
+                                            {% endif %}
+            </div>
+        </div>
+
+        <!-- Histórico de Análises -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-clock-history"></i>
-                    Histórico de Uso
+                    Histórico de Análises
                 </h5>
                 <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-sm btn-primary">
                     <i class="bi bi-plus-circle"></i>
@@ -191,103 +985,80 @@
                 </a>
             </div>
             <div class="card-body">
-                {% if analises %}
+                {% if sessoes %}
                     <div class="table-responsive">
                         <table class="table table-hover">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Data</th>
-                                    <th>Intimação</th>
-                                    <th>Resultado IA</th>
-                                    <th>Classificação Manual</th>
+                                    <th>Data/Hora</th>
+                                    <th>Modelo</th>
+                                    <th>Intimações</th>
                                     <th>Acurácia</th>
                                     <th>Tempo</th>
+                                    <th>Custo</th>
+                                    <th>Status</th>
                                     <th>Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for analise in analises %}
-                                <tr>
+                                {% for sessao in sessoes %}
+                                <tr {% if loop.index > 5 %}class="sessao-extra" style="display: none;"{% endif %}>
                                     <td>
                                         <small class="text-muted">
-                                            {% if analise.data_analise %}
-                                                {% set data = analise.data_analise.split('T')[0] if 'T' in analise.data_analise else analise.data_analise %}
-                                                {% set hora = analise.data_analise.split('T')[1][:5] if 'T' in analise.data_analise else '' %}
+                                            {% if sessao.data_inicio %}
+                                                {% set data = sessao.data_inicio.split('T')[0] if 'T' in sessao.data_inicio else sessao.data_inicio %}
+                                                {% set hora = sessao.data_inicio.split('T')[1][:5] if 'T' in sessao.data_inicio else '' %}
                                                 {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
-                                            {% else %}
+                                        {% else %}
                                                 N/A
-                                            {% endif %}
+                                        {% endif %}
                                         </small>
                                     </td>
                                     <td>
-                                        <span class="text-truncate d-inline-block" style="max-width: 150px;" title="{{ analise.intimacao_contexto or 'N/A' }}">
-                                            #{{ analise.intimacao_id }}
-                                        </span>
+                                        <span class="badge bg-info">{{ sessao.modelo or 'N/A' }}</span>
                                     </td>
                                     <td>
-                                        {% if analise.resultado_ia %}
-                                            {% set badge_class = {
-                                                'URGÊNCIA': 'danger',
-                                                'ELABORAR PEÇA': 'success',
-                                                'ANALISAR PROCESSO': 'info',
-                                                'CONTATAR ASSISTIDO': 'warning',
-                                                'RENUNCIAR PRAZO': 'secondary',
-                                                'OCULTAR': 'dark',
-                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
-                                            } %}
-                                            <span class="badge bg-{{ badge_class.get(analise.resultado_ia, 'secondary') }}">
-                                                {{ analise.resultado_ia }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">N/A</span>
-                                        {% endif %}
+                                        <small class="text-muted">
+                                            {{ sessao.intimações_processadas or 0 }}/{{ sessao.total_intimacoes or 0 }} Processadas
+                                        </small>
                                     </td>
                                     <td>
-                                        {% if analise.classificacao_manual %}
-                                            {% set badge_class = {
-                                                'URGÊNCIA': 'danger',
-                                                'ELABORAR PEÇA': 'success',
-                                                'ANALISAR PROCESSO': 'info',
-                                                'CONTATAR ASSISTIDO': 'warning',
-                                                'RENUNCIAR PRAZO': 'secondary',
-                                                'OCULTAR': 'dark',
-                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
-                                            } %}
-                                            <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
-                                                {{ analise.classificacao_manual }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if analise.acertou is not none %}
-                                            {% if analise.acertou %}
-                                                <span class="badge bg-success">
-                                                    <i class="bi bi-check-circle"></i>
-                                                    Acertou
-                                                </span>
+                                        {% if sessao.intimações_processadas and sessao.intimações_processadas > 0 %}
+                                            {% set taxa_acerto = (sessao.acertos * 100.0 / sessao.intimações_processadas) %}
+                                            {% if taxa_acerto >= 80 %}
+                                                <span class="badge bg-success">{{ '%.1f'|format(taxa_acerto) }}% {{ sessao.acertos }}/{{ sessao.intimações_processadas }}</span>
+                                            {% elif taxa_acerto >= 60 %}
+                                                <span class="badge bg-warning">{{ '%.1f'|format(taxa_acerto) }}% {{ sessao.acertos }}/{{ sessao.intimações_processadas }}</span>
                                             {% else %}
-                                                <span class="badge bg-danger">
-                                                    <i class="bi bi-x-circle"></i>
-                                                    Errou
-                                                </span>
+                                                <span class="badge bg-danger">{{ '%.1f'|format(taxa_acerto) }}% {{ sessao.acertos }}/{{ sessao.intimações_processadas }}</span>
                                             {% endif %}
                                         {% else %}
-                                            <span class="badge bg-secondary">
-                                                <i class="bi bi-question-circle"></i>
-                                                N/A
-                                            </span>
+                                            <span class="badge bg-secondary">0% 0/0</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         <small class="text-muted">
-                                            {{ '%.2f'|format(analise.tempo_processamento) }}s
+                                            {{ '%.2f'|format(sessao.tempo_total or 0) }}s Total
                                         </small>
                                     </td>
                                     <td>
-                                        <a href="{{ url_for('visualizar_analise', analise_id=analise.id) }}" 
-                                           class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                        <small class="text-muted">
+                                            ${{ '%.4f'|format(sessao.custo_total or 0) }} {{ sessao.tokens_total or 0 }} tokens
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if sessao.status == 'Concluída' %}
+                                            <span class="badge bg-success">{{ sessao.status }}</span>
+                                        {% elif sessao.status == 'Em andamento' %}
+                                            <span class="badge bg-warning">{{ sessao.status }}</span>
+                                        {% elif sessao.status == 'Erro' %}
+                                            <span class="badge bg-danger">{{ sessao.status }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ sessao.status or 'N/A' }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('visualizar_sessao_analise', session_id=sessao.session_id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
                                             <i class="bi bi-eye"></i>
                                         </a>
                                     </td>
@@ -296,6 +1067,37 @@
                             </tbody>
                         </table>
                     </div>
+                    
+                    <!-- Botão para expandir/recolher -->
+                    {% if sessoes|length > 5 %}
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleAnalises()" id="btn-toggle">
+                            <i class="bi bi-chevron-down" id="icon-toggle"></i>
+                            <span id="text-toggle">Ver Mais {{ sessoes|length - 5 }} Análises</span>
+                        </button>
+                    </div>
+                    
+                    <script>
+                    function toggleAnalises() {
+                        const sessoesExtras = document.querySelectorAll('.sessao-extra');
+                        const iconToggle = document.getElementById('icon-toggle');
+                        const textToggle = document.getElementById('text-toggle');
+                        
+                        if (sessoesExtras[0].style.display === 'none') {
+                            // Mostrar análises extras
+                            sessoesExtras.forEach(row => row.style.display = 'table-row');
+                            iconToggle.className = 'bi bi-chevron-up';
+                            textToggle.textContent = 'Recolher Análises';
+                        } else {
+                            // Esconder análises extras
+                            sessoesExtras.forEach(row => row.style.display = 'none');
+                            iconToggle.className = 'bi bi-chevron-down';
+                            textToggle.textContent = 'Ver Mais {{ sessoes|length - 5 }} Análises';
+                        }
+                    }
+                    </script>
+                    {% endif %}
+                    
                 {% else %}
                     <div class="text-center py-4">
                         <i class="bi bi-play-circle fa-2x text-muted mb-3"></i>
@@ -324,37 +1126,31 @@
                 <div class="row text-center mb-3">
                     <div class="col-6">
                         <div class="border-end">
-                            <h5 class="text-primary mb-0">{{ analises | length }}</h5>
-                            <small class="text-muted">Usos</small>
+                            <h5 class="text-primary mb-0">{{ stats.total_sessoes }}</h5>
+                            <small class="text-muted">Análises</small>
                         </div>
                     </div>
                     <div class="col-6">
                         <h5 class="text-success mb-0">
-                            {% set acertos = analises | selectattr('acertou', 'equalto', true) | list | length %}
-                            {% if analises | length > 0 %}
-                                {{ '%.1f'|format((acertos / (analises | length)) * 100) }}%
-                            {% else %}
-                                0%
-                            {% endif %}
+                            {{ '%.1f'|format(stats.acuracia_media) }}%
                         </h5>
                         <small class="text-muted">Acurácia</small>
                     </div>
                 </div>
                 
-                {% if analises %}
+                {% if sessoes %}
                     <div class="row text-center mb-3">
                         <div class="col-6">
                             <div class="border-end">
                                 <h6 class="text-info mb-0">
-                                    {{ '%.2f'|format(analises | map(attribute='tempo_processamento') | sum / (analises | length)) }}s
+                                    {{ '%.2f'|format(stats.tempo_total / stats.total_sessoes if stats.total_sessoes > 0 else 0) }}s
                                 </h6>
                                 <small class="text-muted">Tempo Médio</small>
                             </div>
                         </div>
                         <div class="col-6">
                             <h6 class="text-warning mb-0">
-                                {% set custo_total = 0 %} {# Cálculo de custo removido - simulação desabilitada #}
-                                ${{ '%.4f'|format(custo_total) }}
+                                ${{ '%.4f'|format(stats.custo_total) }}
                             </h6>
                             <small class="text-muted">Custo Total</small>
                         </div>
@@ -399,6 +1195,7 @@
             </div>
         </div>
 
+
         <!-- Ações Rápidas -->
         <div class="card mb-4">
             <div class="card-header">
@@ -418,6 +1215,13 @@
                         <i class="bi bi-clipboard"></i>
                         Copiar Conteúdo
                     </button>
+                    
+                    {% if prompt.regra_negocio %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copiarTexto('regra-negocio')">
+                        <i class="bi bi-gear"></i>
+                        Copiar Regra de Negócio
+                    </button>
+                    {% endif %}
                     
                     <button type="button" class="btn btn-outline-info btn-sm" onclick="previewPrompt()">
                         <i class="bi bi-eye"></i>
@@ -474,14 +1278,14 @@
                         <strong>Tokens estimados:</strong> {{ (prompt.conteudo | length / 4) | round | int }}
                     </div>
                     <div class="mb-2">
-                        <strong>Total de usos:</strong> {{ analises | length }}
+                        <strong>Total de análises:</strong> {{ stats.total_sessoes }}
                     </div>
-                    {% if analises and analises|length > 0 %}
+                    {% if sessoes and sessoes|length > 0 %}
                         <div class="mb-2">
-                            <strong>Último uso:</strong> 
-                            {% if analises and analises|length > 0 and analises[0].data_analise %}
-                                {% set data = analises[0].data_analise.split('T')[0] if 'T' in analises[0].data_analise else analises[0].data_analise %}
-                                {% set hora = analises[0].data_analise.split('T')[1][:5] if 'T' in analises[0].data_analise else '' %}
+                            <strong>Última sessão:</strong> 
+                            {% if sessoes and sessoes|length > 0 and sessoes[0].data_inicio %}
+                                {% set data = sessoes[0].data_inicio.split('T')[0] if 'T' in sessoes[0].data_inicio else sessoes[0].data_inicio %}
+                                {% set hora = sessoes[0].data_inicio.split('T')[1][:5] if 'T' in sessoes[0].data_inicio else '' %}
                                 {{ data.split('-')[2] }}/{{ data.split('-')[1] }}/{{ data.split('-')[0] }}{% if hora %} {{ hora }}{% endif %}
                             {% else %}
                                 N/A
@@ -556,7 +1360,7 @@
                 <p>Tem certeza que deseja excluir este prompt?</p>
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
-                    <strong>Atenção:</strong> Esta ação também excluirá todas as {{ analises | length }} análises relacionadas a este prompt.
+                    <strong>Atenção:</strong> Esta ação também excluirá todas as {{ stats.total_sessoes }} análises relacionadas a este prompt.
                 </div>
                 <p class="text-muted"><small>Esta ação não pode ser desfeita.</small></p>
             </div>
@@ -666,22 +1470,25 @@ function exportarPrompt() {
         descricao: '{{ prompt.descricao | replace("'", "\\'")|replace('\n', '\\n') if prompt.descricao else "" }}',
         conteudo: '{{ prompt.conteudo | replace("'", "\\'")|replace('\n', '\\n') }}',
         data_criacao: '{{ prompt.data_criacao }}',
-        total_usos: {{ analises | length }},
-        acuracia: {% set acertos = analises | selectattr('acertou', 'equalto', true) | list | length %}{% if analises | length > 0 %}{{ (acertos / (analises | length)) * 100 }}{% else %}0{% endif %},
-        analises: [
-            {% for analise in analises %}
+        total_analises: {{ stats.total_sessoes }},
+        acuracia: {{ stats.acuracia_media }},
+        sessoes: [
+            {% for sessao in sessoes %}
             {
-                id: '{{ analise.id }}',
-                data_analise: '{{ analise.data_analise }}',
-                intimacao_id: '{{ analise.intimacao_id }}',
-                resultado_ia: '{{ analise.resultado_ia or "" }}',
-                classificacao_manual: '{{ analise.classificacao_manual or "" }}',
-                acertou: {{ 'true' if analise.acertou else 'false' if analise.acertou is not none else 'null' }},
-                tempo_processamento: {{ analise.tempo_processamento or 0 }}
+                session_id: '{{ sessao.session_id }}',
+                data_inicio: '{{ sessao.data_inicio }}',
+                modelo: '{{ sessao.modelo or "" }}',
+                intimações_processadas: {{ sessao.intimações_processadas or 0 }},
+                total_intimacoes: {{ sessao.total_intimacoes or 0 }},
+                acertos: {{ sessao.acertos or 0 }},
+                tempo_total: {{ sessao.tempo_total or 0 }},
+                custo_total: {{ sessao.custo_total or 0 }},
+                status: '{{ sessao.status or "" }}'
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ]
     };
+    
     
     const dataStr = JSON.stringify(dados, null, 2);
     const dataBlob = new Blob([dataStr], {type: 'application/json'});
@@ -823,5 +1630,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
 </script>
+
+<!-- Incluir componente modal de informações adicionais -->
+{% include 'partials/modal_informacoes_adicionais.html' %}
 {% endblock %}

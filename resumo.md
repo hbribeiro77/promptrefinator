@@ -687,3 +687,36 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - ⏱️ Delay configurável para exibição do popover (500ms)
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.
+
+### **Sistema Completo de Configuração de Colunas na Tabela de Intimações**
+- ✅ Modal de configuração com checkboxes para cada coluna
+- ✅ Colunas adicionais: Defensor e Classe da Intimação
+- ✅ Botão "Colunas" na interface de análise
+- ✅ Persistência no localStorage
+- ✅ Reset para configuração padrão
+- ✅ Colunas disponíveis: Card, Defensor, Classe, Classificação, Informações, Taxa, Data, Ações
+
+### **Floating Button de Voltar ao Topo**
+- ✅ Botão flutuante disponível em todas as páginas
+- ✅ Aparece após rolar 300px para baixo
+- ✅ Scroll suave ao clicar
+- ✅ Design moderno com gradiente e sombra
+- ✅ Efeito hover com escala
+- ✅ Posicionamento fixo no canto inferior direito
+
+### **Modal "Ver Informações Adicionais" na Página de Visualizar Prompt**
+- ✅ Botão "Ver Informações Adicionais" na tabela "Histórico nas Intimações"
+- ✅ Modal reutilizável com contexto e informações adicionais
+- ✅ Funciona apenas com intimações selecionadas
+- ✅ Botões para copiar informações individuais ou em lote
+- ✅ API endpoint dedicada para buscar dados das intimações
+- ✅ Integração completa com sistema de filtros
+
+### **Correções e Melhorias de Interface**
+- ✅ Correção de erros de lint no arquivo visualizar_intimacao.html
+- ✅ Separação de dados JSON e JavaScript para evitar conflitos
+- ✅ Correção de seletor CSS inválido em filtros com caracteres especiais
+- ✅ Função de escape CSS para nomes com parênteses e caracteres especiais
+- ✅ Checkbox "Selecionar Todas" funciona apenas com intimações filtradas/visíveis
+- ✅ Estado inteligente do checkbox (marcado/indeterminado/desmarcado)
+- ✅ Sincronização automática com filtros aplicados
