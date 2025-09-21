@@ -909,6 +909,54 @@ def excluir_sessao_analise():
         print(f"Erro ao excluir sessão: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
+@app.route('/api/database/upload', methods=['POST'])
+def upload_database():
+    """Upload de banco de dados via interface web"""
+    try:
+        if 'database_file' not in request.files:
+            return jsonify({'success': False, 'message': 'Nenhum arquivo foi enviado'}), 400
+        
+        file = request.files['database_file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': 'Nenhum arquivo foi selecionado'}), 400
+        
+        if not file.filename.endswith('.db'):
+            return jsonify({'success': False, 'message': 'Arquivo deve ter extensão .db'}), 400
+        
+        # Fazer backup do banco atual
+        backup_path = f"data/database_backup_antes_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        import shutil
+        shutil.copy2('data/database.db', backup_path)
+        
+        # Salvar novo banco
+        file.save('data/database.db')
+        
+        # Testar se o banco é válido
+        try:
+            test_conn = sqlite3.connect('data/database.db')
+            test_conn.execute('SELECT COUNT(*) FROM intimacoes LIMIT 1')
+            test_conn.close()
+        except Exception as e:
+            # Restaurar backup se o banco for inválido
+            shutil.copy2(backup_path, 'data/database.db')
+            return jsonify({'success': False, 'message': f'Banco de dados inválido: {str(e)}'}), 400
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Banco de dados atualizado com sucesso! Backup salvo em: {backup_path}'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao fazer upload: {str(e)}'}), 500
+
+@app.route('/api/database/download', methods=['GET'])
+def download_database():
+    """Download do banco de dados atual"""
+    try:
+        return send_file('data/database.db', as_attachment=True, download_name='database.db')
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao fazer download: {str(e)}'}), 500
+
 @app.route('/api/historico/exportar-sessao', methods=['POST'])
 def exportar_sessao_analise():
     """Exportar uma sessão de análise para CSV/Excel"""
@@ -3142,6 +3190,64 @@ def obter_informacoes_adicionais_analises():
         return jsonify({
             'success': False,
             'message': f'Erro ao obter informações: {str(e)}'
+        }), 500
+
+@app.route('/api/intimacoes/<intimacao_id>/prompts-acerto')
+def obter_prompts_acerto_intimacao(intimacao_id):
+    """API para obter prompts e taxas de acerto de uma intimação específica"""
+    try:
+        # Buscar prompts e taxas de acerto da intimação
+        prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
+        
+        return jsonify({
+            'success': True,
+            'prompts_acerto': prompts_acerto
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter prompts e acertos: {str(e)}'
+        }), 500
+
+@app.route('/api/intimacoes/taxa-acerto')
+def obter_taxa_acerto_intimacoes():
+    """API para obter taxa de acerto de todas as intimações"""
+    try:
+        # Buscar taxa de acerto de cada intimação
+        taxas_acerto = data_service.get_taxa_acerto_por_intimacao()
+        
+        return jsonify({
+            'success': True,
+            'taxas_acerto': taxas_acerto
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter taxas de acerto: {str(e)}'
+        }), 500
+
+@app.route('/api/filtros/analise')
+def obter_filtros_analise():
+    """API para obter dados de filtros para a página de análise"""
+    try:
+        # Buscar classificações únicas do banco
+        classificacoes = data_service.get_classificacoes_unicas()
+        
+        # Buscar defensores únicos do banco
+        defensores = data_service.get_defensores_unicos()
+        
+        return jsonify({
+            'success': True,
+            'classificacoes': classificacoes,
+            'defensores': defensores
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter filtros: {str(e)}'
         }), 500
 
 @app.route('/api/backup/restaurar', methods=['POST'])

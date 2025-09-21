@@ -115,6 +115,9 @@ promptrefinator2/
 - `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
 - `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
 - `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO)
+- `/api/filtros/analise` - API para obter filtros dinâmicos (defensores e classificações) (NOVO)
+- `/api/intimacoes/taxa-acerto` - API para obter taxa de acerto global das intimações (NOVO)
+- `/api/intimacoes/<intimacao_id>/prompts-acerto` - API para obter prompts e taxas de acerto por intimação (NOVO)
 
 **Funcionalidades Especiais:**
 - Paginação AJAX para relatórios
@@ -143,6 +146,11 @@ promptrefinator2/
 - **NOVO**: Paginação AJAX para histórico de análises
 - **NOVO**: Configuração de análises paralelas para Azure OpenAI
 - **NOVO**: Correção de prompt_nome nas análises (resolvido problema "N/A")
+- **NOVO**: Sistema de filtros dinâmicos na página de análise (defensor e classificação)
+- **NOVO**: Popover customizado com taxa de acerto global por intimação
+- **NOVO**: Tooltip interativo com detalhes dos prompts testados
+- **NOVO**: Prompts clicáveis no popover para visualização detalhada
+- **NOVO**: Delay configurável para exibição do popover (500ms)
 
 ### **2. Configurações (`config.py`)**
 
@@ -585,6 +593,22 @@ promptrefinator2/
 - ✅ Remoção de "informação adicional" do prompt enviado à IA
 - ✅ Correção de templating de prompts em análises paralelas
 
+### **Sistema de Filtros Dinâmicos**
+- ✅ Filtros por defensor e classificação na página de análise
+- ✅ Carregamento dinâmico de opções do banco de dados
+- ✅ Checkboxes "Todos" que controlam seleções individuais
+- ✅ Filtros aplicados apenas em intimações visíveis
+- ✅ Seleção inteligente de "Selecionar Todas" apenas em itens visíveis
+
+### **Popover Customizado com Taxa de Acerto**
+- ✅ Taxa de acerto global exibida para cada intimação
+- ✅ Popover customizado com hover inteligente
+- ✅ Delay de 500ms para exibição do popover
+- ✅ Detalhes dos prompts testados com taxas individuais
+- ✅ Prompts clicáveis para visualização detalhada
+- ✅ Efeitos visuais e transições suaves
+- ✅ API dedicada para buscar dados de prompts por intimação
+
 ---
 
 ## 🔮 **Funcionalidades Futuras**
@@ -656,5 +680,10 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - 🔧 Configuração de análises paralelas para Azure OpenAI
 - 🐛 Correção de prompt_nome nas análises (resolvido "N/A")
 - 🚫 Remoção de "informação adicional" do prompt enviado à IA
+- 🔍 Sistema de filtros dinâmicos na página de análise
+- 📊 Popover customizado com taxa de acerto global
+- 🎯 Tooltip interativo com detalhes dos prompts
+- 🔗 Prompts clicáveis para visualização detalhada
+- ⏱️ Delay configurável para exibição do popover (500ms)
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.

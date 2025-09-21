@@ -255,16 +255,17 @@
                                                 <th style="width: 50px;">
                                                     <input type="checkbox" id="select-all-intimacoes" onchange="toggleSelectAllIntimacoes()">
                                                 </th>
-                                                <th style="width: 35%;">Card da Intimação</th>
-                                                <th style="width: 15%;">Classificação Manual</th>
-                                                <th style="width: 20%;">Informações Adicionais</th>
-                                                <th style="width: 15%;">Data de Criação</th>
-                                                <th style="width: 15%;">Ações</th>
+                                                <th style="width: 30%;">Card da Intimação</th>
+                                                <th style="width: 12%;">Classificação Manual</th>
+                                                <th style="width: 15%;">Informações Adicionais</th>
+                                                <th style="width: 10%;">Taxa de Acerto</th>
+                                                <th style="width: 12%;">Data de Criação</th>
+                                                <th style="width: 12%;">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}">
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
@@ -300,6 +301,12 @@
                                                     {% else %}
                                                     <span class="text-muted">-</span>
                                                     {% endif %}
+                                                </td>
+                                                <td class="taxa-acerto-cell">
+                                                    <div id="taxa-acerto-{{ intimacao.id }}" class="taxa-acerto-placeholder">
+                                                        <i class="bi bi-hourglass-split text-muted"></i>
+                                                        <small class="text-muted">Carregando...</small>
+                                                    </div>
                                                 </td>
                                                 <td class="data-cell">
                                                     {% if intimacao.data_criacao %}
@@ -543,44 +550,65 @@
     </div>
 </div>
 
-<!-- Modal de Filtro por Classificação -->
+<!-- Modal de Filtro -->
 <div class="modal fade" id="modalFiltro" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="bi bi-funnel text-info"></i>
-                    Filtrar Intimações por Classificação
+                    Filtrar Intimações
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">Selecione as classificações:</label>
+                <!-- Filtro por Defensor -->
+                <div class="mb-4">
+                    <label class="form-label">
+                        <i class="bi bi-person-badge text-primary"></i>
+                        <strong>Defensor:</strong>
+                    </label>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas" checked>
-                        <label class="form-check-label" for="filtro-todas">
+                        <input class="form-check-input" type="checkbox" id="filtro-todos-defensores" checked>
+                        <label class="form-check-label" for="filtro-todos-defensores">
+                            <strong>Todos os defensores</strong>
+                        </label>
+                    </div>
+                    <hr>
+                    <div id="filtros-defensores">
+                        <div class="text-center py-3">
+                            <i class="bi bi-hourglass-split"></i>
+                            Carregando defensores...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtro por Classificação -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-tags text-success"></i>
+                        <strong>Classificação:</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todas-classificacoes" checked>
+                        <label class="form-check-label" for="filtro-todas-classificacoes">
                             <strong>Todas as classificações</strong>
                         </label>
                     </div>
                     <hr>
-                    {% for tipo in tipos_acao %}
-                    <div class="form-check">
-                        <input class="form-check-input filtro-classificacao" type="checkbox" id="filtro-{{ loop.index }}" value="{{ tipo }}" checked>
-                        <label class="form-check-label" for="filtro-{{ loop.index }}">
-                            {{ tipo }}
-                        </label>
-                    </div>
-                    {% endfor %}
-                    <div class="form-check">
-                        <input class="form-check-input filtro-classificacao" type="checkbox" id="filtro-sem-classificacao" value="" checked>
-                        <label class="form-check-label" for="filtro-sem-classificacao">
-                            <em>Sem classificação</em>
-                        </label>
+                    <div id="filtros-classificacoes">
+                        <div class="text-center py-3">
+                            <i class="bi bi-hourglass-split"></i>
+                            Carregando classificações...
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="limparFiltros()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Limpar Filtros
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="aplicarFiltro()">
                     <i class="bi bi-funnel"></i>
@@ -1375,11 +1403,20 @@ function updateIntimacoesSelection() {
     const count = checkboxes.length;
     document.getElementById('intimacoes-count').textContent = count + ' selecionada(s)';
     
-    // Atualizar checkbox "selecionar todas"
+    // Atualizar checkbox "selecionar todas" considerando apenas intimações visíveis
     const selectAll = document.getElementById('select-all-intimacoes');
-    const totalCheckboxes = document.querySelectorAll('.intimacao-checkbox');
-    selectAll.checked = count === totalCheckboxes.length && totalCheckboxes.length > 0;
-    selectAll.indeterminate = count > 0 && count < totalCheckboxes.length;
+    const allCheckboxes = document.querySelectorAll('.intimacao-checkbox');
+    const visibleCheckboxes = Array.from(allCheckboxes).filter(checkbox => {
+        const row = checkbox.closest('tr');
+        return row.style.display !== 'none';
+    });
+    const visibleChecked = Array.from(allCheckboxes).filter(checkbox => {
+        const row = checkbox.closest('tr');
+        return row.style.display !== 'none' && checkbox.checked;
+    });
+    
+    selectAll.checked = visibleChecked.length === visibleCheckboxes.length && visibleCheckboxes.length > 0;
+    selectAll.indeterminate = visibleChecked.length > 0 && visibleChecked.length < visibleCheckboxes.length;
     
     atualizarResumo();
 }
@@ -1388,7 +1425,15 @@ function updateIntimacoesSelection() {
 function toggleSelectAllIntimacoes() {
     const selectAll = document.getElementById('select-all-intimacoes');
     const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    checkboxes.forEach(checkbox => checkbox.checked = selectAll.checked);
+    
+    // Selecionar apenas as intimações visíveis (não filtradas)
+    checkboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        if (row.style.display !== 'none') {
+            checkbox.checked = selectAll.checked;
+        }
+    });
+    
     updateIntimacoesSelection();
 }
 
@@ -1793,31 +1838,159 @@ function limparSelecaoIntimacoes() {
 
 // Função para filtrar por classificação
 function filtrarPorClassificacao() {
+    carregarFiltros();
     const modal = new bootstrap.Modal(document.getElementById('modalFiltro'));
     modal.show();
 }
 
+// Carregar filtros dinamicamente do banco
+function carregarFiltros() {
+    fetch('/api/filtros/analise')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                carregarDefensores(data.defensores);
+                carregarClassificacoes(data.classificacoes);
+            } else {
+                console.error('Erro ao carregar filtros:', data.message);
+                showToast('Erro ao carregar filtros', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro na requisição:', error);
+            showToast('Erro ao carregar filtros', 'error');
+        });
+}
+
+// Carregar defensores na modal
+function carregarDefensores(defensores) {
+    const container = document.getElementById('filtros-defensores');
+    
+    if (defensores.length === 0) {
+        container.innerHTML = '<div class="text-muted"><em>Nenhum defensor encontrado</em></div>';
+        return;
+    }
+    
+    container.innerHTML = defensores.map((defensor, index) => `
+        <div class="form-check">
+            <input class="form-check-input filtro-defensor" type="checkbox" id="filtro-defensor-${index}" value="${defensor}" checked>
+            <label class="form-check-label" for="filtro-defensor-${index}">
+                ${defensor}
+            </label>
+        </div>
+    `).join('');
+    
+    // Adicionar event listener para o check "Todos os defensores"
+    const checkTodosDefensores = document.getElementById('filtro-todos-defensores');
+    checkTodosDefensores.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.filtro-defensor');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+    
+    // Adicionar event listeners para os checkboxes individuais de defensores
+    const checkboxesDefensores = document.querySelectorAll('.filtro-defensor');
+    checkboxesDefensores.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const todosMarcados = document.querySelectorAll('.filtro-defensor:checked').length === checkboxesDefensores.length;
+            const nenhumMarcado = document.querySelectorAll('.filtro-defensor:checked').length === 0;
+            
+            if (todosMarcados) {
+                checkTodosDefensores.checked = true;
+                checkTodosDefensores.indeterminate = false;
+            } else if (nenhumMarcado) {
+                checkTodosDefensores.checked = false;
+                checkTodosDefensores.indeterminate = false;
+            } else {
+                checkTodosDefensores.checked = false;
+                checkTodosDefensores.indeterminate = true;
+            }
+        });
+    });
+}
+
+// Carregar classificações na modal
+function carregarClassificacoes(classificacoes) {
+    const container = document.getElementById('filtros-classificacoes');
+    
+    if (classificacoes.length === 0) {
+        container.innerHTML = '<div class="text-muted"><em>Nenhuma classificação encontrada</em></div>';
+        return;
+    }
+    
+    container.innerHTML = classificacoes.map((classificacao, index) => `
+        <div class="form-check">
+            <input class="form-check-input filtro-classificacao" type="checkbox" id="filtro-classificacao-${index}" value="${classificacao}" checked>
+            <label class="form-check-label" for="filtro-classificacao-${index}">
+                ${classificacao}
+            </label>
+        </div>
+    `).join('');
+    
+    // Adicionar event listener para o check "Todas as classificações"
+    const checkTodasClassificacoes = document.getElementById('filtro-todas-classificacoes');
+    checkTodasClassificacoes.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.filtro-classificacao');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+    
+    // Adicionar event listeners para os checkboxes individuais de classificações
+    const checkboxesClassificacoes = document.querySelectorAll('.filtro-classificacao');
+    checkboxesClassificacoes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const todosMarcados = document.querySelectorAll('.filtro-classificacao:checked').length === checkboxesClassificacoes.length;
+            const nenhumMarcado = document.querySelectorAll('.filtro-classificacao:checked').length === 0;
+            
+            if (todosMarcados) {
+                checkTodasClassificacoes.checked = true;
+                checkTodasClassificacoes.indeterminate = false;
+            } else if (nenhumMarcado) {
+                checkTodasClassificacoes.checked = false;
+                checkTodasClassificacoes.indeterminate = false;
+            } else {
+                checkTodasClassificacoes.checked = false;
+                checkTodasClassificacoes.indeterminate = true;
+            }
+        });
+    });
+}
+
 // Função para aplicar filtro
 function aplicarFiltro() {
-    const todasMarcadas = document.getElementById('filtro-todas').checked;
+    // Obter filtros de defensores
+    const todosDefensores = document.getElementById('filtro-todos-defensores').checked;
+    const defensoresSelecionados = [];
+    
+    if (!todosDefensores) {
+        const checkboxesDefensores = document.querySelectorAll('.filtro-defensor:checked');
+        checkboxesDefensores.forEach(cb => defensoresSelecionados.push(cb.value));
+    }
+    
+    // Obter filtros de classificações
+    const todasClassificacoes = document.getElementById('filtro-todas-classificacoes').checked;
     const classificacoesSelecionadas = [];
     
-    if (!todasMarcadas) {
-        const checkboxes = document.querySelectorAll('.filtro-classificacao:checked');
-        checkboxes.forEach(cb => classificacoesSelecionadas.push(cb.value));
+    if (!todasClassificacoes) {
+        const checkboxesClassificacoes = document.querySelectorAll('.filtro-classificacao:checked');
+        checkboxesClassificacoes.forEach(cb => classificacoesSelecionadas.push(cb.value));
     }
     
-    const select = document.getElementById('intimacoes-selecionadas');
-    for (let option of select.options) {
-        const classificacao = option.dataset.classificacao || '';
+    // Aplicar filtros nos checkboxes de intimações
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
+    checkboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        const classificacao = checkbox.dataset.classificacao || '';
+        const defensor = row.dataset.defensor || '';
         
-        if (todasMarcadas || classificacoesSelecionadas.includes(classificacao)) {
-            option.style.display = '';
+        let mostrarDefensor = todosDefensores || defensoresSelecionados.includes(defensor);
+        let mostrarClassificacao = todasClassificacoes || classificacoesSelecionadas.includes(classificacao);
+        
+        if (mostrarDefensor && mostrarClassificacao) {
+            row.style.display = '';
         } else {
-            option.style.display = 'none';
-            option.selected = false;
+            row.style.display = 'none';
+            checkbox.checked = false; // Desmarcar se estiver oculto
         }
-    }
+    });
     
     atualizarResumo();
     
@@ -1827,7 +2000,217 @@ function aplicarFiltro() {
     showToast('Filtro aplicado com sucesso!', 'success');
 }
 
+// Função para limpar filtros
+function limparFiltros() {
+    // Marcar todos os checkboxes como selecionados
+    document.getElementById('filtro-todos-defensores').checked = true;
+    document.getElementById('filtro-todas-classificacoes').checked = true;
+    
+    // Marcar todos os checkboxes individuais (já que "Todos" está marcado)
+    document.querySelectorAll('.filtro-defensor').forEach(cb => cb.checked = true);
+    document.querySelectorAll('.filtro-classificacao').forEach(cb => cb.checked = true);
+    
+    // Mostrar todas as intimações
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
+    checkboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        row.style.display = '';
+    });
+    
+    atualizarResumo();
+    showToast('Filtros limpos!', 'info');
+}
 
+// Carregar taxas de acerto das intimações
+function carregarTaxasAcerto() {
+    fetch('/api/intimacoes/taxa-acerto')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                atualizarTaxasAcerto(data.taxas_acerto);
+            } else {
+                console.error('Erro ao carregar taxas de acerto:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro na requisição de taxas de acerto:', error);
+        });
+}
+
+// Atualizar taxas de acerto na interface
+function atualizarTaxasAcerto(taxasAcerto) {
+    Object.keys(taxasAcerto).forEach(intimacaoId => {
+        const elemento = document.getElementById(`taxa-acerto-${intimacaoId}`);
+        if (elemento) {
+            const dados = taxasAcerto[intimacaoId];
+            const taxa = dados.taxa_acerto;
+            const total = dados.total_analises;
+            const acertos = dados.acertos;
+            
+            // Determinar cor do badge baseado na taxa
+            let badgeClass = 'bg-secondary';
+            if (taxa >= 80) {
+                badgeClass = 'bg-success';
+            } else if (taxa >= 60) {
+                badgeClass = 'bg-warning';
+            } else if (taxa >= 40) {
+                badgeClass = 'bg-danger';
+            }
+            
+            elemento.innerHTML = `
+                <div class="d-flex flex-column align-items-center position-relative" 
+                     data-intimacao-id="${intimacaoId}"
+                     style="cursor: pointer;">
+                    <span class="badge ${badgeClass} mb-1">${taxa}%</span>
+                    <small class="text-muted">${acertos}/${total}</small>
+                    
+                    <!-- Popover customizado -->
+                    <div class="custom-popover" id="popover-${intimacaoId}" style="display: none;">
+                        <div class="popover-content">
+                            <div class="popover-body">
+                                <div class="text-center">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    Carregando detalhes...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adicionar eventos para popover customizado
+            const triggerElement = elemento.querySelector('[data-intimacao-id]');
+            const popoverElement = elemento.querySelector('.custom-popover');
+            
+            // Variáveis para controle do popover
+            elemento.popoverTimeout = null;
+            elemento.showTimeout = null;
+            elemento.isPopoverVisible = false;
+            
+            // Mostrar popover quando entrar no elemento (com delay)
+            triggerElement.addEventListener('mouseenter', function() {
+                clearTimeout(elemento.popoverTimeout);
+                clearTimeout(elemento.showTimeout);
+                
+                if (!elemento.isPopoverVisible) {
+                    // Delay de 500ms para mostrar o popover
+                    elemento.showTimeout = setTimeout(() => {
+                        carregarDetalhesPrompts(intimacaoId, popoverElement);
+                        popoverElement.style.display = 'block';
+                        elemento.isPopoverVisible = true;
+                    }, 500);
+                }
+            });
+            
+            // Esconder popover com delay quando sair do elemento
+            triggerElement.addEventListener('mouseleave', function() {
+                // Cancelar o timeout de mostrar se ainda não foi executado
+                clearTimeout(elemento.showTimeout);
+                
+                elemento.popoverTimeout = setTimeout(() => {
+                    if (elemento.isPopoverVisible) {
+                        popoverElement.style.display = 'none';
+                        elemento.isPopoverVisible = false;
+                    }
+                }, 300);
+            });
+            
+            // Manter popover visível quando mouse estiver sobre ele
+            popoverElement.addEventListener('mouseenter', function() {
+                clearTimeout(elemento.popoverTimeout);
+            });
+            
+            popoverElement.addEventListener('mouseleave', function() {
+                elemento.popoverTimeout = setTimeout(() => {
+                    if (elemento.isPopoverVisible) {
+                        popoverElement.style.display = 'none';
+                        elemento.isPopoverVisible = false;
+                    }
+                }, 300);
+            });
+        }
+    });
+}
+
+
+
+// Carregar detalhes dos prompts para o popover customizado
+function carregarDetalhesPrompts(intimacaoId, popoverElement) {
+    // Verificar se já foi carregado para evitar requisições desnecessárias
+    if (popoverElement.dataset.loaded === 'true') {
+        return; // Já foi carregado
+    }
+    
+    // Mostrar loading no popover
+    popoverElement.querySelector('.popover-body').innerHTML = `
+        <div class="text-center">
+            <i class="bi bi-hourglass-split"></i>
+            Carregando detalhes...
+        </div>
+    `;
+    
+    fetch(`/api/intimacoes/${intimacaoId}/prompts-acerto`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const prompts = data.prompts_acerto;
+                if (prompts.length === 0) {
+                    const content = '<div class="text-center"><em>Nenhuma análise encontrada</em></div>';
+                    popoverElement.querySelector('.popover-body').innerHTML = content;
+                    popoverElement.dataset.loaded = 'true';
+                    return;
+                }
+                
+                // Construir conteúdo do popover
+                let content = '<div class="text-start">';
+                content += '<div class="fw-bold mb-2">Prompts Testados:</div>';
+                
+                prompts.forEach((prompt, index) => {
+                    const taxa = prompt.taxa_acerto;
+                    let badgeClass = 'bg-secondary';
+                    if (taxa >= 80) {
+                        badgeClass = 'bg-success';
+                    } else if (taxa >= 60) {
+                        badgeClass = 'bg-warning';
+                    } else if (taxa >= 40) {
+                        badgeClass = 'bg-danger';
+                    }
+                    
+                    content += `
+                        <div class="mb-2 p-2 border rounded prompt-card" 
+                             onclick="window.open('/prompts/${prompt.prompt_id}', '_blank')" 
+                             style="cursor: pointer; transition: all 0.2s ease;">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="fw-semibold text-primary prompt-name">${prompt.prompt_nome}</div>
+                                    <small class="text-muted">
+                                        ${prompt.modelo} • Temp: ${prompt.temperatura}
+                                    </small>
+                                </div>
+                                <span class="badge ${badgeClass} ms-2">${taxa}%</span>
+                            </div>
+                            <div class="mt-1">
+                                <small class="text-muted">${prompt.acertos}/${prompt.total_analises} acertos</small>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                content += '</div>';
+                
+                popoverElement.querySelector('.popover-body').innerHTML = content;
+                popoverElement.dataset.loaded = 'true';
+            } else {
+                const content = '<div class="text-center"><em>Erro ao carregar detalhes</em></div>';
+                popoverElement.querySelector('.popover-body').innerHTML = content;
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar detalhes dos prompts:', error);
+            const content = '<div class="text-center"><em>Erro ao carregar</em></div>';
+            popoverElement.querySelector('.popover-body').innerHTML = content;
+        });
+}
 
 // Função para limpar formulário
 function limparFormulario() {
@@ -2504,8 +2887,12 @@ document.addEventListener('DOMContentLoaded', function() {
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
     
+    
     // Inicializar botão de regras de negócio
     atualizarBotaoRegrasNegocio();
+    
+    // Carregar taxas de acerto das intimações
+    carregarTaxasAcerto();
     
     // Adicionar event listeners para atalhos de teclado
 document.addEventListener('keydown', function(e) {
@@ -3296,6 +3683,77 @@ function editarPrompt() {
         }
     });
 </script>
+
+<style>
+.custom-popover {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1060;
+    max-width: 400px;
+    min-width: 300px;
+    margin-top: 10px;
+}
+
+.popover-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.popover-content::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #dee2e6;
+}
+
+.popover-content::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid white;
+}
+
+.popover-body {
+    padding: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.prompt-card {
+    transition: all 0.2s ease;
+}
+
+.prompt-card:hover {
+    background-color: #f8f9fa;
+    border-color: #007bff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
+}
+
+.prompt-name {
+    text-decoration: none;
+}
+
+.prompt-card:hover .prompt-name {
+    text-decoration: underline;
+}
+</style>
 
 <!-- Botão Voltar ao Topo -->
 <button id="btn-voltar-topo" class="btn btn-primary btn-floating" 

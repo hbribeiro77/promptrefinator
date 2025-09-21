@@ -592,6 +592,95 @@ class SQLiteService:
                 sessoes.append(sessao)
             return sessoes
     
+    def get_classificacoes_unicas(self) -> List[str]:
+        """Obter lista de classificações únicas das intimações"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT DISTINCT classificacao_manual 
+                FROM intimacoes 
+                WHERE classificacao_manual IS NOT NULL 
+                AND classificacao_manual != ''
+                ORDER BY classificacao_manual
+            ''')
+            return [row[0] for row in cursor.fetchall()]
+    
+    def get_defensores_unicos(self) -> List[str]:
+        """Obter lista de defensores únicos das intimações"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT DISTINCT defensor 
+                FROM intimacoes 
+                WHERE defensor IS NOT NULL 
+                AND defensor != ''
+                ORDER BY defensor
+            ''')
+            return [row[0] for row in cursor.fetchall()]
+    
+    def get_taxa_acerto_por_intimacao(self) -> Dict[str, Dict[str, Any]]:
+        """Obter taxa de acerto de cada intimação"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.intimacao_id,
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto
+                FROM analises a
+                WHERE a.intimacao_id IS NOT NULL
+                GROUP BY a.intimacao_id
+                ORDER BY taxa_acerto DESC
+            ''')
+            
+            result = {}
+            for row in cursor.fetchall():
+                result[row[0]] = {
+                    'total_analises': row[1],
+                    'acertos': row[2],
+                    'taxa_acerto': row[3]
+                }
+            
+            return result
+    
+    def get_prompts_acerto_por_intimacao(self, intimacao_id: str) -> List[Dict[str, Any]]:
+        """Obter prompts e taxas de acerto de uma intimação específica"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.prompt_id,
+                    a.prompt_nome,
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto,
+                    a.modelo,
+                    a.temperatura,
+                    MAX(a.data_analise) as ultima_analise
+                FROM analises a
+                WHERE a.intimacao_id = ?
+                GROUP BY a.prompt_id, a.prompt_nome, a.modelo, a.temperatura
+                ORDER BY taxa_acerto DESC, ultima_analise DESC
+            ''', (intimacao_id,))
+            
+            result = []
+            for row in cursor.fetchall():
+                result.append({
+                    'prompt_id': row[0],
+                    'prompt_nome': row[1],
+                    'total_analises': row[2],
+                    'acertos': row[3],
+                    'taxa_acerto': row[4],
+                    'modelo': row[5],
+                    'temperatura': row[6],
+                    'ultima_analise': row[7]
+                })
+            
+            return result
+    
     def get_total_sessoes_analise(self, data_inicio: str = None, data_fim: str = None,
                                  prompt_id: str = None, status: str = None,
                                  acuracia_min: str = None) -> int:
