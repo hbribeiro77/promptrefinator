@@ -3471,6 +3471,7 @@ def comparar_prompts():
         # Obter ID da intimação da query string
         intimacao_id = request.args.get('intimacao_id')
         print(f"🔍 Intimação ID recebido: {intimacao_id}")
+        print(f"🔍 Todos os parâmetros: {dict(request.args)}")
         
         if not prompt_ids:
             flash('Nenhum prompt selecionado para comparação', 'warning')
@@ -3499,27 +3500,39 @@ def comparar_prompts():
             print(f"🔍 Intimação encontrada: {intimacao is not None}")
             if intimacao:
                 print(f"🔍 Dados da intimação: {intimacao.get('id', 'N/A')}")
-                
-                # Buscar dados de acerto de cada prompt com esta intimação
-                for prompt in prompts:
-                    prompt_id = prompt['id']
-                    # Buscar análises deste prompt com esta intimação
-                    analises = data_service.get_analises_by_prompt_and_intimacao(prompt_id, intimacao_id)
-                    if analises:
-                        acertos = sum(1 for analise in analises if analise.get('acertou', False))
-                        total = len(analises)
-                        taxa = round((acertos / total) * 100, 1) if total > 0 else 0
-                        prompts_acerto[prompt_id] = {
-                            'taxa_acerto': taxa,
-                            'acertos': acertos,
-                            'total_analises': total
-                        }
-                    else:
-                        prompts_acerto[prompt_id] = {
-                            'taxa_acerto': 0,
-                            'acertos': 0,
-                            'total_analises': 0
-                        }
+                print(f"🔍 Processo: {intimacao.get('processo', 'N/A')}")
+                print(f"🔍 Classe: {intimacao.get('classe', 'N/A')}")
+            else:
+                print(f"🔍 ERRO: Intimação não encontrada com ID: {intimacao_id}")
+        else:
+            print(f"🔍 AVISO: Nenhum intimacao_id fornecido")
+        
+        # Buscar dados de acerto de cada prompt com esta intimação
+        if intimacao_id:
+            for prompt in prompts:
+                prompt_id = prompt['id']
+                # Buscar análises deste prompt com esta intimação
+                analises = data_service.get_analises_by_prompt_and_intimacao(prompt_id, intimacao_id)
+                if analises:
+                    acertos = sum(1 for analise in analises if analise.get('acertou', False))
+                    total = len(analises)
+                    taxa = round((acertos / total) * 100, 1) if total > 0 else 0
+                    prompts_acerto[prompt_id] = {
+                        'taxa_acerto': taxa,
+                        'acertos': acertos,
+                        'total_analises': total
+                    }
+                else:
+                    prompts_acerto[prompt_id] = {
+                        'taxa_acerto': 0,
+                        'acertos': 0,
+                        'total_analises': 0
+                    }
+        
+        print(f"🔍 Renderizando template com:")
+        print(f"🔍 - prompts: {len(prompts)}")
+        print(f"🔍 - intimacao: {intimacao is not None}")
+        print(f"🔍 - intimacao_id: {intimacao.get('id') if intimacao else 'None'}")
         
         return render_template('comparar_prompts.html', 
                              prompts=prompts,
@@ -3530,6 +3543,27 @@ def comparar_prompts():
     except Exception as e:
         flash(f'Erro ao carregar comparação: {str(e)}', 'error')
         return redirect(url_for('listar_prompts'))
+
+@app.route('/api/intimacao/<intimacao_id>')
+def get_intimacao_by_id(intimacao_id):
+    """API para buscar dados de uma intimação por ID"""
+    try:
+        intimacao = data_service.get_intimacao_by_id(intimacao_id)
+        if intimacao:
+            return jsonify({
+                'success': True,
+                'intimacao': intimacao
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Intimação não encontrada'
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/analisar-diferencas-prompts', methods=['POST'])
 def analisar_diferencas_prompts():
@@ -3558,12 +3592,14 @@ def analisar_diferencas_prompts():
         if config_personalizada:
             persona = config_personalizada.get('persona', 'Você é um especialista em análise de prompts de IA para classificação jurídica.')
             instrucoes = config_personalizada.get('instrucoes', 'Forneça uma análise detalhada das diferenças.')
+            incluir_contexto = config_personalizada.get('incluirContextoIntimacao', True)
+            incluir_gabarito = config_personalizada.get('incluirInformacaoAdicional', True)
             
             # Construir contexto da intimação com dados reais
             contexto_intimacao = ''
             informacao_adicional = ''
             
-            if intimacao_data:
+            if intimacao_data and incluir_contexto:
                 contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
 - ID: {intimacao_data.get('id', 'N/A')}
 - Processo: {intimacao_data.get('processo', 'N/A')}
@@ -3576,18 +3612,23 @@ def analisar_diferencas_prompts():
 CONTEÚDO DA INTIMAÇÃO:
 {intimacao_data.get('contexto', 'N/A')}
 
-CLASSIFICAÇÃO MANUAL (GABARITO):
+"""
+            
+            if intimacao_data and incluir_gabarito:
+                informacao_adicional = f"""CLASSIFICAÇÃO MANUAL (GABARITO):
 {intimacao_data.get('classificacao_manual', 'N/A')}
 
 INFORMAÇÕES ADICIONAIS:
-{intimacao_data.get('informacao_adicional', 'N/A')}"""
-                
-                informacao_adicional = f"""A classificação correta para esta intimação é: "{intimacao_data.get('classificacao_manual', 'N/A')}".
+{intimacao_data.get('informacao_adicional', 'N/A')}
+
+A classificação correta para esta intimação é: "{intimacao_data.get('classificacao_manual', 'N/A')}".
 
 Analise por que um prompt teve melhor performance que o outro considerando:
 1. A precisão na classificação da intimação
 2. A adequação das regras de negócio ao contexto específico
-3. A capacidade de capturar nuances importantes do caso"""
+3. A capacidade de capturar nuances importantes do caso
+
+"""
             
             prompt_analise = f"""{persona}
 

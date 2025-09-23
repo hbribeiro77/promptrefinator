@@ -1,10 +1,85 @@
-// Configuração do prompt de análise
-let configPromptAnalise = {
-    persona: 'Você é um especialista em análise de prompts de IA para classificação jurídica.',
+// Configuração padrão do prompt de análise
+const configPromptAnaliseDefault = {
+    persona: 'Você é um especialista em análise de prompts de IA para classificação jurídica.\n\nAnalise as diferenças entre estas duas regras de negócio e forneça:\n\n1. Uma análise geral das principais diferenças\n2. Uma lista de 3-5 diferenças específicas\n3. Recomendações sobre qual abordagem pode ser mais eficaz',
     incluirContextoIntimacao: true,
-    incluirInformacaoAdicional: true,
-    instrucoes: 'Analise as diferenças entre estas duas regras de negócio e forneça:\n\n1. Uma análise geral das principais diferenças\n2. Uma lista de 3-5 diferenças específicas\n3. Recomendações sobre qual abordagem pode ser mais eficaz'
+    incluirInformacaoAdicional: true
 };
+
+// Configuração do prompt de análise (carregada do localStorage ou padrão)
+let configPromptAnalise = { ...configPromptAnaliseDefault };
+
+// Função para carregar configurações do localStorage
+function carregarConfiguracoes() {
+    try {
+        const configSalva = localStorage.getItem('configPromptAnalise');
+        if (configSalva) {
+            const config = JSON.parse(configSalva);
+            configPromptAnalise = { ...configPromptAnaliseDefault, ...config };
+            console.log('Configurações carregadas do localStorage:', configPromptAnalise);
+        } else {
+            console.log('Nenhuma configuração salva encontrada, usando padrão');
+        }
+    } catch (e) {
+        console.error('Erro ao carregar configurações do localStorage:', e);
+        configPromptAnalise = { ...configPromptAnaliseDefault };
+    }
+}
+
+// Função para salvar configurações no localStorage
+function salvarConfiguracoes() {
+    try {
+        localStorage.setItem('configPromptAnalise', JSON.stringify(configPromptAnalise));
+        console.log('Configurações salvas no localStorage:', configPromptAnalise);
+    } catch (e) {
+        console.error('Erro ao salvar configurações no localStorage:', e);
+    }
+}
+
+// Carregar configurações ao inicializar
+carregarConfiguracoes();
+
+// Função para carregar dados da intimação
+async function carregarDadosIntimacao() {
+    console.log('Carregando dados da intimação...');
+    
+    // Primeiro, tentar pegar do elemento JSON
+    const intimacaoDataElement = document.getElementById('intimacao-data');
+    if (intimacaoDataElement) {
+        try {
+            window.intimacaoData = JSON.parse(intimacaoDataElement.textContent);
+            console.log('Dados da intimação carregados do JSON:', window.intimacaoData);
+            return true;
+        } catch (e) {
+            console.error(' Erro ao fazer parse do JSON:', e);
+        }
+    }
+    
+    // Se não conseguir do JSON, buscar no banco via API
+    const intimacaoRow = document.querySelector('.intimacao-row');
+    if (intimacaoRow) {
+        const intimacaoId = intimacaoRow.getAttribute('data-intimacao-id');
+        if (intimacaoId) {
+            try {
+                console.log(' Buscando intimação no banco via API:', intimacaoId);
+                const response = await fetch(`/api/intimacao/${intimacaoId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.intimacaoData = data.intimacao;
+                    console.log(' Dados da intimação carregados do banco:', window.intimacaoData);
+                    return true;
+                } else {
+                    console.error(' Erro na API:', data.error);
+                }
+            } catch (e) {
+                console.error(' Erro ao buscar intimação:', e);
+            }
+        }
+    }
+    
+    console.log(' Nenhum dado de intimação encontrado');
+    return false;
+}
 
 // Função para configurar o prompt de análise
 function configurarPromptAnalise() {
@@ -23,18 +98,10 @@ function configurarPromptAnalise() {
                         <form id="formConfigPrompt">
                             <div class="mb-3">
                                 <label for="persona" class="form-label">
-                                    <strong>Persona da IA:</strong>
-                                    <small class="text-muted">Como a IA deve se comportar</small>
+                                    <strong>Persona + Instruções de Análise:</strong>
+                                    <small class="text-muted">Como a IA deve se comportar e o que deve fazer</small>
                                 </label>
-                                <textarea class="form-control" id="persona" rows="3" placeholder="Ex: Você é um especialista em análise de prompts de IA para classificação jurídica.">${configPromptAnalise.persona}</textarea>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="instrucoes" class="form-label">
-                                    <strong>Instruções de Análise:</strong>
-                                    <small class="text-muted">O que a IA deve fazer</small>
-                                </label>
-                                <textarea class="form-control" id="instrucoes" rows="4" placeholder="Ex: Analise as diferenças entre estas duas regras de negócio...">${configPromptAnalise.instrucoes}</textarea>
+                                <textarea class="form-control" id="persona" rows="6" placeholder="Ex: Você é um especialista em análise de prompts de IA para classificação jurídica.&#10;&#10;Analise as diferenças entre estas duas regras de negócio e forneça:&#10;&#10;1. Uma análise geral das principais diferenças&#10;2. Uma lista de 3-5 diferenças específicas&#10;3. Recomendações sobre qual abordagem pode ser mais eficaz">${configPromptAnalise.persona}</textarea>
                             </div>
                             
                             <div class="mb-3">
@@ -103,10 +170,12 @@ function configurarPromptAnalise() {
 function salvarConfigPrompt() {
     configPromptAnalise = {
         persona: document.getElementById('persona').value.trim(),
-        instrucoes: document.getElementById('instrucoes').value.trim(),
         incluirContextoIntimacao: document.getElementById('incluirContexto').checked,
         incluirInformacaoAdicional: document.getElementById('incluirGabarito').checked
     };
+    
+    // Salvar no localStorage
+    salvarConfiguracoes();
     
     // Fechar modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfigPrompt'));
@@ -117,16 +186,13 @@ function salvarConfigPrompt() {
 
 // Função para resetar configuração
 function resetarConfigPrompt() {
-    configPromptAnalise = {
-        persona: 'Você é um especialista em análise de prompts de IA para classificação jurídica.',
-        incluirContextoIntimacao: true,
-        incluirInformacaoAdicional: true,
-        instrucoes: 'Analise as diferenças entre estas duas regras de negócio e forneça:\n\n1. Uma análise geral das principais diferenças\n2. Uma lista de 3-5 diferenças específicas\n3. Recomendações sobre qual abordagem pode ser mais eficaz'
-    };
+    configPromptAnalise = { ...configPromptAnaliseDefault };
+    
+    // Salvar no localStorage
+    salvarConfiguracoes();
     
     // Atualizar campos do formulário
     document.getElementById('persona').value = configPromptAnalise.persona;
-    document.getElementById('instrucoes').value = configPromptAnalise.instrucoes;
     document.getElementById('incluirContexto').checked = configPromptAnalise.incluirContextoIntimacao;
     document.getElementById('incluirGabarito').checked = configPromptAnalise.incluirInformacaoAdicional;
     
@@ -134,13 +200,13 @@ function resetarConfigPrompt() {
 }
 
 // Função para visualizar o prompt usado na análise
-function visualizarPromptAnalise() {
+async function visualizarPromptAnalise() {
     const elements = document.querySelectorAll('[id^="regra-comparacao-"]');
     if (elements.length < 2) {
         showToast('É necessário ter pelo menos 2 prompts para comparar', 'warning');
         return;
     }
-    
+
     // Obter nomes dos prompts
     const promptNames = document.querySelectorAll('.card-title a');
     const nome1 = promptNames[0] ? promptNames[0].textContent.trim() : 'Prompt 1';
@@ -151,12 +217,18 @@ function visualizarPromptAnalise() {
     
     // Construir prompt baseado na configuração
     let promptAnalise = configPromptAnalise.persona + '\n\n';
+    console.log(' Configuração atual:', configPromptAnalise);
     
     // Adicionar contexto da intimação se habilitado
     if (configPromptAnalise.incluirContextoIntimacao) {
-        // Obter dados da intimação do DOM
-        const intimacaoData = window.intimacaoData || {};
-        if (intimacaoData.id) {
+        // SEMPRE carregar dados da intimação
+        await carregarDadosIntimacao();
+        
+        // Usar dados carregados
+        const intimacaoData = window.intimacaoData;
+        console.log(' Dados da intimação no Ver Prompt:', intimacaoData);
+        
+        if (intimacaoData && intimacaoData.id) {
             promptAnalise += `CONTEXTO DA INTIMAÇÃO:
 - ID: ${intimacaoData.id}
 - Processo: ${intimacaoData.processo || 'N/A'}
@@ -170,13 +242,30 @@ CONTEÚDO DA INTIMAÇÃO:
 ${intimacaoData.contexto || 'N/A'}
 
 `;
+        } else {
+            promptAnalise += `CONTEXTO DA INTIMAÇÃO:
+- ID: N/A
+- Processo: N/A
+- Classe: N/A
+- Órgão Julgador: N/A
+- Intimado: N/A
+- Defensor: N/A
+- Data: N/A
+
+CONTEÚDO DA INTIMAÇÃO:
+N/A
+
+`;
         }
     }
     
     // Adicionar informação adicional (gabarito) se habilitado
     if (configPromptAnalise.incluirInformacaoAdicional) {
-        const intimacaoData = window.intimacaoData || {};
-        if (intimacaoData.id) {
+        // Usar dados já carregados no window.intimacaoData
+        const intimacaoData = window.intimacaoData;
+        console.log(' Dados da intimação no Ver Prompt (Gabarito):', intimacaoData);
+        
+        if (intimacaoData && intimacaoData.id) {
             promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
 ${intimacaoData.classificacao_manual || 'N/A'}
 
@@ -191,11 +280,25 @@ Analise por que um prompt teve melhor performance que o outro considerando:
 3. A capacidade de capturar nuances importantes do caso
 
 `;
+        } else {
+            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
+N/A
+
+INFORMAÇÕES ADICIONAIS:
+N/A
+
+A classificação correta para esta intimação é: "N/A".
+
+Analise por que um prompt teve melhor performance que o outro considerando:
+1. A precisão na classificação da intimação
+2. A adequação das regras de negócio ao contexto específico
+3. A capacidade de capturar nuances importantes do caso
+
+`;
         }
     }
     
-    // Adicionar instruções
-    promptAnalise += configPromptAnalise.instrucoes + '\n\n';
+    // As instruções já estão incluídas no persona
     
     // Adicionar prompts a comparar
     promptAnalise += `${nome1.toUpperCase()}:
@@ -294,7 +397,7 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.`;
 }
 
 // Função para copiar o prompt de análise
-function copiarPromptAnalise() {
+async function copiarPromptAnalise() {
     const elements = document.querySelectorAll('[id^="regra-comparacao-"]');
     if (elements.length < 2) return;
     
@@ -311,10 +414,12 @@ function copiarPromptAnalise() {
     
     // Adicionar contexto da intimação se habilitado
     if (configPromptAnalise.incluirContextoIntimacao) {
+        // SEMPRE carregar dados da intimação
+        await carregarDadosIntimacao();
+        
         const intimacaoData = window.intimacaoData || {};
-        if (intimacaoData.id) {
-            promptAnalise += `CONTEXTO DA INTIMAÇÃO:
-- ID: ${intimacaoData.id}
+        promptAnalise += `CONTEXTO DA INTIMAÇÃO:
+- ID: ${intimacaoData.id || 'N/A'}
 - Processo: ${intimacaoData.processo || 'N/A'}
 - Classe: ${intimacaoData.classe || 'N/A'}
 - Órgão Julgador: ${intimacaoData.orgao_julgador || 'N/A'}
@@ -326,13 +431,15 @@ CONTEÚDO DA INTIMAÇÃO:
 ${intimacaoData.contexto || 'N/A'}
 
 `;
-        }
     }
     
     // Adicionar informação adicional (gabarito) se habilitado
     if (configPromptAnalise.incluirInformacaoAdicional) {
-        const intimacaoData = window.intimacaoData || {};
-        if (intimacaoData.id) {
+        // Usar dados já carregados no window.intimacaoData
+        const intimacaoData = window.intimacaoData;
+        console.log(' Dados da intimação no Ver Prompt (Gabarito):', intimacaoData);
+        
+        if (intimacaoData && intimacaoData.id) {
             promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
 ${intimacaoData.classificacao_manual || 'N/A'}
 
@@ -347,11 +454,25 @@ Analise por que um prompt teve melhor performance que o outro considerando:
 3. A capacidade de capturar nuances importantes do caso
 
 `;
+        } else {
+            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
+N/A
+
+INFORMAÇÕES ADICIONAIS:
+N/A
+
+A classificação correta para esta intimação é: "N/A".
+
+Analise por que um prompt teve melhor performance que o outro considerando:
+1. A precisão na classificação da intimação
+2. A adequação das regras de negócio ao contexto específico
+3. A capacidade de capturar nuances importantes do caso
+
+`;
         }
     }
     
-    // Adicionar instruções
-    promptAnalise += configPromptAnalise.instrucoes + '\n\n';
+    // As instruções já estão incluídas no persona
     
     // Adicionar prompts a comparar
     promptAnalise += `${nome1.toUpperCase()}:

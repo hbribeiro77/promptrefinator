@@ -4107,9 +4107,48 @@ function editarPrompt() {
         const promptIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptId);
         const promptNomes = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptNome);
         
-        // Obter ID da intimação da variável global
-        const intimacaoId = window.currentIntimacaoId;
+        // Obter ID da intimação da variável global ou do popover ativo
+        let intimacaoId = window.currentIntimacaoId;
+        
+        // Se não tiver na variável global, tentar capturar do popover ativo
+        if (!intimacaoId) {
+            const popovers = document.querySelectorAll('.custom-popover');
+            for (let popover of popovers) {
+                if (popover.style.display === 'block' || popover.style.display !== 'none') {
+                    const intimacaoIdMatch = popover.id.match(/popover-(\d+)/);
+                    if (intimacaoIdMatch) {
+                        intimacaoId = intimacaoIdMatch[1];
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Se ainda não tiver, tentar capturar da URL atual ou do contexto da página
+        if (!intimacaoId) {
+            // Tentar capturar da URL atual se estivermos na página de análise
+            const urlParams = new URLSearchParams(window.location.search);
+            intimacaoId = urlParams.get('intimacao_id');
+            
+            // Se não tiver na URL, tentar capturar do primeiro popover visível
+            if (!intimacaoId) {
+                const firstPopover = document.querySelector('.custom-popover');
+                if (firstPopover) {
+                    const intimacaoIdMatch = firstPopover.id.match(/popover-(\d+)/);
+                    if (intimacaoIdMatch) {
+                        intimacaoId = intimacaoIdMatch[1];
+                    }
+                }
+            }
+        }
+        
         console.log('🔍 Intimação ID capturado:', intimacaoId);
+        console.log('🔍 Window object:', window);
+        console.log('🔍 CurrentIntimacaoId type:', typeof window.currentIntimacaoId);
+        console.log('🔍 CurrentIntimacaoId value:', window.currentIntimacaoId);
+        console.log('🔍 Popovers encontrados:', document.querySelectorAll('.custom-popover').length);
+        console.log('🔍 URL atual:', window.location.href);
+        console.log('🔍 Parâmetros da URL:', new URLSearchParams(window.location.search).toString());
         
         // Criar URL com parâmetros
         const params = new URLSearchParams();

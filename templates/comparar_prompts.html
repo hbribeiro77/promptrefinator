@@ -87,6 +87,7 @@
 
     <!-- Intimação de Origem -->
     <!-- Debug: intimacao = {{ intimacao }} -->
+    <!-- Debug: intimacao_id = {{ request.args.get('intimacao_id') }} -->
     {% if intimacao %}
     <div class="row mb-4">
         <div class="col-12">
@@ -764,6 +765,12 @@ function carregarTaxaAcertoIntimacao() {
     {% endif %}
 }
 
+<!-- Debug: Verificar se intimacao está sendo passada -->
+<!-- Debug: intimacao = {{ intimacao }} -->
+<!-- Debug: intimacao_id = {{ request.args.get('intimacao_id') }} -->
+<!-- Debug: intimacao is none = {{ intimacao is none }} -->
+<!-- Debug: intimacao is defined = {{ intimacao is defined }} -->
+
 <!-- Dados da intimação para JavaScript -->
 <script type="application/json" id="intimacao-data">
 {% if intimacao %}
@@ -787,13 +794,23 @@ null
 <!-- Script principal da página -->
 <script src="{{ url_for('static', filename='js/comparar_prompts.js') }}"></script>
 
-// Adicionar IDs únicos para os elementos de conteúdo
+<script>
+// Carregar dados da intimação IMEDIATAMENTE após o script principal
 document.addEventListener('DOMContentLoaded', function() {
-    // Carregar dados da intimação
+    // Carregar dados da intimação IMEDIATAMENTE
     const intimacaoDataElement = document.getElementById('intimacao-data');
     if (intimacaoDataElement) {
-        window.intimacaoData = JSON.parse(intimacaoDataElement.textContent);
+        try {
+            window.intimacaoData = JSON.parse(intimacaoDataElement.textContent);
+            console.log('Dados da intimação carregados no DOMContentLoaded:', window.intimacaoData);
+        } catch (e) {
+            console.error('Erro ao fazer parse do JSON:', e);
+        }
+    } else {
+        console.log('Elemento intimacao-data não encontrado no DOMContentLoaded');
     }
+    
+    // Adicionar IDs únicos para os elementos de conteúdo
     {% for prompt in prompts %}
     // ID para regra de negócio
     const regra{{ loop.index }} = document.querySelector('#regra-{{ prompt.id }}');
@@ -809,7 +826,9 @@ document.addEventListener('DOMContentLoaded', function() {
     {% endfor %}
     
     // Carregar taxa de acerto da intimação
-    carregarTaxaAcertoIntimacao();
+    if (typeof carregarTaxaAcertoIntimacao === 'function') {
+        carregarTaxaAcertoIntimacao();
+    }
 });
 </script>
 {% endblock %}

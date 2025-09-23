@@ -752,3 +752,20 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ Código limpo e fácil de manter
 - ✅ Eliminação de scripts inline gigantes
 - ✅ Melhor performance com cache do navegador
+
+### **Sistema de Configuração Persistente**
+- ✅ Configurações salvas automaticamente no localStorage
+- ✅ Carregamento automático das configurações ao inicializar
+- ✅ Configuração padrão como fallback seguro
+- ✅ Merge inteligente entre configurações salvas e padrão
+- ✅ Tratamento de erros com fallback para configuração padrão
+- ✅ Persistência entre sessões do navegador
+- ✅ Simplificação da interface com campo único "Persona + Instruções"
+
+### **Melhorias na Análise de Diferenças**
+- ✅ Campo único "Persona + Instruções de Análise" no modal de configuração
+- ✅ Instruções integradas ao persona para simplificar a interface
+- ✅ Configuração padrão com instruções completas de análise
+- ✅ Persistência das configurações personalizadas
+- ✅ Textarea expandida (6 linhas) para acomodar persona + instruções
+- ✅ Remoção de campo separado de instruções para evitar confusão
