@@ -40,7 +40,7 @@
                 <div class="card-body">
                     <div class="row">
                         {% for prompt in prompts %}
-                        <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <div class="card border-primary">
                                 <div class="card-header bg-primary text-white">
                                     <h6 class="card-title mb-0">
@@ -85,6 +85,106 @@
         </div>
     </div>
 
+    <!-- Intimação de Origem -->
+    <!-- Debug: intimacao = {{ intimacao }} -->
+    {% if intimacao %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-file-earmark-text"></i>
+                        Intimação de Origem
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width: 2%;"></th>
+                                            <th style="width: 25%;">Card da Intimação</th>
+                                            <th style="width: 10%;">Defensor</th>
+                                            <th style="width: 10%;">Classe</th>
+                                            <th style="width: 15%;">Classificação</th>
+                                            <th style="width: 10%;">Taxa de Acerto</th>
+                                            <th style="width: 10%;">Data</th>
+                                            <th style="width: 18%;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}">
+                                            <td>
+                                                <input type="checkbox" class="form-check-input" checked disabled>
+                                            </td>
+                                            <td>
+                                                {% include 'partials/card_intimacao_compact.html' %}
+                                            </td>
+                                            <td>
+                                                {% if intimacao.defensor %}
+                                                <span class="badge bg-info" title="{{ intimacao.defensor }}">
+                                                    {{ intimacao.defensor[:20] }}{% if intimacao.defensor|length > 20 %}...{% endif %}
+                                                </span>
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if intimacao.classe %}
+                                                <span class="badge bg-secondary" title="{{ intimacao.classe }}">
+                                                    {{ intimacao.classe[:20] }}{% if intimacao.classe|length > 20 %}...{% endif %}
+                                                </span>
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if intimacao.classificacao_manual %}
+                                                <span class="badge bg-primary">{{ intimacao.classificacao_manual }}</span>
+                                                {% else %}
+                                                <span class="text-muted">-</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-secondary" id="taxa-acerto-{{ intimacao.id }}">Carregando...</span>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    {% if intimacao.data_criacao %}
+                                                        {% if intimacao.data_criacao is string %}
+                                                            {{ intimacao.data_criacao }}
+                                                        {% else %}
+                                                            {{ intimacao.data_criacao.strftime('%d/%m/%Y') }}
+                                                        {% endif %}
+                                                    {% else %}
+                                                        N/A
+                                                    {% endif %}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group btn-group-sm" role="group">
+                                                    <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" 
+                                                       class="btn btn-outline-primary" 
+                                                       target="_blank"
+                                                       title="Ver detalhes">
+                                                        <i class="bi bi-eye"></i>
+                                                    </a>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Comparação de Conteúdo -->
     <div class="row mb-4">
         <div class="col-12">
@@ -98,13 +198,38 @@
                 <div class="card-body">
                     <div class="row">
                         {% for prompt in prompts %}
-                        <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="col-md-6 mb-4">
                             <div class="card h-100">
                                 <div class="card-header bg-light">
-                                    <h6 class="card-title mb-0 text-primary">
-                                        <i class="bi bi-file-text"></i>
-                                        {{ prompt.nome }}
-                                    </h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="card-title mb-0">
+                                            <a href="{{ url_for('visualizar_prompt', id=prompt.id) }}" 
+                                               target="_blank" 
+                                               class="text-primary text-decoration-none"
+                                               title="Ver detalhes do prompt">
+                                                <i class="bi bi-file-text"></i>
+                                                {{ prompt.nome }}
+                                            </a>
+                                        </h6>
+                                        {% if intimacao and prompts_acerto.get(prompt.id) %}
+                                        {% set acerto_data = prompts_acerto[prompt.id] %}
+                                        {% set taxa = acerto_data.taxa_acerto %}
+                                        {% set acertos = acerto_data.acertos %}
+                                        {% set total = acerto_data.total_analises %}
+                                        {% if taxa >= 80 %}
+                                            {% set badge_class = 'bg-success' %}
+                                        {% elif taxa >= 60 %}
+                                            {% set badge_class = 'bg-warning' %}
+                                        {% elif taxa >= 40 %}
+                                            {% set badge_class = 'bg-danger' %}
+                                        {% else %}
+                                            {% set badge_class = 'bg-secondary' %}
+                                        {% endif %}
+                                        <span class="badge {{ badge_class }}" title="{{ acertos }} acertos de {{ total }} análises">
+                                            {{ taxa }}% ({{ acertos }}/{{ total }})
+                                        </span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     <div class="mb-3">
@@ -115,26 +240,43 @@
                                     {% if prompt.regra_negocio %}
                                     <div class="mb-3">
                                         <strong>Regra de Negócio:</strong>
-                                        <div class="bg-light p-2 rounded small" style="max-height: 100px; overflow-y: auto;">
-                                            {{ prompt.regra_negocio }}
+                                        <div class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                                            <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9em;">{{ prompt.regra_negocio }}</pre>
+                                        </div>
+                                        <div class="text-end mt-2">
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-secondary" 
+                                                    onclick="copiarTexto('regra-{{ prompt.id }}')">
+                                                <i class="bi bi-clipboard"></i>
+                                                Copiar Regra
+                                            </button>
                                         </div>
                                     </div>
                                     {% endif %}
                                     
                                     <div class="mb-3">
-                                        <strong>Conteúdo do Prompt:</strong>
-                                        <div class="bg-light p-2 rounded small" style="max-height: 200px; overflow-y: auto;">
-                                            <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8em;">{{ prompt.conteudo }}</pre>
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong>Conteúdo do Prompt:</strong>
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-primary" 
+                                                    onclick="toggleConteudo('conteudo-{{ prompt.id }}')">
+                                                <i class="bi bi-chevron-down" id="icon-conteudo-{{ prompt.id }}"></i>
+                                                <span id="text-conteudo-{{ prompt.id }}">Mostrar</span>
+                                            </button>
                                         </div>
-                                    </div>
-                                    
-                                    <div class="text-end">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-outline-secondary" 
-                                                onclick="copiarTexto('conteudo-{{ prompt.id }}')">
-                                            <i class="bi bi-clipboard"></i>
-                                            Copiar
-                                        </button>
+                                        <div class="collapse" id="conteudo-{{ prompt.id }}">
+                                            <div class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">
+                                                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8em;">{{ prompt.conteudo }}</pre>
+                                            </div>
+                                            <div class="text-end mt-2">
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-secondary" 
+                                                        onclick="copiarTexto('conteudo-text-{{ prompt.id }}')">
+                                                    <i class="bi bi-clipboard"></i>
+                                                    Copiar Conteúdo
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -145,6 +287,243 @@
             </div>
         </div>
     </div>
+
+    <!-- Comparação Lado a Lado das Regras de Negócio -->
+    {% if intimacao and prompts|length >= 2 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-arrow-left-right"></i>
+                            Comparação Lado a Lado - Regras de Negócio
+                        </h5>
+                        <div class="btn-group" role="group">
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-secondary" 
+                                    onclick="configurarPromptAnalise()"
+                                    title="Configurar prompt de análise">
+                                <i class="bi bi-gear"></i>
+                                Configurar
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-info" 
+                                    onclick="visualizarPromptAnalise()"
+                                    title="Visualizar prompt usado na análise">
+                                <i class="bi bi-eye"></i>
+                                Ver Prompt
+                            </button>
+                            <button type="button" 
+                                    class="btn btn-sm btn-warning" 
+                                    onclick="analisarDiferencasComIA()"
+                                    title="Analisar diferenças com IA">
+                                <i class="bi bi-robot"></i>
+                                Analisar com IA
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="row">
+                        {% for prompt in prompts %}
+                        <div class="col-md-6">
+                            <div class="card border-primary h-100">
+                                <div class="card-header bg-primary text-white">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="card-title mb-0">
+                                            <a href="{{ url_for('visualizar_prompt', id=prompt.id) }}" 
+                                               target="_blank" 
+                                               class="text-white text-decoration-none">
+                                                <i class="bi bi-file-text"></i>
+                                                {{ prompt.nome }}
+                                            </a>
+                                        </h6>
+                                        {% if prompts_acerto.get(prompt.id) %}
+                                        {% set acerto_data = prompts_acerto[prompt.id] %}
+                                        {% set taxa = acerto_data.taxa_acerto %}
+                                        {% set acertos = acerto_data.acertos %}
+                                        {% set total = acerto_data.total_analises %}
+                                        {% if taxa >= 80 %}
+                                            {% set badge_class = 'bg-success' %}
+                                        {% elif taxa >= 60 %}
+                                            {% set badge_class = 'bg-warning' %}
+                                        {% elif taxa >= 40 %}
+                                            {% set badge_class = 'bg-danger' %}
+                                        {% else %}
+                                            {% set badge_class = 'bg-secondary' %}
+                                        {% endif %}
+                                        <span class="badge {{ badge_class }}" title="{{ acertos }} acertos de {{ total }} análises">
+                                            {{ taxa }}% ({{ acertos }}/{{ total }})
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    {% if prompt.regra_negocio %}
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <strong>Regra de Negócio:</strong>
+                                            <div>
+                                                <button type="button" 
+                                                        class="btn btn-sm btn-outline-secondary" 
+                                                        onclick="copiarTexto('regra-comparacao-{{ prompt.id }}')">
+                                                    <i class="bi bi-clipboard"></i>
+                                                    Copiar
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                                            <pre id="regra-comparacao-{{ prompt.id }}" class="mb-0" style="white-space: pre-wrap; font-size: 0.9em;">{{ prompt.regra_negocio }}</pre>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-info-circle"></i>
+                                                Caracteres: <span id="regra-char-count-{{ prompt.id }}">{{ prompt.regra_negocio | length }}</span> | 
+                                                Palavras: <span id="regra-word-count-{{ prompt.id }}">{{ prompt.regra_negocio.split() | length }}</span> | 
+                                                Linhas: <span id="regra-line-count-{{ prompt.id }}">{{ prompt.regra_negocio.split('\n') | length }}</span>
+                                            </small>
+                                        </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="text-center py-4">
+                                        <i class="bi bi-exclamation-triangle fa-2x text-warning mb-3"></i>
+                                        <p class="text-muted">Este prompt não possui regra de negócio definida.</p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Análise Comparativa -->
+                    {% if prompts|length == 2 and prompts[0].regra_negocio and prompts[1].regra_negocio %}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="card-title mb-0">
+                                        <i class="bi bi-graph-up"></i>
+                                        Análise Comparativa
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="text-center">
+                                                <h6 class="text-primary">Tamanho</h6>
+                                                <div class="d-flex justify-content-between">
+                                                    <span>{{ prompts[0].nome[:15] }}...</span>
+                                                    <span>{{ prompts[1].nome[:15] }}...</span>
+                                                </div>
+                                                <div class="progress mt-2" style="height: 20px;">
+                                                    {% set tamanho1 = prompts[0].regra_negocio | length %}
+                                                    {% set tamanho2 = prompts[1].regra_negocio | length %}
+                                                    {% set total = tamanho1 + tamanho2 %}
+                                                    {% if total > 0 %}
+                                                    <div class="progress-bar bg-primary" style="width: {{ (tamanho1 / total * 100) }}%">
+                                                        {{ tamanho1 }} chars
+                                                    </div>
+                                                    <div class="progress-bar bg-secondary" style="width: {{ (tamanho2 / total * 100) }}%">
+                                                        {{ tamanho2 }} chars
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="text-center">
+                                                <h6 class="text-success">Performance</h6>
+                                                {% if prompts_acerto.get(prompts[0].id) and prompts_acerto.get(prompts[1].id) %}
+                                                {% set taxa1 = prompts_acerto[prompts[0].id].taxa_acerto %}
+                                                {% set taxa2 = prompts_acerto[prompts[1].id].taxa_acerto %}
+                                                <div class="d-flex justify-content-between">
+                                                    <span>{{ taxa1 }}%</span>
+                                                    <span>{{ taxa2 }}%</span>
+                                                </div>
+                                                <div class="progress mt-2" style="height: 20px;">
+                                                    <div class="progress-bar bg-success" style="width: {{ taxa1 }}%">
+                                                        {{ taxa1 }}%
+                                                    </div>
+                                                    <div class="progress-bar bg-warning" style="width: {{ taxa2 }}%">
+                                                        {{ taxa2 }}%
+                                                    </div>
+                                                </div>
+                                                {% else %}
+                                                <p class="text-muted">Dados de performance não disponíveis</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="text-center">
+                                                <h6 class="text-info">Recomendação</h6>
+                                                {% if prompts_acerto.get(prompts[0].id) and prompts_acerto.get(prompts[1].id) %}
+                                                {% set taxa1 = prompts_acerto[prompts[0].id].taxa_acerto %}
+                                                {% set taxa2 = prompts_acerto[prompts[1].id].taxa_acerto %}
+                                                {% if taxa1 > taxa2 %}
+                                                <div class="alert alert-success">
+                                                    <i class="bi bi-trophy"></i>
+                                                    <strong>{{ prompts[0].nome }}</strong> tem melhor performance
+                                                </div>
+                                                {% elif taxa2 > taxa1 %}
+                                                <div class="alert alert-success">
+                                                    <i class="bi bi-trophy"></i>
+                                                    <strong>{{ prompts[1].nome }}</strong> tem melhor performance
+                                                </div>
+                                                {% else %}
+                                                <div class="alert alert-info">
+                                                    <i class="bi bi-equals"></i>
+                                                    Performance similar
+                                                </div>
+                                                {% endif %}
+                                                {% else %}
+                                                <p class="text-muted">Não é possível comparar performance</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Análise da IA -->
+                    <div class="row mt-4" id="analise-ia-section" style="display: none;">
+                        <div class="col-12">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="card-title mb-0">
+                                            <i class="bi bi-robot"></i>
+                                            Análise de Diferenças pela IA
+                                        </h6>
+                                        <button type="button" class="btn btn-sm btn-outline-dark" onclick="fecharAnaliseIA()">
+                                            <i class="bi bi-x"></i>
+                                            Fechar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="analise-ia-content">
+                                        <div class="text-center py-4">
+                                            <div class="spinner-border text-warning" role="status">
+                                                <span class="visually-hidden">Analisando...</span>
+                                            </div>
+                                            <p class="mt-3 text-muted">A IA está analisando as diferenças entre os prompts...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Estatísticas de Uso -->
     <div class="row mb-4">
@@ -159,7 +538,7 @@
                 <div class="card-body">
                     <div class="row">
                         {% for prompt in prompts %}
-                        <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <div class="card border-success">
                                 <div class="card-header bg-success text-white">
                                     <h6 class="card-title mb-0">
@@ -240,14 +619,197 @@ function copiarTexto(elementId) {
     }
 }
 
+// Função para toggle do conteúdo do prompt
+function toggleConteudo(elementId) {
+    const element = document.getElementById(elementId);
+    const icon = document.getElementById('icon-' + elementId);
+    const text = document.getElementById('text-' + elementId);
+    
+    if (element.classList.contains('show')) {
+        // Esconder
+        element.classList.remove('show');
+        icon.className = 'bi bi-chevron-down';
+        text.textContent = 'Mostrar';
+    } else {
+        // Mostrar
+        element.classList.add('show');
+        icon.className = 'bi bi-chevron-up';
+        text.textContent = 'Esconder';
+    }
+}
+
+// Função para analisar diferenças com IA
+function analisarDiferencasComIA() {
+    const elements = document.querySelectorAll('[id^="regra-comparacao-"]');
+    if (elements.length < 2) {
+        showToast('É necessário ter pelo menos 2 prompts para comparar', 'warning');
+        return;
+    }
+    
+    // Obter nomes dos prompts
+    const promptNames = document.querySelectorAll('.card-title a');
+    const nome1 = promptNames[0] ? promptNames[0].textContent.trim() : 'Prompt 1';
+    const nome2 = promptNames[1] ? promptNames[1].textContent.trim() : 'Prompt 2';
+    
+    const regra1 = elements[0].textContent;
+    const regra2 = elements[1].textContent;
+    
+    // Mostrar seção de análise
+    const analiseSection = document.getElementById('analise-ia-section');
+    analiseSection.style.display = 'block';
+    
+    // Scroll para a seção
+    analiseSection.scrollIntoView({ behavior: 'smooth' });
+    
+    // Fazer requisição para análise com IA
+    fetch('/api/analisar-diferencas-prompts', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            regra_negocio_1: regra1,
+            regra_negocio_2: regra2,
+            nome_prompt_1: nome1,
+            nome_prompt_2: nome2,
+            config_personalizada: configPromptAnalise,
+            intimacao_id: {% if intimacao %}{{ intimacao.id }}{% else %}null{% endif %}
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('analise-ia-content').innerHTML = `
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-lightbulb"></i> Análise da IA:</h6>
+                    <p class="mb-0">${data.analise}</p>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Principais Diferenças:</h6>
+                        <ul class="list-group list-group-flush">
+                            ${data.diferencas.map(diff => `<li class="list-group-item">${diff}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-success">Recomendações:</h6>
+                        <ul class="list-group list-group-flush">
+                            ${data.recomendacoes.map(rec => `<li class="list-group-item">${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.getElementById('analise-ia-content').innerHTML = `
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Erro na análise:</h6>
+                    <p class="mb-0">${data.message}</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Erro na análise:', error);
+        document.getElementById('analise-ia-content').innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle"></i> Erro na análise:</h6>
+                <p class="mb-0">Erro ao conectar com a IA. Tente novamente.</p>
+            </div>
+        `;
+    });
+}
+
+// Função para fechar análise da IA
+function fecharAnaliseIA() {
+    document.getElementById('analise-ia-section').style.display = 'none';
+}
+
+
+
+// Carregar taxa de acerto da intimação
+function carregarTaxaAcertoIntimacao() {
+    {% if intimacao %}
+    fetch('/api/intimacoes/taxa-acerto')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const intimacaoId = '{{ intimacao.id }}';
+                const dados = data.taxas_acerto[intimacaoId];
+                if (dados) {
+                    const elemento = document.getElementById(`taxa-acerto-${intimacaoId}`);
+                    if (elemento) {
+                        const taxa = dados.taxa_acerto;
+                        const total = dados.total_analises;
+                        const acertos = dados.acertos;
+                        
+                        let badgeClass = 'bg-secondary';
+                        if (taxa >= 80) {
+                            badgeClass = 'bg-success';
+                        } else if (taxa >= 60) {
+                            badgeClass = 'bg-warning';
+                        } else if (taxa >= 40) {
+                            badgeClass = 'bg-danger';
+                        }
+                        
+                        elemento.className = `badge ${badgeClass}`;
+                        elemento.textContent = `${taxa}% (${acertos}/${total})`;
+                        elemento.title = `${acertos} acertos de ${total} análises`;
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar taxa de acerto:', error);
+        });
+    {% endif %}
+}
+
+<!-- Dados da intimação para JavaScript -->
+<script type="application/json" id="intimacao-data">
+{% if intimacao %}
+{
+    "id": "{{ intimacao.id }}",
+    "processo": "{{ intimacao.processo }}",
+    "classe": "{{ intimacao.classe }}",
+    "orgao_julgador": "{{ intimacao.orgao_julgador }}",
+    "intimado": "{{ intimacao.intimado }}",
+    "defensor": "{{ intimacao.defensor }}",
+    "data_criacao": "{{ intimacao.data_criacao }}",
+    "contexto": {{ intimacao.contexto | tojson }},
+    "classificacao_manual": "{{ intimacao.classificacao_manual }}",
+    "informacao_adicional": {{ intimacao.informacao_adicional | tojson }}
+}
+{% else %}
+null
+{% endif %}
+</script>
+
+<!-- Script principal da página -->
+<script src="{{ url_for('static', filename='js/comparar_prompts.js') }}"></script>
+
 // Adicionar IDs únicos para os elementos de conteúdo
 document.addEventListener('DOMContentLoaded', function() {
+    // Carregar dados da intimação
+    const intimacaoDataElement = document.getElementById('intimacao-data');
+    if (intimacaoDataElement) {
+        window.intimacaoData = JSON.parse(intimacaoDataElement.textContent);
+    }
     {% for prompt in prompts %}
-    const conteudo{{ loop.index }} = document.querySelector('.card:has(.card-header:contains("{{ prompt.nome }}")) .bg-light pre');
+    // ID para regra de negócio
+    const regra{{ loop.index }} = document.querySelector('#regra-{{ prompt.id }}');
+    if (regra{{ loop.index }}) {
+        regra{{ loop.index }}.id = 'regra-{{ prompt.id }}';
+    }
+    
+    // ID para conteúdo do prompt
+    const conteudo{{ loop.index }} = document.querySelector('#conteudo-{{ prompt.id }} pre');
     if (conteudo{{ loop.index }}) {
-        conteudo{{ loop.index }}.id = 'conteudo-{{ prompt.id }}';
+        conteudo{{ loop.index }}.id = 'conteudo-text-{{ prompt.id }}';
     }
     {% endfor %}
+    
+    // Carregar taxa de acerto da intimação
+    carregarTaxaAcertoIntimacao();
 });
 </script>
 {% endblock %}

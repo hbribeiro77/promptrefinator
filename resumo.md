@@ -720,3 +720,35 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ Checkbox "Selecionar Todas" funciona apenas com intimações filtradas/visíveis
 - ✅ Estado inteligente do checkbox (marcado/indeterminado/desmarcado)
 - ✅ Sincronização automática com filtros aplicados
+
+### **Sistema de Comparação de Prompts**
+- ✅ Página de comparação de prompts selecionados
+- ✅ Checkboxes no popover de taxa de acerto para seleção múltipla
+- ✅ Botão "Comparar Prompts Selecionados" habilitado com 2+ prompts
+- ✅ Navegação para página de comparação com intimação de origem
+- ✅ Exibição da intimação que originou a comparação
+- ✅ Taxa de acerto de cada prompt com a intimação específica
+- ✅ Nomes de prompts clicáveis para visualização detalhada
+- ✅ Conteúdo do prompt colapsado por padrão
+- ✅ Layout responsivo ocupando toda largura disponível
+
+### **Análise de Diferenças com IA**
+- ✅ Botão "Analisar com IA" no cabeçalho da comparação
+- ✅ Sistema de configuração de prompt de análise personalizável
+- ✅ Modal de configuração com persona, instruções e opções
+- ✅ Opções para incluir contexto da intimação e gabarito
+- ✅ Botão "Ver Prompt" para visualizar prompt completo
+- ✅ Modal com estatísticas detalhadas (caracteres, palavras, linhas)
+- ✅ Botão "Copiar Prompt" para área de transferência
+- ✅ Análise JSON estruturada com diferenças e recomendações
+- ✅ API endpoint dedicada para análise de diferenças
+- ✅ Integração com AIManagerService para múltiplos provedores
+
+### **Organização de Código JavaScript**
+- ✅ Arquivo JavaScript dedicado: `static/js/comparar_prompts.js`
+- ✅ Separação completa entre template HTML e lógica JavaScript
+- ✅ Dados da intimação passados via JSON seguro
+- ✅ Funções organizadas e reutilizáveis
+- ✅ Código limpo e fácil de manter
+- ✅ Eliminação de scripts inline gigantes
+- ✅ Melhor performance com cache do navegador

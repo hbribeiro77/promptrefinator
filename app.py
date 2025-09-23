@@ -3468,6 +3468,9 @@ def comparar_prompts():
     try:
         # Obter IDs dos prompts da query string
         prompt_ids = request.args.getlist('prompt_ids')
+        # Obter ID da intimação da query string
+        intimacao_id = request.args.get('intimacao_id')
+        print(f"🔍 Intimação ID recebido: {intimacao_id}")
         
         if not prompt_ids:
             flash('Nenhum prompt selecionado para comparação', 'warning')
@@ -3487,13 +3490,280 @@ def comparar_prompts():
             flash('É necessário selecionar pelo menos 2 prompts para comparação', 'warning')
             return redirect(url_for('listar_prompts'))
         
+        # Buscar dados da intimação se ID foi fornecido
+        intimacao = None
+        prompts_acerto = {}
+        if intimacao_id:
+            print(f"🔍 Buscando intimação com ID: {intimacao_id}")
+            intimacao = data_service.get_intimacao_by_id(intimacao_id)
+            print(f"🔍 Intimação encontrada: {intimacao is not None}")
+            if intimacao:
+                print(f"🔍 Dados da intimação: {intimacao.get('id', 'N/A')}")
+                
+                # Buscar dados de acerto de cada prompt com esta intimação
+                for prompt in prompts:
+                    prompt_id = prompt['id']
+                    # Buscar análises deste prompt com esta intimação
+                    analises = data_service.get_analises_by_prompt_and_intimacao(prompt_id, intimacao_id)
+                    if analises:
+                        acertos = sum(1 for analise in analises if analise.get('acertou', False))
+                        total = len(analises)
+                        taxa = round((acertos / total) * 100, 1) if total > 0 else 0
+                        prompts_acerto[prompt_id] = {
+                            'taxa_acerto': taxa,
+                            'acertos': acertos,
+                            'total_analises': total
+                        }
+                    else:
+                        prompts_acerto[prompt_id] = {
+                            'taxa_acerto': 0,
+                            'acertos': 0,
+                            'total_analises': 0
+                        }
+        
         return render_template('comparar_prompts.html', 
                              prompts=prompts,
-                             total_prompts=len(prompts))
+                             total_prompts=len(prompts),
+                             intimacao=intimacao,
+                             prompts_acerto=prompts_acerto)
         
     except Exception as e:
         flash(f'Erro ao carregar comparação: {str(e)}', 'error')
         return redirect(url_for('listar_prompts'))
+
+@app.route('/api/analisar-diferencas-prompts', methods=['POST'])
+def analisar_diferencas_prompts():
+    """Analisar diferenças entre regras de negócio usando IA"""
+    try:
+        data = request.get_json()
+        regra_negocio_1 = data.get('regra_negocio_1', '')
+        regra_negocio_2 = data.get('regra_negocio_2', '')
+        nome_prompt_1 = data.get('nome_prompt_1', 'Prompt 1')
+        nome_prompt_2 = data.get('nome_prompt_2', 'Prompt 2')
+        config_personalizada = data.get('config_personalizada')
+        
+        if not regra_negocio_1 or not regra_negocio_2:
+            return jsonify({
+                'success': False,
+                'message': 'Ambas as regras de negócio são necessárias para análise'
+            }), 400
+        
+        # Obter dados da intimação se disponível
+        intimacao_id = data.get('intimacao_id')
+        intimacao_data = None
+        if intimacao_id:
+            intimacao_data = data_service.get_intimacao_by_id(intimacao_id)
+        
+        # Usar configuração personalizada se disponível, senão usar padrão
+        if config_personalizada:
+            persona = config_personalizada.get('persona', 'Você é um especialista em análise de prompts de IA para classificação jurídica.')
+            instrucoes = config_personalizada.get('instrucoes', 'Forneça uma análise detalhada das diferenças.')
+            
+            # Construir contexto da intimação com dados reais
+            contexto_intimacao = ''
+            informacao_adicional = ''
+            
+            if intimacao_data:
+                contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
+- ID: {intimacao_data.get('id', 'N/A')}
+- Processo: {intimacao_data.get('processo', 'N/A')}
+- Classe: {intimacao_data.get('classe', 'N/A')}
+- Órgão Julgador: {intimacao_data.get('orgao_julgador', 'N/A')}
+- Intimado: {intimacao_data.get('intimado', 'N/A')}
+- Defensor: {intimacao_data.get('defensor', 'N/A')}
+- Data: {intimacao_data.get('data_criacao', 'N/A')}
+
+CONTEÚDO DA INTIMAÇÃO:
+{intimacao_data.get('contexto', 'N/A')}
+
+CLASSIFICAÇÃO MANUAL (GABARITO):
+{intimacao_data.get('classificacao_manual', 'N/A')}
+
+INFORMAÇÕES ADICIONAIS:
+{intimacao_data.get('informacao_adicional', 'N/A')}"""
+                
+                informacao_adicional = f"""A classificação correta para esta intimação é: "{intimacao_data.get('classificacao_manual', 'N/A')}".
+
+Analise por que um prompt teve melhor performance que o outro considerando:
+1. A precisão na classificação da intimação
+2. A adequação das regras de negócio ao contexto específico
+3. A capacidade de capturar nuances importantes do caso"""
+            
+            prompt_analise = f"""{persona}
+
+{contexto_intimacao}
+
+{informacao_adicional}
+
+{instrucoes}
+
+{nome_prompt_1.upper()}:
+{regra_negocio_1}
+
+{nome_prompt_2.upper()}:
+{regra_negocio_2}
+
+Responda em formato JSON com as seguintes chaves:
+- "analise": análise geral (2-3 frases)
+- "diferencas": array com 3-5 diferenças específicas
+- "recomendacoes": array com 3-5 recomendações
+
+Seja objetivo, técnico e focado em eficácia para classificação jurídica."""
+        else:
+            # Prompt padrão com dados da intimação se disponível
+            contexto_intimacao = ''
+            informacao_adicional = ''
+            
+            if intimacao_data:
+                contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
+- ID: {intimacao_data.get('id', 'N/A')}
+- Processo: {intimacao_data.get('processo', 'N/A')}
+- Classe: {intimacao_data.get('classe', 'N/A')}
+- Órgão Julgador: {intimacao_data.get('orgao_julgador', 'N/A')}
+- Intimado: {intimacao_data.get('intimado', 'N/A')}
+- Defensor: {intimacao_data.get('defensor', 'N/A')}
+- Data: {intimacao_data.get('data_criacao', 'N/A')}
+
+CONTEÚDO DA INTIMAÇÃO:
+{intimacao_data.get('contexto', 'N/A')}
+
+CLASSIFICAÇÃO MANUAL (GABARITO):
+{intimacao_data.get('classificacao_manual', 'N/A')}
+
+INFORMAÇÕES ADICIONAIS:
+{intimacao_data.get('informacao_adicional', 'N/A')}"""
+                
+                informacao_adicional = f"""A classificação correta para esta intimação é: "{intimacao_data.get('classificacao_manual', 'N/A')}".
+
+Analise por que um prompt teve melhor performance que o outro considerando:
+1. A precisão na classificação da intimação
+2. A adequação das regras de negócio ao contexto específico
+3. A capacidade de capturar nuances importantes do caso"""
+            
+            prompt_analise = f"""
+Você é um especialista em análise de prompts de IA para classificação jurídica. 
+
+{contexto_intimacao}
+
+{informacao_adicional}
+
+Analise as diferenças entre estas duas regras de negócio e forneça:
+
+1. Uma análise geral das principais diferenças
+2. Uma lista de 3-5 diferenças específicas
+3. Recomendações sobre qual abordagem pode ser mais eficaz
+
+{nome_prompt_1.upper()}:
+{regra_negocio_1}
+
+{nome_prompt_2.upper()}:
+{regra_negocio_2}
+
+Responda em formato JSON com as seguintes chaves:
+- "analise": análise geral (2-3 frases)
+- "diferencas": array com 3-5 diferenças específicas
+- "recomendacoes": array com 3-5 recomendações
+
+Seja objetivo, técnico e focado em eficácia para classificação jurídica.
+"""
+        
+        # Usar o serviço de IA para análise
+        ai_service = AIManagerService()
+        current_service = ai_service.get_current_service()
+        
+        if not current_service:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum provedor de IA configurado'
+            }), 500
+        
+        # Usar o método analyze_text do serviço atual
+        try:
+            print(f"🔍 Iniciando análise com IA...")
+            print(f"🔍 Provedor atual: {ai_service.get_current_provider()}")
+            print(f"🔍 Tamanho do prompt: {len(prompt_analise)} caracteres")
+            
+            resposta_completa = current_service.analyze_text(
+                prompt_analise,
+                temperatura=0.1,
+                max_tokens=1000
+            )
+            
+            # Verificar se a resposta é uma tupla (resposta, tokens) ou apenas string
+            if isinstance(resposta_completa, tuple):
+                resposta_texto = resposta_completa[0]
+                tokens_info = resposta_completa[1]
+                print(f"🔍 Resposta da IA recebida: {len(resposta_texto)} caracteres, tokens: {tokens_info}")
+            else:
+                resposta_texto = resposta_completa
+                print(f"🔍 Resposta da IA recebida: {len(resposta_texto)} caracteres")
+            
+            response = {'success': True, 'resultado': resposta_texto}
+        except Exception as e:
+            print(f"❌ Erro na chamada da IA: {e}")
+            response = {'success': False, 'erro': str(e)}
+        
+        if response['success']:
+            # Tentar extrair JSON da resposta
+            try:
+                # Limpar a resposta e extrair JSON
+                resposta_texto = response['resultado']
+                print(f"🔍 Processando resposta da IA...")
+                print(f"🔍 Primeiros 200 caracteres: {resposta_texto[:200]}")
+                
+                # Tentar encontrar JSON na resposta
+                import re
+                json_match = re.search(r'\{.*\}', resposta_texto, re.DOTALL)
+                if json_match:
+                    print(f"🔍 JSON encontrado na resposta")
+                    import json
+                    analise_data = json.loads(json_match.group())
+                    print(f"🔍 JSON parseado com sucesso: {list(analise_data.keys())}")
+                else:
+                    print(f"🔍 JSON não encontrado, usando fallback")
+                    # Se não conseguir extrair JSON, criar resposta estruturada
+                    analise_data = {
+                        'analise': resposta_texto[:200] + '...' if len(resposta_texto) > 200 else resposta_texto,
+                        'diferencas': [
+                            'Diferenças estruturais no texto',
+                            'Variações na abordagem de classificação',
+                            'Mudanças na especificidade das regras'
+                        ],
+                        'recomendacoes': [
+                            'Considere combinar os pontos fortes de ambas as abordagens',
+                            'Teste ambas as regras com dados reais',
+                            'Avalie a clareza e especificidade de cada versão'
+                        ]
+                    }
+                
+                print(f"🔍 Retornando análise estruturada")
+                return jsonify({
+                    'success': True,
+                    'analise': analise_data.get('analise', 'Análise não disponível'),
+                    'diferencas': analise_data.get('diferencas', []),
+                    'recomendacoes': analise_data.get('recomendacoes', [])
+                })
+                
+            except Exception as e:
+                print(f"❌ Erro ao processar resposta da IA: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({
+                    'success': False,
+                    'message': 'Erro ao processar análise da IA'
+                }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Erro na IA: {response.get("erro", "Erro desconhecido")}'
+            }), 500
+            
+    except Exception as e:
+        print(f"Erro na análise de diferenças: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # Criar diretórios necessários

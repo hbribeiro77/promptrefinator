@@ -640,6 +640,18 @@ class SQLiteService:
             ''', (prompt_id,))
             return [dict(row) for row in cursor.fetchall()]
     
+    def get_analises_by_prompt_and_intimacao(self, prompt_id: str, intimacao_id: str) -> List[Dict[str, Any]]:
+        """Obter análises de um prompt específico com uma intimação específica"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT a.*, p.nome as prompt_nome
+                FROM analises a
+                LEFT JOIN prompts p ON a.prompt_id = p.id
+                WHERE a.prompt_id = ? AND a.intimacao_id = ?
+                ORDER BY a.data_analise DESC
+            ''', (prompt_id, intimacao_id))
+            return [dict(row) for row in cursor.fetchall()]
+    
     def get_taxa_acerto_prompt(self, prompt_id: str) -> Dict[str, Any]:
         """Obter taxa de acerto de um prompt específico"""
         with self.get_connection() as conn:

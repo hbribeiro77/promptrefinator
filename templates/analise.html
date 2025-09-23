@@ -2458,6 +2458,10 @@ function atualizarTaxasAcerto(taxasAcerto) {
                 clearTimeout(elemento.popoverTimeout);
                 clearTimeout(elemento.showTimeout);
                 
+                // Armazenar ID da intimação atual globalmente
+                window.currentIntimacaoId = intimacaoId;
+                console.log('🔍 Intimação atual definida:', window.currentIntimacaoId);
+                
                 if (!elemento.isPopoverVisible) {
                     // Delay de 500ms para mostrar o popover
                     elemento.showTimeout = setTimeout(() => {
@@ -4103,12 +4107,23 @@ function editarPrompt() {
         const promptIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptId);
         const promptNomes = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptNome);
         
+        // Obter ID da intimação da variável global
+        const intimacaoId = window.currentIntimacaoId;
+        console.log('🔍 Intimação ID capturado:', intimacaoId);
+        
         // Criar URL com parâmetros
         const params = new URLSearchParams();
         promptIds.forEach(id => params.append('prompt_ids', id));
+        if (intimacaoId) {
+            params.append('intimacao_id', intimacaoId);
+        }
+        
+        // Log da URL final
+        const finalUrl = `/comparar-prompts?${params.toString()}`;
+        console.log('🚀 URL final:', finalUrl);
         
         // Redirecionar para página de comparação
-        window.open(`/comparar-prompts?${params.toString()}`, '_blank');
+        window.open(finalUrl, '_blank');
     }
 </script>
 
