@@ -2481,6 +2481,9 @@ function atualizarTaxasAcerto(taxasAcerto) {
                     if (elemento.isPopoverVisible) {
                         popoverElement.style.display = 'none';
                         elemento.isPopoverVisible = false;
+                        
+                        // ACRESCENTADO: Limpar checkboxes quando popover fecha
+                        clearPopoverCheckboxes(popoverElement);
                     }
                 }, 300);
             });
@@ -2495,6 +2498,9 @@ function atualizarTaxasAcerto(taxasAcerto) {
                     if (elemento.isPopoverVisible) {
                         popoverElement.style.display = 'none';
                         elemento.isPopoverVisible = false;
+                        
+                        // ACRESCENTADO: Limpar checkboxes quando popover fecha
+                        clearPopoverCheckboxes(popoverElement);
                     }
                 }, 300);
             });
@@ -2503,6 +2509,48 @@ function atualizarTaxasAcerto(taxasAcerto) {
 }
 
 
+
+// ACRESCENTADO: Função para limpar seleção dos checkboxes quando popover fecha
+function clearPopoverCheckboxes(targetPopover = null) {
+    let clearedCount = 0;
+    
+    if (targetPopover) {
+        // Clear checkboxes do popover específico que foi passado como parâmetro
+        const checkboxes = targetPopover.querySelectorAll('.prompt-checkbox');
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                checkbox.checked = false;
+                clearedCount++;
+            }
+        });
+    } else {
+        // Clear todos os checkboxes de todos os popovers visíveis (fallback)
+        const allPopovers = document.querySelectorAll('.custom-popover');
+        allPopovers.forEach(popover => {
+            const isVisible = popover.style.display !== 'none' && 
+                             !popover.style.display.includes('none');
+            
+            if (isVisible) {
+                const checkboxes = popover.querySelectorAll('.prompt-checkbox');
+                checkboxes.forEach(checkbox => {
+                    if (checkbox.checked) {
+                        checkbox.checked = false;
+                        clearedCount++;
+                    }
+                });
+            }
+        });
+    }
+    
+    // ACRESCENTADO: Re-validar o botão após limpar seleção
+    setTimeout(() => {
+        updateCompareButton();
+    }, 10);
+    
+    if (clearedCount > 0) {
+        console.log(`🧹 ${clearedCount} checkboxes desmarcados quando popover fechou`);
+    }
+}
 
 // Carregar detalhes dos prompts para o popover customizado
 function carregarDetalhesPrompts(intimacaoId, popoverElement) {
@@ -2578,14 +2626,13 @@ function carregarDetalhesPrompts(intimacaoId, popoverElement) {
                     `;
                 });
                 
-                // Adicionar botão de comparação
+                // ACRESCENTADO: Botão sempre habilitado com validação no backend
                 content += `
                     <div class="mt-3 pt-2 border-top">
                         <button type="button" 
                                 class="btn btn-primary btn-sm w-100" 
                                 id="btn-compare-prompts"
-                                onclick="compareSelectedPrompts()"
-                                disabled>
+                                onclick="compareSelectedPrompts()">
                             <i class="bi bi-arrow-left-right"></i>
                             Comparar Prompts Selecionados
                         </button>
@@ -2596,6 +2643,19 @@ function carregarDetalhesPrompts(intimacaoId, popoverElement) {
                 
                 popoverElement.querySelector('.popover-body').innerHTML = content;
                 popoverElement.dataset.loaded = 'true';
+                
+                // ACRESCENTADO: Aguardar um ciclo do event loop para garantir que o HTML foi renderizado  
+                setTimeout(() => {
+                    // ACRESCENTADO: Botão sempre enabled agora não precisa updateCompareButton (only text update)
+                    const dynamicCheckboxes = popoverElement.querySelectorAll('.prompt-checkbox');
+                    dynamicCheckboxes.forEach(checkbox => {
+                        const newCheckbox = checkbox.cloneNode(true);
+                        checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+                        newCheckbox.addEventListener('change', updateCompareButton);
+                    });
+                    
+                    updateCompareButton(); // Current simple version 
+                }, 50);
             } else {
                 const content = '<div class="text-center"><em>Erro ao carregar detalhes</em></div>';
                 popoverElement.querySelector('.popover-body').innerHTML = content;
@@ -4078,29 +4138,31 @@ function editarPrompt() {
         }
     });
     
-    // Função para atualizar estado do botão de comparação
+    // Função para atualizar estado do botão de comparação - SIMPLIFICADA
+    // ACRESCENTADO: Botão sempre naturalmente enabled, validação no backend
     function updateCompareButton() {
-        const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
+        const checkedCheckboxes = document.querySelectorAll('.prompt-checkbox:checked');
         const compareButton = document.getElementById('btn-compare-prompts');
         
-        if (compareButton) {
-            if (checkboxes.length >= 2) {
-                compareButton.disabled = false;
-                compareButton.textContent = `Comparar ${checkboxes.length} Prompts Selecionados`;
-            } else {
-                compareButton.disabled = true;
-                compareButton.innerHTML = '<i class="bi bi-arrow-left-right"></i> Comparar Prompts Selecionados';
-            }
+        if (compareButton && checkedCheckboxes.length > 0) {
+            // ACRESCENTADO: Apenas atualizar texto com contagem selected, delegar validation to backend
+            compareButton.textContent = checkedCheckboxes.length >= 2 
+                ? `Comparar ${checkedCheckboxes.length} Prompts Selecionados`
+                : 'Comparar Prompts Selecionados';
         }
+        
+        console.log('🔧 DEBUG: Botão mantido habilitado, validação movida para backend. Selected:', checkedCheckboxes.length);
     }
     
     // Função para comparar prompts selecionados
+    // ACRESCENTADO: Validação no frontend mantém functionality, validação real no backend
     function compareSelectedPrompts() {
         const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
         
+        // ACRESCENTADO: Botão sempre habilitado, deixar backend fazer toda substituição validation
         if (checkboxes.length < 2) {
             showToast('Selecione pelo menos 2 prompts para comparar', 'warning');
-            return;
+            return; // Keep user-friendly warning and allow backend to validate
         }
         
         // Coletar IDs dos prompts selecionados

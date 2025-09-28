@@ -42,7 +42,7 @@ class AIManagerService:
             bool: True se o provedor foi definido com sucesso
         """
         if provider_name not in self.providers:
-            print(f"❌ Provedor '{provider_name}' não disponível")
+            print(f"ERRO: Provedor '{provider_name}' não disponível")
             return False
         
         try:
@@ -53,17 +53,17 @@ class AIManagerService:
             # Tentar inicializar o cliente
             if self.current_service.initialize_client():
                 self.current_provider = provider_name
-                print(f"✅ Provedor '{provider_name}' definido com sucesso")
+                print(f"SUCESSO: Provedor '{provider_name}' definido com sucesso")
                 
                 # Salvar configuração
                 self._save_provider_config(provider_name)
                 return True
             else:
-                print(f"❌ Falha ao inicializar provedor '{provider_name}'")
+                print(f"Falha ao inicializar provedor '{provider_name}'")
                 return False
                 
         except Exception as e:
-            print(f"❌ Erro ao definir provedor '{provider_name}': {e}")
+            print(f"Erro ao definir provedor '{provider_name}': {e}")
             return False
     
     def _save_provider_config(self, provider_name: str):
@@ -73,7 +73,7 @@ class AIManagerService:
             config['ai_provider'] = provider_name
             self.data_service.save_config(config)
         except Exception as e:
-            print(f"⚠️  Aviso: Não foi possível salvar configuração do provedor: {e}")
+            print(f"AVISO:  Aviso: Não foi possível salvar configuração do provedor: {e}")
     
     def get_current_service(self) -> Optional[AIServiceInterface]:
         """Obter instância do serviço atual"""
@@ -144,4 +144,4 @@ class AIManagerService:
             raise ValueError(f"Classe {service_class} deve implementar AIServiceInterface")
         
         self.providers[name] = service_class
-        print(f"✅ Provedor '{name}' adicionado com sucesso")
+        print(f"SUCESSO: Provedor '{name}' adicionado com sucesso")

@@ -41,16 +41,16 @@ class AzureService(AIServiceInterface):
                     azure_endpoint=endpoint,
                     api_version=api_version
                 )
-                print("✅ Cliente Azure OpenAI inicializado com sucesso")
+                print("Cliente Azure OpenAI inicializado com sucesso")
                 return True
             else:
-                print("⚠️  Aviso: Credenciais do Azure OpenAI não configuradas.")
+                print("Aviso: Credenciais do Azure OpenAI não configuradas.")
                 print("   Configure as credenciais através da interface de configurações.")
                 self.client = None
                 # Retornar True para permitir seleção do provedor mesmo sem credenciais
                 return True
         except Exception as e:
-            print(f"❌ Erro ao inicializar cliente Azure OpenAI: {e}")
+            print(f"Erro ao inicializar cliente Azure OpenAI: {e}")
             self.client = None
             return False
     
@@ -65,9 +65,9 @@ class AzureService(AIServiceInterface):
                 azure_endpoint=endpoint,
                 api_version=api_version
             )
-            print("✅ Credenciais do Azure OpenAI atualizadas com sucesso")
+            print("SUCESSO: Credenciais do Azure OpenAI atualizadas com sucesso")
         except Exception as e:
-            print(f"❌ Erro ao atualizar credenciais do Azure OpenAI: {e}")
+            print(f"ERRO: Erro ao atualizar credenciais do Azure OpenAI: {e}")
             self.client = None
     
     def test_connection(self) -> Tuple[bool, str]:
@@ -135,7 +135,7 @@ class AzureService(AIServiceInterface):
         return {
             'model': parametros.get('modelo', self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT),
             'temperature': min(max(parametros.get('temperatura', self.config.AZURE_OPENAI_DEFAULT_TEMPERATURE), 0), 2),
-            'max_tokens': min(parametros.get('max_tokens', self.config.AZURE_OPENAI_DEFAULT_MAX_TOKENS), 4000),
+            'max_tokens': parametros.get('max_tokens', self.config.AZURE_OPENAI_DEFAULT_MAX_TOKENS),
             'top_p': min(max(parametros.get('top_p', self.config.AZURE_OPENAI_DEFAULT_TOP_P), 0), 1),
             'frequency_penalty': min(max(parametros.get('frequency_penalty', 0), -2), 2),
             'presence_penalty': min(max(parametros.get('presence_penalty', 0), -2), 2)
@@ -151,10 +151,6 @@ class AzureService(AIServiceInterface):
                 response = self.client.chat.completions.create(
                     model=parametros['model'],
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "Você é um assistente especializado em análise de intimações jurídicas. Responda sempre com uma das classificações solicitadas."
-                        },
                         {
                             "role": "user",
                             "content": prompt
@@ -309,22 +305,29 @@ class AzureService(AIServiceInterface):
                     prompt: str, 
                     modelo: str = None, 
                     temperatura: float = 0.1, 
-                    max_tokens: int = 500) -> str:
+                    max_tokens: int = None) -> str:
         """Método simples para análise de texto genérica"""
         if not self.client:
             raise Exception("Cliente Azure OpenAI não inicializado. Configure as credenciais.")
+        
+        if max_tokens is None:
+            config = self.data_service.get_config()
+            max_tokens = config.get('azure_max_tokens')
         
         if modelo is None:
             modelo = self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
         
         parametros = {
-            'model': modelo,
-            'temperature': temperatura,
+            'modelo': modelo,
+            'temperatura': temperatura,
             'max_tokens': max_tokens,
             'top_p': 1.0
         }
         
-        return self._fazer_chamada_com_retry(prompt, parametros)
+        # Validar parâmetros antes de fazer a chamada
+        parametros_validados = self._validar_parametros(parametros)
+        
+        return self._fazer_chamada_com_retry(prompt, parametros_validados)
     
     def get_provider_name(self) -> str:
         """Obter nome do provedor"""

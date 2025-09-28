@@ -769,3 +769,15 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ Persistência das configurações personalizadas
 - ✅ Textarea expandida (6 linhas) para acomodar persona + instruções
 - ✅ Remoção de campo separado de instruções para evitar confusão
+
+### **Correções Críticas de Funcionamento (Janeiro 2025)**
+- ✅ **Correção de erro de encoding com emojis**: Implementada remoção automática de emojis no frontend
+- ✅ **Correção de JavaScript quebrado**: Resolvido erro de sintaxe que impedia funcionamento dos botões
+- ✅ **Eliminação de alucinação da IA**: Implementado uso de taxas de acerto reais dos prompts
+- ✅ **Configuração completa do Azure OpenAI**: Adicionadas configurações necessárias (modelo, temperatura, tokens)
+- ✅ **Sistema de taxas de acerto**: Frontend agora envia taxas reais para o backend
+- ✅ **Prompt estruturado**: Backend usa taxas reais no formato "CONJUNTO A - NOME (Taxa: X%)"
+- ✅ **Temperatura 0.0**: Configurado para eliminar alucinação da IA
+- ✅ **Modelo GPT-4o**: Configurado para máxima precisão
+- ✅ **16k tokens**: Configurado para respostas completas
+- ✅ **Sistema robusto**: Todos os botões funcionando perfeitamente

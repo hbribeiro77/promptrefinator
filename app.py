@@ -91,7 +91,7 @@ DEFAULT_CONFIG = {
     'openai_api_key': '',
     'modelo_padrao': 'gpt-3.5-turbo',
     'temperatura_padrao': 0.7,
-    'max_tokens_padrao': 150,
+    'max_tokens_padrao': 1000,
     'timeout_padrao': 30,
     'max_retries': 3,
     'retry_delay': 1,
@@ -279,7 +279,7 @@ def listar_intimacoes():
         print(f"DEBUG: Total de intimações carregadas: {len(intimacoes)}")
         for i, intimacao in enumerate(intimacoes):
             if intimacao is None:
-                print(f"  {i+1}. ❌ Intimação None encontrada")
+                print(f"  {i+1}. ERRO: Intimação None encontrada")
                 continue
             contexto = intimacao.get('contexto', '')
             if contexto is None:
@@ -771,7 +771,7 @@ def analise():
         # Debug das configurações
         modelo_padrao = config.get('azure_deployment', 'gpt-4')
         temperatura_padrao = config.get('azure_temperatura', 0.7)
-        max_tokens_padrao = config.get('azure_max_tokens', 500)
+        max_tokens_padrao = config.get('azure_max_tokens')
         
         print(f"=== DEBUG: Configurações carregadas - Modelo: {modelo_padrao}, Temp: {temperatura_padrao}, Tokens: {max_tokens_padrao} ===")
         
@@ -2204,7 +2204,7 @@ def configuracoes():
         if 'azure_temperatura' not in config:
             config['azure_temperatura'] = 0.7
         if 'azure_max_tokens' not in config:
-            config['azure_max_tokens'] = 500
+            config['azure_max_tokens'] = config.get('max_tokens_padrao')
         config.setdefault('timeout_padrao', 30)
         config.setdefault('max_retries', 3)
         config.setdefault('retry_delay', 1)
@@ -2383,16 +2383,16 @@ def excluir_analise():
                 sucesso = data_service.delete_analise(analise_id)
                 if sucesso:
                     excluidas += 1
-                    print(f"✅ Análise {analise_id} excluída")
+                    print(f"SUCESSO: Análise {analise_id} excluída")
                 else:
                     erros.append(f"Análise {analise_id} não encontrada")
-                    print(f"❌ Análise {analise_id} não encontrada")
+                    print(f"ERRO: Análise {analise_id} não encontrada")
             except Exception as e:
                 erros.append(f"Erro ao excluir {analise_id}: {str(e)}")
-                print(f"❌ Erro ao excluir análise {analise_id}: {e}")
+                print(f"ERRO: Erro ao excluir análise {analise_id}: {e}")
         
         if excluidas > 0:
-            print(f"✅ {excluidas} análises excluídas com sucesso")
+            print(f"SUCESSO: {excluidas} análises excluídas com sucesso")
         
         return jsonify({
             'success': True,
@@ -2478,6 +2478,25 @@ def toggle_prompt_ativo(id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/config', methods=['GET'])
+def api_config():
+    """Retorna as configurações atuais da aplicação"""
+    try:
+        config = data_service.get_config() or {}
+        # CORRIGIDO: Usar configurações do Azure OpenAI que são as atuais
+        return jsonify({
+            'modelo_padrao': config.get('azure_deployment', config.get('modelo_padrao', 'gpt-4o')),
+            'temperatura_padrao': config.get('azure_temperatura', config.get('temperatura_padrao', 0.0)),
+            'max_tokens_padrao': config.get('azure_max_tokens', config.get('max_tokens_padrao', 100000))
+        })
+    except Exception as e:
+        print(f"Erro ao carregar configurações: {e}")
+        return jsonify({
+            'modelo_padrao': 'gpt-4o',
+            'temperatura_padrao': 0.0,
+            'max_tokens_padrao': 100000
+        })
 
 @app.route('/api/configuracoes/testar-conexao', methods=['POST'])
 def testar_conexao_ai():
@@ -2791,9 +2810,28 @@ Retorne APENAS o JSON, sem texto adicional.
         
         # Usar o mesmo padrão da análise de intimações que funciona
         # Preparar parâmetros igual à análise
+        # CORRIGIDO: Usar configurações do usuário em vez de valores hardcoded
+        config = data_service.get_config() or {}
+        
+        # VALIDAÇÃO ROBUSTA: Garantir valores válidos
+        # CORRIGIDO: Usar temperatura configurada pelo usuário
+        try:
+            temperatura_config = float(config.get('temperatura_padrao', 0.1))
+            if temperatura_config <= 0:
+                temperatura_config = 0.1
+        except (ValueError, TypeError):
+            temperatura_config = 0.1
+        
+        try:
+            max_tokens_config = int(config.get('max_tokens_padrao', 500))
+            if max_tokens_config <= 0:
+                max_tokens_config = 500
+        except (ValueError, TypeError):
+            max_tokens_config = 500
+        
         parametros = {
-            'temperatura': 0.1,
-            'max_tokens': 500,
+            'temperatura': temperatura_config,
+            'max_tokens': max_tokens_config,
             'top_p': 1.0
         }
         
@@ -2908,7 +2946,7 @@ def restaurar_dados_demo():
         
         # Os dados agora são salvos no banco SQLite, não mais em JSON
         # Esta função foi mantida apenas para compatibilidade
-        print("ℹ️  Dados de demonstração - salvamento em JSON descontinuado (usando SQLite)")
+        print("INFO:  Dados de demonstração - salvamento em JSON descontinuado (usando SQLite)")
         
         return jsonify({
             'success': True,
@@ -3470,8 +3508,8 @@ def comparar_prompts():
         prompt_ids = request.args.getlist('prompt_ids')
         # Obter ID da intimação da query string
         intimacao_id = request.args.get('intimacao_id')
-        print(f"🔍 Intimação ID recebido: {intimacao_id}")
-        print(f"🔍 Todos os parâmetros: {dict(request.args)}")
+        print(f"Intimação ID recebido: {intimacao_id}")
+        print(f"Todos os parâmetros: {dict(request.args)}")
         
         if not prompt_ids:
             flash('Nenhum prompt selecionado para comparação', 'warning')
@@ -3487,25 +3525,28 @@ def comparar_prompts():
                     prompt['data_criacao'] = prompt['data_criacao'].strftime('%d/%m/%Y %H:%M')
                 prompts.append(prompt)
         
+        # Backend validation robuste for minimum prompts
         if len(prompts) < 2:
             flash('É necessário selecionar pelo menos 2 prompts para comparação', 'warning')
             return redirect(url_for('listar_prompts'))
+        
+        print(f"SUCESSO: BACKEND CONFIRMED validation - {len(prompts)} prompts received and valid for comparison")
         
         # Buscar dados da intimação se ID foi fornecido
         intimacao = None
         prompts_acerto = {}
         if intimacao_id:
-            print(f"🔍 Buscando intimação com ID: {intimacao_id}")
+            print(f" Buscando intimação com ID: {intimacao_id}")
             intimacao = data_service.get_intimacao_by_id(intimacao_id)
-            print(f"🔍 Intimação encontrada: {intimacao is not None}")
+            print(f" Intimação encontrada: {intimacao is not None}")
             if intimacao:
-                print(f"🔍 Dados da intimação: {intimacao.get('id', 'N/A')}")
-                print(f"🔍 Processo: {intimacao.get('processo', 'N/A')}")
-                print(f"🔍 Classe: {intimacao.get('classe', 'N/A')}")
+                print(f" Dados da intimação: {intimacao.get('id', 'N/A')}")
+                print(f" Processo: {intimacao.get('processo', 'N/A')}")
+                print(f" Classe: {intimacao.get('classe', 'N/A')}")
             else:
-                print(f"🔍 ERRO: Intimação não encontrada com ID: {intimacao_id}")
+                print(f" ERRO: Intimação não encontrada com ID: {intimacao_id}")
         else:
-            print(f"🔍 AVISO: Nenhum intimacao_id fornecido")
+            print(f" AVISO: Nenhum intimacao_id fornecido")
         
         # Buscar dados de acerto de cada prompt com esta intimação
         if intimacao_id:
@@ -3529,10 +3570,10 @@ def comparar_prompts():
                         'total_analises': 0
                     }
         
-        print(f"🔍 Renderizando template com:")
-        print(f"🔍 - prompts: {len(prompts)}")
-        print(f"🔍 - intimacao: {intimacao is not None}")
-        print(f"🔍 - intimacao_id: {intimacao.get('id') if intimacao else 'None'}")
+        print(f" Renderizando template com:")
+        print(f" - prompts: {len(prompts)}")
+        print(f" - intimacao: {intimacao is not None}")
+        print(f" - intimacao_id: {intimacao.get('id') if intimacao else 'None'}")
         
         return render_template('comparar_prompts.html', 
                              prompts=prompts,
@@ -3574,6 +3615,8 @@ def analisar_diferencas_prompts():
         regra_negocio_2 = data.get('regra_negocio_2', '')
         nome_prompt_1 = data.get('nome_prompt_1', 'Prompt 1')
         nome_prompt_2 = data.get('nome_prompt_2', 'Prompt 2')
+        taxa_prompt_1 = data.get('taxa_prompt_1', 'N/A')
+        taxa_prompt_2 = data.get('taxa_prompt_2', 'N/A')
         config_personalizada = data.get('config_personalizada')
         
         if not regra_negocio_1 or not regra_negocio_2:
@@ -3589,11 +3632,23 @@ def analisar_diferencas_prompts():
             intimacao_data = data_service.get_intimacao_by_id(intimacao_id)
         
         # Usar configuração personalizada se disponível, senão usar padrão
-        if config_personalizada:
+        print(f" DEBUG - config_personalizada recebida: {config_personalizada}")
+        print(f" DEBUG - config_personalizada é None? {config_personalizada is None}")
+        print(f" DEBUG - config_personalizada é dict vazio? {config_personalizada == {}}")
+        
+        if config_personalizada and config_personalizada != {}:
+            print(f" DEBUG - Usando configuração personalizada!")
             persona = config_personalizada.get('persona', 'Você é um especialista em análise de prompts de IA para classificação jurídica.')
-            instrucoes = config_personalizada.get('instrucoes', 'Forneça uma análise detalhada das diferenças.')
+            instrucoes_resposta = config_personalizada.get('instrucoesResposta', 'Responda em formato JSON com as seguintes chaves:\n- "analise": análise geral (2-3 frases)\n- "diferencas": array com 3-5 diferenças específicas\n- "recomendacoes": array com 3-5 recomendações\n\nSeja objetivo, técnico e focado em eficácia para classificação jurídica.')
             incluir_contexto = config_personalizada.get('incluirContextoIntimacao', True)
             incluir_gabarito = config_personalizada.get('incluirInformacaoAdicional', True)
+            print(f" DEBUG - instrucoes_resposta: '{instrucoes_resposta}'")
+            print(f" DEBUG - instrucoes_resposta é vazia? {instrucoes_resposta == ''}")
+            
+            # Se instrucoes_resposta estiver vazia, não adicionar instruções de formato
+            if not instrucoes_resposta or instrucoes_resposta.strip() == '':
+                instrucoes_resposta = ''  # Manter vazio - sem instruções de formato
+                print(f" DEBUG - Instruções de resposta mantidas vazias - IA responderá livremente")
             
             # Construir contexto da intimação com dados reais
             contexto_intimacao = ''
@@ -3636,21 +3691,15 @@ Analise por que um prompt teve melhor performance que o outro considerando:
 
 {informacao_adicional}
 
-{instrucoes}
-
-{nome_prompt_1.upper()}:
+CONJUNTO A - {nome_prompt_1.upper()} (Taxa de acerto: {taxa_prompt_1}):
 {regra_negocio_1}
 
-{nome_prompt_2.upper()}:
+CONJUNTO B - {nome_prompt_2.upper()} (Taxa de acerto: {taxa_prompt_2}):
 {regra_negocio_2}
 
-Responda em formato JSON com as seguintes chaves:
-- "analise": análise geral (2-3 frases)
-- "diferencas": array com 3-5 diferenças específicas
-- "recomendacoes": array com 3-5 recomendações
-
-Seja objetivo, técnico e focado em eficácia para classificação jurídica."""
+{instrucoes_resposta}"""
         else:
+            print(f" DEBUG - Usando prompt padrão (não há configuração personalizada)")
             # Prompt padrão com dados da intimação se disponível
             contexto_intimacao = ''
             informacao_adicional = ''
@@ -3694,10 +3743,10 @@ Analise as diferenças entre estas duas regras de negócio e forneça:
 2. Uma lista de 3-5 diferenças específicas
 3. Recomendações sobre qual abordagem pode ser mais eficaz
 
-{nome_prompt_1.upper()}:
+CONJUNTO A - {nome_prompt_1.upper()} (Taxa de acerto: {taxa_prompt_1}):
 {regra_negocio_1}
 
-{nome_prompt_2.upper()}:
+CONJUNTO B - {nome_prompt_2.upper()} (Taxa de acerto: {taxa_prompt_2}):
 {regra_negocio_2}
 
 Responda em formato JSON com as seguintes chaves:
@@ -3720,79 +3769,120 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
         
         # Usar o método analyze_text do serviço atual
         try:
-            print(f"🔍 Iniciando análise com IA...")
-            print(f"🔍 Provedor atual: {ai_service.get_current_provider()}")
-            print(f"🔍 Tamanho do prompt: {len(prompt_analise)} caracteres")
+            print(f" Iniciando análise com IA...")
+            print(f" Provedor atual: {ai_service.get_current_provider()}")
+            print(f" Tamanho do prompt: {len(prompt_analise)} caracteres")
             
-            resposta_completa = current_service.analyze_text(
-                prompt_analise,
-                temperatura=0.1,
-                max_tokens=1000
+            # Usar configurações baseadas no provider atual
+            provider_atual = ai_service.get_current_provider()
+            config = data_service.get_config() or {}
+            print(f" Provider atual: {provider_atual}")
+            print(f" Config carregada: {config}")
+            
+            # Buscar configurações específicas do provider
+            if provider_atual == 'azure':
+                modelo_analise = config.get('azure_deployment')
+                temperatura_analise = config.get('azure_temperatura')
+                max_tokens_analise = config.get('azure_max_tokens')
+            elif provider_atual == 'openai':
+                modelo_analise = config.get('modelo_padrao')
+                temperatura_analise = config.get('temperatura_padrao')
+                max_tokens_analise = config.get('max_tokens_padrao')
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'Provider {provider_atual} não suportado'
+                }), 400
+            
+            # Validar se as configurações estão presentes
+            if not modelo_analise:
+                return jsonify({
+                    'success': False,
+                    'message': f'Modelo não configurado para o provider {provider_atual}'
+                }), 400
+            
+            if temperatura_analise is None:
+                return jsonify({
+                    'success': False,
+                    'message': f'Temperatura não configurada para o provider {provider_atual}'
+                }), 400
+                
+            if max_tokens_analise is None:
+                return jsonify({
+                    'success': False,
+                    'message': f'Max tokens não configurado para o provider {provider_atual}'
+                }), 400
+            
+            print(f" Valores configurados: modelo={modelo_analise}, temp={temperatura_analise}, tokens={max_tokens_analise}")
+            
+            # Usar o mesmo método que funciona na análise de prompts
+            parametros_analise = {
+                'model': modelo_analise,
+                'temperature': temperatura_analise,
+                'max_tokens': max_tokens_analise,
+                'top_p': 1.0
+            }
+            
+            classificacao, resposta_texto, tokens_info = ai_service.analisar_intimacao(
+                "",  # contexto vazio - já está no prompt
+                prompt_analise,  # prompt completo
+                parametros_analise
             )
             
-            # Verificar se a resposta é uma tupla (resposta, tokens) ou apenas string
-            if isinstance(resposta_completa, tuple):
-                resposta_texto = resposta_completa[0]
-                tokens_info = resposta_completa[1]
-                print(f"🔍 Resposta da IA recebida: {len(resposta_texto)} caracteres, tokens: {tokens_info}")
-            else:
-                resposta_texto = resposta_completa
-                print(f"🔍 Resposta da IA recebida: {len(resposta_texto)} caracteres")
+            print(f" Resposta da IA recebida: {len(resposta_texto)} caracteres, tokens: N/A")
             
             response = {'success': True, 'resultado': resposta_texto}
         except Exception as e:
-            print(f"❌ Erro na chamada da IA: {e}")
+            print(f"ERRO: Erro na chamada da IA: {e}")
             response = {'success': False, 'erro': str(e)}
         
         if response['success']:
-            # Tentar extrair JSON da resposta
-            try:
-                # Limpar a resposta e extrair JSON
-                resposta_texto = response['resultado']
-                print(f"🔍 Processando resposta da IA...")
-                print(f"🔍 Primeiros 200 caracteres: {resposta_texto[:200]}")
-                
-                # Tentar encontrar JSON na resposta
-                import re
-                json_match = re.search(r'\{.*\}', resposta_texto, re.DOTALL)
-                if json_match:
-                    print(f"🔍 JSON encontrado na resposta")
-                    import json
-                    analise_data = json.loads(json_match.group())
-                    print(f"🔍 JSON parseado com sucesso: {list(analise_data.keys())}")
-                else:
-                    print(f"🔍 JSON não encontrado, usando fallback")
-                    # Se não conseguir extrair JSON, criar resposta estruturada
+            # Verificar se deve tentar extrair JSON ou retornar resposta livre
+            resposta_texto = response['resultado']
+            print(f" Processando resposta da IA...")
+            print(f" Primeiros 200 caracteres: {resposta_texto[:200]}")
+            
+            # Se instrucoes_resposta estiver vazia, retornar resposta livre
+            if not instrucoes_resposta or instrucoes_resposta.strip() == '':
+                print(f" Instruções vazias - retornando resposta livre da IA")
+                analise_data = {
+                    'analise': resposta_texto,
+                    'diferencas': [],
+                    'recomendacoes': []
+                }
+            else:
+                # Tentar extrair JSON da resposta
+                try:
+                    import re
+                    json_match = re.search(r'\{.*\}', resposta_texto, re.DOTALL)
+                    if json_match:
+                        print(f" JSON encontrado na resposta")
+                        import json
+                        analise_data = json.loads(json_match.group())
+                        print(f" JSON parseado com sucesso: {list(analise_data.keys())}")
+                    else:
+                        print(f" JSON não encontrado, usando resposta da IA como está")
+                        # Se não conseguir extrair JSON, usar resposta da IA como está
+                        analise_data = {
+                            'analise': resposta_texto,
+                            'diferencas': [],
+                            'recomendacoes': []
+                        }
+                except Exception as e:
+                    print(f"ERRO: Erro ao processar JSON: {e}")
                     analise_data = {
-                        'analise': resposta_texto[:200] + '...' if len(resposta_texto) > 200 else resposta_texto,
-                        'diferencas': [
-                            'Diferenças estruturais no texto',
-                            'Variações na abordagem de classificação',
-                            'Mudanças na especificidade das regras'
-                        ],
-                        'recomendacoes': [
-                            'Considere combinar os pontos fortes de ambas as abordagens',
-                            'Teste ambas as regras com dados reais',
-                            'Avalie a clareza e especificidade de cada versão'
-                        ]
+                        'analise': resposta_texto,
+                        'diferencas': [],
+                        'recomendacoes': []
                     }
-                
-                print(f"🔍 Retornando análise estruturada")
-                return jsonify({
-                    'success': True,
-                    'analise': analise_data.get('analise', 'Análise não disponível'),
-                    'diferencas': analise_data.get('diferencas', []),
-                    'recomendacoes': analise_data.get('recomendacoes', [])
-                })
-                
-            except Exception as e:
-                print(f"❌ Erro ao processar resposta da IA: {e}")
-                import traceback
-                traceback.print_exc()
-                return jsonify({
-                    'success': False,
-                    'message': 'Erro ao processar análise da IA'
-                }), 500
+            
+            print(f" Retornando análise estruturada")
+            return jsonify({
+                'success': True,
+                'analise': analise_data.get('analise', 'Análise não disponível'),
+                'diferencas': analise_data.get('diferencas', []),
+                'recomendacoes': analise_data.get('recomendacoes', [])
+            })
         else:
             return jsonify({
                 'success': False,

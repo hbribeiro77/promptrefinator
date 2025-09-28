@@ -382,12 +382,12 @@ class DataService:
             api_key = config['openai_api_key']
             # Se for uma chave real (começa com sk-), não salvar
             if api_key.startswith('sk-'):
-                print("⚠️  AVISO: Tentativa de salvar chave da API no arquivo de configuração bloqueada!")
+                print("AVISO:  AVISO: Tentativa de salvar chave da API no arquivo de configuração bloqueada!")
                 # Manter apenas o placeholder
                 config['openai_api_key'] = '${OPENAI_API_KEY}'
             # Se não for placeholder, não salvar
             elif not (api_key.startswith('${') and api_key.endswith('}')):
-                print("⚠️  AVISO: Tentativa de salvar valor inválido para chave da API bloqueada!")
+                print("AVISO:  AVISO: Tentativa de salvar valor inválido para chave da API bloqueada!")
                 # Manter apenas o placeholder
                 config['openai_api_key'] = '${OPENAI_API_KEY}'
         
@@ -517,5 +517,5 @@ class DataService:
             return round(total_cost, 6)  # Arredondar para 6 casas decimais
             
         except Exception as e:
-            print(f"⚠️  Erro ao calcular custo real: {e}")
+            print(f"AVISO:  Erro ao calcular custo real: {e}")
             return 0.0

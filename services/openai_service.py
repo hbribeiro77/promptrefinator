@@ -33,15 +33,15 @@ class OpenAIService(AIServiceInterface):
             
             if api_key:
                 self.client = openai.OpenAI(api_key=api_key)
-                print("✅ Cliente OpenAI inicializado com sucesso")
+                print("SUCESSO: Cliente OpenAI inicializado com sucesso")
                 return True
             else:
-                print("⚠️  Aviso: Chave da API OpenAI não configurada.")
+                print("AVISO:  Aviso: Chave da API OpenAI não configurada.")
                 print("   Configure a variável de ambiente OPENAI_API_KEY ou use a interface de configurações.")
                 self.client = None
                 return False
         except Exception as e:
-            print(f"❌ Erro ao inicializar cliente OpenAI: {e}")
+            print(f"ERRO: Erro ao inicializar cliente OpenAI: {e}")
             self.client = None
             return False
     
@@ -139,7 +139,7 @@ class OpenAIService(AIServiceInterface):
         
         # Validar limites
         parametros_validados['temperature'] = max(0.0, min(2.0, parametros_validados['temperature']))
-        parametros_validados['max_tokens'] = max(1, min(4000, parametros_validados['max_tokens']))
+        parametros_validados['max_tokens'] = max(1, parametros_validados['max_tokens'])
         parametros_validados['top_p'] = max(0.0, min(1.0, parametros_validados['top_p']))
         
         # Verificar se o modelo está na lista de modelos disponíveis

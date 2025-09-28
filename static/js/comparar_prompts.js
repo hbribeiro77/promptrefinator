@@ -1,8 +1,9 @@
 // Configuração padrão do prompt de análise
 const configPromptAnaliseDefault = {
-    persona: 'Você é um especialista em análise de prompts de IA para classificação jurídica.\n\nAnalise as diferenças entre estas duas regras de negócio e forneça:\n\n1. Uma análise geral das principais diferenças\n2. Uma lista de 3-5 diferenças específicas\n3. Recomendações sobre qual abordagem pode ser mais eficaz',
+    persona: 'Você é um especialista em análise de prompts de IA.\n\nTAREFA: Responda APENAS o nome de cada conjunto de regras com sua respectiva taxa de acerto.\n\nCRÍTICO: Use EXATAMENTE as taxas que estão escritas no prompt. NÃO invente, NÃO altere, NÃO ignore as taxas fornecidas.\n\nEXEMPLO DE RESPOSTA:\nConjunto A: NOME_A (Taxa: X%)\nConjunto B: NOME_B (Taxa: Y%)\nGabarito: [GABARITO_CORRETO]',
     incluirContextoIntimacao: true,
-    incluirInformacaoAdicional: true
+    incluirInformacaoAdicional: true,
+    instrucoesResposta: 'IMPORTANTE: Use APENAS as informações fornecidas no prompt. NUNCA invente ou altere o gabarito fornecido.\n\nResponda em formato JSON com as seguintes chaves:\n- "analise": análise geral (2-3 frases) baseada no gabarito fornecido\n- "diferencas": array com 3-5 diferenças específicas entre os prompts\n- "recomendacoes": array com 3-5 recomendações baseadas no gabarito real\n\nSeja objetivo, técnico e focado em eficácia para classificação jurídica.'
 };
 
 // Configuração do prompt de análise (carregada do localStorage ou padrão)
@@ -25,6 +26,47 @@ function carregarConfiguracoes() {
     }
 }
 
+// Função para carregar informações do modelo e temperatura
+async function carregarInfoModeloETemperatura() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const config = await response.json();
+            const modeloElement = document.getElementById('modelo-ia-info');
+            const temperaturaElement = document.getElementById('temperatura-ia-info');
+            
+            if (modeloElement) {
+                modeloElement.textContent = config.modelo_padrao || 'GPT-4o';
+            }
+            
+            if (temperaturaElement) {
+                temperaturaElement.textContent = config.temperatura_padrao || '0.0';
+            }
+            
+            console.log('Info modelo e temperatura carregada:', {
+                modelo: config.modelo_padrao,
+                temperatura: config.temperatura_padrao
+            });
+        } else {
+            console.error('Erro ao carregar configurações da API');
+            // Fallback para valores padrão
+            const modeloElement = document.getElementById('modelo-ia-info');
+            const temperaturaElement = document.getElementById('temperatura-ia-info');
+            
+            if (modeloElement) modeloElement.textContent = 'GPT-4o';
+            if (temperaturaElement) temperaturaElement.textContent = '0.0';
+        }
+    } catch (e) {
+        console.error('Erro ao carregar informações do modelo e temperatura:', e);
+        // Fallback para valores padrão
+        const modeloElement = document.getElementById('modelo-ia-info');
+        const temperaturaElement = document.getElementById('temperatura-ia-info');
+        
+        if (modeloElement) modeloElement.textContent = 'GPT-4o';
+        if (temperaturaElement) temperaturaElement.textContent = '0.0';
+    }
+}
+
 // Função para salvar configurações no localStorage
 function salvarConfiguracoes() {
     try {
@@ -37,6 +79,7 @@ function salvarConfiguracoes() {
 
 // Carregar configurações ao inicializar
 carregarConfiguracoes();
+carregarInfoModeloETemperatura();
 
 // Função para carregar dados da intimação
 async function carregarDadosIntimacao() {
@@ -105,6 +148,14 @@ function configurarPromptAnalise() {
                             </div>
                             
                             <div class="mb-3">
+                                <label for="instrucoesResposta" class="form-label">
+                                    <strong>Instruções de Resposta:</strong>
+                                    <small class="text-muted">Como a IA deve formatar e estruturar sua resposta</small>
+                                </label>
+                                <textarea class="form-control" id="instrucoesResposta" rows="5" placeholder="Ex: Responda em formato JSON com as seguintes chaves:&#10;- &quot;analise&quot;: análise geral (2-3 frases)&#10;- &quot;diferencas&quot;: array com 3-5 diferenças específicas&#10;- &quot;recomendacoes&quot;: array com 3-5 recomendações&#10;&#10;Seja objetivo, técnico e focado em eficácia para classificação jurídica.">${configPromptAnalise.instrucoesResposta}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="incluirContexto" ${configPromptAnalise.incluirContextoIntimacao ? 'checked' : ''}>
                                     <label class="form-check-label" for="incluirContexto">
@@ -130,8 +181,8 @@ function configurarPromptAnalise() {
                                     <li><strong>Persona:</strong> Como a IA deve se comportar</li>
                                     <li><strong>Contexto da Intimação:</strong> Dados completos (se habilitado)</li>
                                     <li><strong>Gabarito:</strong> Classificação correta (se habilitado)</li>
-                                    <li><strong>Instruções:</strong> O que fazer com as informações</li>
                                     <li><strong>Prompts a Comparar:</strong> As regras de negócio</li>
+                                    <li><strong>Instruções de Resposta:</strong> Como formatar a resposta</li>
                                 </ol>
                             </div>
                         </form>
@@ -170,6 +221,7 @@ function configurarPromptAnalise() {
 function salvarConfigPrompt() {
     configPromptAnalise = {
         persona: document.getElementById('persona').value.trim(),
+        instrucoesResposta: document.getElementById('instrucoesResposta').value.trim(),
         incluirContextoIntimacao: document.getElementById('incluirContexto').checked,
         incluirInformacaoAdicional: document.getElementById('incluirGabarito').checked
     };
@@ -193,6 +245,7 @@ function resetarConfigPrompt() {
     
     // Atualizar campos do formulário
     document.getElementById('persona').value = configPromptAnalise.persona;
+    document.getElementById('instrucoesResposta').value = configPromptAnalise.instrucoesResposta;
     document.getElementById('incluirContexto').checked = configPromptAnalise.incluirContextoIntimacao;
     document.getElementById('incluirGabarito').checked = configPromptAnalise.incluirInformacaoAdicional;
     
@@ -215,8 +268,33 @@ async function visualizarPromptAnalise() {
     const regra1 = elements[0].textContent;
     const regra2 = elements[1].textContent;
     
-    // Construir prompt baseado na configuração
-    let promptAnalise = configPromptAnalise.persona + '\n\n';
+    // ACRESCENTADO: Obter taxa de acerto de cada prompt
+    const promptCards = document.querySelectorAll('.card.h-100');
+    let taxa1 = 'N/A';
+    let taxa2 = 'N/A';
+    
+    if (promptCards.length >= 2) {
+        // Buscar badge de taxa de acerto no primeiro prompt
+        const badge1 = promptCards[0].querySelector('.badge');
+        if (badge1) {
+            taxa1 = badge1.textContent.trim();
+        }
+        
+        // Buscar badge de taxa de acerto no segundo prompt
+        const badge2 = promptCards[1].querySelector('.badge');
+        if (badge2) {
+            taxa2 = badge2.textContent.trim();
+        }
+    }
+    
+    console.log(' Taxa de acerto capturada:', { taxa1, taxa2 });
+    
+    // Construir prompt baseado na configuração com seções claras
+    let promptAnalise = `=== INSTRUÇÕES ===
+${configPromptAnalise.persona}
+
+=== CONTEXTO DA INTIMAÇÃO ===
+`;
     console.log(' Configuração atual:', configPromptAnalise);
     
     // Adicionar contexto da intimação se habilitado
@@ -266,22 +344,14 @@ N/A
         console.log(' Dados da intimação no Ver Prompt (Gabarito):', intimacaoData);
         
         if (intimacaoData && intimacaoData.id) {
-            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
-${intimacaoData.classificacao_manual || 'N/A'}
+            promptAnalise += `=== GABARITO ===
+Classificação: ${intimacaoData.classificacao_manual || 'N/A'}
+Informações: ${intimacaoData.informacao_adicional || 'N/A'}
 
-INFORMAÇÕES ADICIONAIS:
-${intimacaoData.informacao_adicional || 'N/A'}
-
-A classificação correta para esta intimação é: "${intimacaoData.classificacao_manual || 'N/A'}".
-
-Analise por que um prompt teve melhor performance que o outro considerando:
-1. A precisão na classificação da intimação
-2. A adequação das regras de negócio ao contexto específico
-3. A capacidade de capturar nuances importantes do caso
-
+=== CONJUNTOS DE REGRAS DE NEGÓCIO A COMPARAR ===
 `;
         } else {
-            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
+            promptAnalise += `GABARITO: GABARITO OFICIAL (RESPOSTA CORRETA):
 N/A
 
 INFORMAÇÕES ADICIONAIS:
@@ -298,21 +368,25 @@ Analise por que um prompt teve melhor performance que o outro considerando:
         }
     }
     
-    // As instruções já estão incluídas no persona
-    
     // Adicionar prompts a comparar
-    promptAnalise += `${nome1.toUpperCase()}:
+    promptAnalise += `=== CONJUNTOS DE REGRAS DE NEGÓCIO A COMPARAR ===
+
+CONJUNTO A - ${nome1.toUpperCase()} (Taxa de acerto: ${taxa1}):
 ${regra1}
 
-${nome2.toUpperCase()}:
+CONJUNTO B - ${nome2.toUpperCase()} (Taxa de acerto: ${taxa2}):
 ${regra2}
 
-Responda em formato JSON com as seguintes chaves:
-- "analise": análise geral (2-3 frases)
-- "diferencas": array com 3-5 diferenças específicas
-- "recomendacoes": array com 3-5 recomendações
-
-Seja objetivo, técnico e focado em eficácia para classificação jurídica.`;
+=== FIM DOS CONJUNTOS ===`;
+    
+    // DEBUG: Log do prompt completo
+    // Remover emojis do prompt para evitar erro de encoding
+    promptAnalise = promptAnalise.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "");
+ 
+ console.log(' PROMPT COMPLETO ENVIADO PARA IA:');
+    console.log('='.repeat(80));
+    console.log(promptAnalise);
+    console.log('='.repeat(80));
     
     // Criar modal para mostrar o prompt
     const modalHtml = `
@@ -366,6 +440,14 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.`;
                                         <span>Diferença de tamanho:</span>
                                         <span class="badge ${Math.abs(regra1.length - regra2.length) > 100 ? 'bg-warning' : 'bg-success'}">${Math.abs(regra1.length - regra2.length)}</span>
                                     </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Taxa de acerto ${nome1}:</span>
+                                        <span class="badge bg-success">${taxa1}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Taxa de acerto ${nome2}:</span>
+                                        <span class="badge bg-success">${taxa2}</span>
+                                    </li>
                                 </ul>
                             </div>
                         </div>
@@ -409,8 +491,33 @@ async function copiarPromptAnalise() {
     const regra1 = elements[0].textContent;
     const regra2 = elements[1].textContent;
     
+    // ACRESCENTADO: Obter taxa de acerto de cada prompt (mesmo código da função visualizar)
+    const promptCards = document.querySelectorAll('.card.h-100');
+    let taxa1 = 'N/A';
+    let taxa2 = 'N/A';
+    
+    if (promptCards.length >= 2) {
+        // Buscar badge de taxa de acerto no primeiro prompt
+        const badge1 = promptCards[0].querySelector('.badge');
+        if (badge1) {
+            taxa1 = badge1.textContent.trim();
+        }
+        
+        // Buscar badge de taxa de acerto no segundo prompt
+        const badge2 = promptCards[1].querySelector('.badge');
+        if (badge2) {
+            taxa2 = badge2.textContent.trim();
+        }
+    }
+    
+    console.log(' Taxa de acerto capturada (copiar):', { taxa1, taxa2 });
+    
     // Construir prompt baseado na configuração (mesmo código da função visualizar)
-    let promptAnalise = configPromptAnalise.persona + '\n\n';
+    let promptAnalise = `=== INSTRUÇÕES ===
+${configPromptAnalise.persona}
+
+=== CONTEXTO DA INTIMAÇÃO ===
+`;
     
     // Adicionar contexto da intimação se habilitado
     if (configPromptAnalise.incluirContextoIntimacao) {
@@ -440,22 +547,14 @@ ${intimacaoData.contexto || 'N/A'}
         console.log(' Dados da intimação no Ver Prompt (Gabarito):', intimacaoData);
         
         if (intimacaoData && intimacaoData.id) {
-            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
-${intimacaoData.classificacao_manual || 'N/A'}
+            promptAnalise += `=== GABARITO ===
+Classificação: ${intimacaoData.classificacao_manual || 'N/A'}
+Informações: ${intimacaoData.informacao_adicional || 'N/A'}
 
-INFORMAÇÕES ADICIONAIS:
-${intimacaoData.informacao_adicional || 'N/A'}
-
-A classificação correta para esta intimação é: "${intimacaoData.classificacao_manual || 'N/A'}".
-
-Analise por que um prompt teve melhor performance que o outro considerando:
-1. A precisão na classificação da intimação
-2. A adequação das regras de negócio ao contexto específico
-3. A capacidade de capturar nuances importantes do caso
-
+=== CONJUNTOS DE REGRAS DE NEGÓCIO A COMPARAR ===
 `;
         } else {
-            promptAnalise += `CLASSIFICAÇÃO MANUAL (GABARITO):
+            promptAnalise += `GABARITO: GABARITO OFICIAL (RESPOSTA CORRETA):
 N/A
 
 INFORMAÇÕES ADICIONAIS:
@@ -472,21 +571,19 @@ Analise por que um prompt teve melhor performance que o outro considerando:
         }
     }
     
-    // As instruções já estão incluídas no persona
-    
     // Adicionar prompts a comparar
-    promptAnalise += `${nome1.toUpperCase()}:
+    promptAnalise += `=== CONJUNTOS DE REGRAS DE NEGÓCIO A COMPARAR ===
+
+CONJUNTO A - ${nome1.toUpperCase()} (Taxa de acerto: ${taxa1}):
 ${regra1}
 
-${nome2.toUpperCase()}:
+CONJUNTO B - ${nome2.toUpperCase()} (Taxa de acerto: ${taxa2}):
 ${regra2}
 
-Responda em formato JSON com as seguintes chaves:
-- "analise": análise geral (2-3 frases)
-- "diferencas": array com 3-5 diferenças específicas
-- "recomendacoes": array com 3-5 recomendações
-
-Seja objetivo, técnico e focado em eficácia para classificação jurídica.`;
+=== FIM DOS CONJUNTOS ===`;
+    
+    // Remover emojis do prompt para evitar erro de encoding
+    promptAnalise = promptAnalise.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "");
     
     navigator.clipboard.writeText(promptAnalise).then(() => {
         showToast('Prompt copiado para a área de transferência!', 'success');
@@ -511,6 +608,29 @@ function analisarDiferencasComIA() {
     const regra1 = elements[0].textContent;
     const regra2 = elements[1].textContent;
     
+    // ACRESCENTADO: Obter taxa de acerto de cada prompt
+    const promptCards = document.querySelectorAll('.card.h-100');
+    let taxa1 = 'N/A';
+    let taxa2 = 'N/A';
+    
+    if (promptCards.length >= 2) {
+        // Buscar badge de taxa de acerto no primeiro prompt
+        const badge1 = promptCards[0].querySelector('.badge');
+        if (badge1) {
+            taxa1 = badge1.textContent.trim();
+        }
+        
+        // Buscar badge de taxa de acerto no segundo prompt
+        const badge2 = promptCards[1].querySelector('.badge');
+        if (badge2) {
+            taxa2 = badge2.textContent.trim();
+        }
+    }
+    
+    // Remover emojis das regras para evitar erro de encoding
+    const regra1Limpa = regra1.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "");
+    const regra2Limpa = regra2.replace(/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, "");
+    
     // Mostrar seção de análise
     const analiseSection = document.getElementById('analise-ia-section');
     analiseSection.style.display = 'block';
@@ -525,10 +645,12 @@ function analisarDiferencasComIA() {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            regra_negocio_1: regra1,
-            regra_negocio_2: regra2,
+            regra_negocio_1: regra1Limpa,
+            regra_negocio_2: regra2Limpa,
             nome_prompt_1: nome1,
             nome_prompt_2: nome2,
+            taxa_prompt_1: taxa1,
+            taxa_prompt_2: taxa2,
             config_personalizada: configPromptAnalise,
             intimacao_id: window.intimacaoData ? window.intimacaoData.id : null
         })
@@ -536,10 +658,20 @@ function analisarDiferencasComIA() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // ACRESCENTADO: Renderizar Markdown se a biblioteca estiver disponível
+            let analiseHtml = data.analise;
+            console.log(' Biblioteca marked disponível:', typeof marked !== 'undefined');
+            if (typeof marked !== 'undefined') {
+                console.log('SUCESSO: Renderizando Markdown...');
+                analiseHtml = marked.parse(data.analise);
+            } else {
+                console.log('IMPORTANTE: Biblioteca marked não encontrada, usando texto puro');
+            }
+            
             document.getElementById('analise-ia-content').innerHTML = `
                 <div class="alert alert-info">
                     <h6><i class="bi bi-lightbulb"></i> Análise da IA:</h6>
-                    <p class="mb-0">${data.analise}</p>
+                    <div class="markdown-content">${analiseHtml}</div>
                 </div>
                 <div class="row mt-3">
                     <div class="col-md-6">
