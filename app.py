@@ -3606,6 +3606,255 @@ def get_intimacao_by_id(intimacao_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/prompts/<prompt_id>')
+def obter_prompt(prompt_id):
+    """API para obter dados de um prompt específico"""
+    try:
+        prompt = data_service.get_prompt_by_id(prompt_id)
+        if not prompt:
+            return jsonify({
+                'success': False,
+                'message': 'Prompt não encontrado'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'prompt': prompt
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter prompt: {str(e)}'
+        }), 500
+
+@app.route('/api/analisar-prompt-individual', methods=['POST'])
+def analisar_prompt_individual():
+    """Analisar um prompt específico com uma intimação usando IA"""
+    try:
+        data = request.get_json()
+        prompt_id = data.get('prompt_id')
+        prompt_nome = data.get('prompt_nome', 'Prompt')
+        intimacao_id = data.get('intimacao_id')
+        config_personalizada = data.get('config_personalizada')
+        
+        if not prompt_id:
+            return jsonify({
+                'success': False,
+                'message': 'ID do prompt é necessário para análise'
+            }), 400
+        
+        # Buscar dados do prompt
+        prompt = data_service.get_prompt_by_id(prompt_id)
+        if not prompt:
+            return jsonify({
+                'success': False,
+                'message': 'Prompt não encontrado'
+            }), 404
+        
+        # Obter dados da intimação se disponível
+        intimacao_data = None
+        if intimacao_id:
+            intimacao_data = data_service.get_intimacao_by_id(intimacao_id)
+        
+        # Usar configuração personalizada se disponível
+        if config_personalizada and config_personalizada != {}:
+            persona = config_personalizada.get('persona', 'Você é um especialista em análise de prompts de IA para classificação jurídica.')
+            instrucoes_resposta = config_personalizada.get('instrucoesResposta', '')
+            incluir_contexto = config_personalizada.get('incluirContextoIntimacao', True)
+            incluir_gabarito = config_personalizada.get('incluirInformacaoAdicional', True)
+            
+            # Construir contexto da intimação
+            contexto_intimacao = ''
+            if intimacao_data and incluir_contexto:
+                contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
+- ID: {intimacao_data.get('id', 'N/A')}
+- Processo: {intimacao_data.get('processo', 'N/A')}
+- Classe: {intimacao_data.get('classe', 'N/A')}
+- Órgão Julgador: {intimacao_data.get('orgao_julgador', 'N/A')}
+- Intimado: {intimacao_data.get('intimado', 'N/A')}
+- Defensor: {intimacao_data.get('defensor', 'N/A')}
+- Data: {intimacao_data.get('data_criacao', 'N/A')}
+
+CONTEÚDO DA INTIMAÇÃO:
+{intimacao_data.get('contexto', 'N/A')}
+
+"""
+            
+            # Construir gabarito
+            informacao_adicional = ''
+            if intimacao_data and incluir_gabarito:
+                informacao_adicional = f"""GABARITO (CLASSIFICAÇÃO CORRETA):
+{intimacao_data.get('classificacao_manual', 'N/A')}
+
+INFORMAÇÕES ADICIONAIS:
+{intimacao_data.get('informacao_adicional', 'N/A')}
+
+"""
+            
+            # Buscar taxa de acerto do prompt
+            taxa_acerto = ''
+            try:
+                prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
+                for p in prompts_acerto:
+                    if p['prompt_id'] == prompt_id:
+                        taxa_acerto = f" (Taxa de acerto: {p['taxa_acerto']}%)"
+                        break
+            except Exception as e:
+                print(f"Erro ao buscar taxa de acerto: {e}")
+            
+            # Construir prompt de análise
+            # Usar regras de negócio em vez do conteúdo completo
+            regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
+            
+            prompt_analise = f"""{persona}
+
+{contexto_intimacao}
+
+{informacao_adicional}
+
+=== PROMPT A ANALISAR ===
+PROMPT: {prompt_nome}{taxa_acerto}
+{regras_negocio}
+
+{instrucoes_resposta}"""
+        else:
+            # Prompt padrão
+            contexto_intimacao = ''
+            informacao_adicional = ''
+            
+            if intimacao_data:
+                contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
+- ID: {intimacao_data.get('id', 'N/A')}
+- Processo: {intimacao_data.get('processo', 'N/A')}
+- Classe: {intimacao_data.get('classe', 'N/A')}
+- Órgão Julgador: {intimacao_data.get('orgao_julgador', 'N/A')}
+- Intimado: {intimacao_data.get('intimado', 'N/A')}
+- Defensor: {intimacao_data.get('defensor', 'N/A')}
+- Data: {intimacao_data.get('data_criacao', 'N/A')}
+
+CONTEÚDO DA INTIMAÇÃO:
+{intimacao_data.get('contexto', 'N/A')}
+
+GABARITO (CLASSIFICAÇÃO CORRETA):
+{intimacao_data.get('classificacao_manual', 'N/A')}
+
+INFORMAÇÕES ADICIONAIS:
+{intimacao_data.get('informacao_adicional', 'N/A')}
+
+"""
+            
+            # Buscar taxa de acerto do prompt
+            taxa_acerto = ''
+            try:
+                prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
+                for p in prompts_acerto:
+                    if p['prompt_id'] == prompt_id:
+                        taxa_acerto = f" (Taxa de acerto: {p['taxa_acerto']}%)"
+                        break
+            except Exception as e:
+                print(f"Erro ao buscar taxa de acerto: {e}")
+            
+            # Usar regras de negócio em vez do conteúdo completo
+            regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
+            
+            prompt_analise = f"""
+Você é um especialista em análise de prompts de IA para classificação jurídica.
+
+{contexto_intimacao}
+
+{informacao_adicional}
+
+Analise a eficácia deste prompt específico para classificar a intimação fornecida:
+
+=== PROMPT A ANALISAR ===
+PROMPT: {prompt_nome}{taxa_acerto}
+{regras_negocio}
+
+Responda em formato JSON com as seguintes chaves:
+- "analise": análise geral (2-3 frases) sobre a eficácia do prompt
+- "pontos_fortes": array com 3-5 pontos fortes do prompt
+- "pontos_fracos": array com 3-5 pontos fracos do prompt
+- "recomendacoes": array com 3-5 recomendações para melhorar o prompt
+
+Seja objetivo, técnico e focado em eficácia para classificação jurídica.
+"""
+        
+        # Usar o serviço de IA para análise
+        ai_service = AIManagerService()
+        current_service = ai_service.get_current_service()
+        
+        if not current_service:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum provedor de IA configurado'
+            }), 500
+        
+        # Usar configurações baseadas no provider atual
+        provider_atual = ai_service.get_current_provider()
+        config = data_service.get_config() or {}
+        
+        # Buscar configurações específicas do provider
+        if provider_atual == 'azure':
+            modelo_analise = config.get('azure_deployment')
+            temperatura_analise = config.get('azure_temperatura')
+            max_tokens_analise = config.get('azure_max_tokens')
+        elif provider_atual == 'openai':
+            modelo_analise = config.get('modelo_padrao')
+            temperatura_analise = config.get('temperatura_padrao')
+            max_tokens_analise = config.get('max_tokens_padrao')
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Provider {provider_atual} não suportado'
+            }), 400
+        
+        # Validar configurações
+        if not modelo_analise:
+            return jsonify({
+                'success': False,
+                'message': f'Modelo não configurado para o provider {provider_atual}'
+            }), 400
+        
+        if temperatura_analise is None:
+            return jsonify({
+                'success': False,
+                'message': f'Temperatura não configurada para o provider {provider_atual}'
+            }), 400
+            
+        if max_tokens_analise is None:
+            return jsonify({
+                'success': False,
+                'message': f'Max tokens não configurado para o provider {provider_atual}'
+            }), 400
+        
+        # Parâmetros para análise
+        parametros_analise = {
+            'model': modelo_analise,
+            'temperature': temperatura_analise,
+            'max_tokens': max_tokens_analise,
+            'top_p': 1.0
+        }
+        
+        # Chamar IA
+        classificacao, resposta_texto, tokens_info = ai_service.analisar_intimacao(
+            "",  # contexto vazio - já está no prompt
+            prompt_analise,  # prompt completo
+            parametros_analise
+        )
+        
+        return jsonify({
+            'success': True,
+            'resultado': resposta_texto
+        })
+        
+    except Exception as e:
+        print(f"Erro na análise individual: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
 @app.route('/api/analisar-diferencas-prompts', methods=['POST'])
 def analisar_diferencas_prompts():
     """Analisar diferenças entre regras de negócio usando IA"""
@@ -3902,5 +4151,155 @@ if __name__ == '__main__':
     os.makedirs('templates', exist_ok=True)
     os.makedirs('static/css', exist_ok=True)
     os.makedirs('static/js', exist_ok=True)
-    
+
+@app.route('/api/testar-triagem-customizada', methods=['POST'])
+def testar_triagem_customizada():
+    """Testar triagem de intimação com regras de negócio customizadas"""
+    try:
+        data = request.get_json()
+        intimacao_id = data.get('intimacao_id')
+        regras_negocio_customizadas = data.get('regras_negocio', '')
+        prompt_base_id = data.get('prompt_base_id')  # ID do prompt base para usar como template
+        
+        if not intimacao_id:
+            return jsonify({
+                'success': False,
+                'message': 'ID da intimação é necessário'
+            }), 400
+        
+        if not regras_negocio_customizadas:
+            return jsonify({
+                'success': False,
+                'message': 'Regras de negócio são necessárias'
+            }), 400
+        
+        # Buscar dados da intimação
+        intimacao = data_service.get_intimacao_by_id(intimacao_id)
+        if not intimacao:
+            return jsonify({
+                'success': False,
+                'message': 'Intimação não encontrada'
+            }), 404
+        
+        # Buscar prompt base se fornecido
+        prompt_base = None
+        if prompt_base_id:
+            prompt_base = data_service.get_prompt_by_id(prompt_base_id)
+        
+        # Preparar contexto da intimação
+        contexto = f"""
+Contexto da Intimação:
+{intimacao.get('contexto', '')}
+"""
+        
+        # Preparar prompt final
+        if prompt_base:
+            # Usar prompt base como template
+            prompt_final = prompt_base['conteudo']
+            # Substituir {REGRADENEGOCIO} pelas regras customizadas
+            if '{REGRADENEGOCIO}' in prompt_final:
+                prompt_final = prompt_final.replace('{REGRADENEGOCIO}', regras_negocio_customizadas)
+            # Substituir {CONTEXTO}
+            if '{CONTEXTO}' in prompt_final:
+                prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
+        else:
+            # Usar prompt padrão simples
+            prompt_final = f"""
+Você é um especialista em análise jurídica da Defensoria Pública.
+
+{regras_negocio_customizadas}
+
+{contexto}
+
+Com base nas regras de negócio fornecidas e no contexto da intimação, classifique a ação necessária.
+
+Responda apenas com uma das seguintes opções:
+- RENUNCIAR_PRAZO
+- OCULTAR
+- ELABORAR_PECA
+- CONTATAR_ASSISTIDO
+- ANALISAR_PROCESSO
+- ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
+- URGENCIA
+"""
+        
+        # Obter configurações de IA
+        ai_service = AIManagerService()
+        current_service = ai_service.get_current_service()
+        
+        if not current_service:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum provedor de IA configurado'
+            }), 500
+        
+        # Obter parâmetros da configuração
+        config = data_service.get_config() or {}
+        provider_atual = ai_service.get_current_provider()
+        
+        if provider_atual == 'azure':
+            modelo = config.get('azure_deployment')
+            temperatura = config.get('azure_temperatura')
+            max_tokens = config.get('azure_max_tokens')
+        elif provider_atual == 'openai':
+            modelo = config.get('modelo_padrao')
+            temperatura = config.get('temperatura_padrao')
+            max_tokens = config.get('max_tokens_padrao')
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Provider {provider_atual} não suportado'
+            }), 400
+        
+        if not modelo or temperatura is None or max_tokens is None:
+            return jsonify({
+                'success': False,
+                'message': f'Configuração de IA incompleta para o provider {provider_atual}'
+            }), 400
+        
+        # Preparar parâmetros para a IA
+        parametros = {
+            'model': modelo,
+            'temperature': temperatura,
+            'max_tokens': max_tokens,
+            'top_p': 1.0
+        }
+        
+        # Chamar IA
+        inicio_analise = time.time()
+        resultado_ia, resposta_ia, tokens_info = ai_service.analisar_intimacao(
+            contexto, prompt_final, parametros
+        )
+        fim_analise = time.time()
+        tempo_processamento = fim_analise - inicio_analise
+        
+        # Calcular acurácia comparando com classificação manual
+        acertou = None
+        if intimacao.get('classificacao_manual'):
+            acertou = resultado_ia.strip().upper() == intimacao['classificacao_manual'].strip().upper()
+        
+        return jsonify({
+            'success': True,
+            'resultado': {
+                'classificacao_ia': resultado_ia,
+                'resposta_completa': resposta_ia,
+                'classificacao_manual': intimacao.get('classificacao_manual'),
+                'acertou': acertou,
+                'tempo_processamento': round(tempo_processamento, 2),
+                'tokens_info': tokens_info,
+                'regras_utilizadas': regras_negocio_customizadas,
+                'modelo_utilizado': modelo,
+                'temperatura_utilizada': temperatura,
+                'max_tokens_utilizado': max_tokens
+            }
+        })
+        
+    except Exception as e:
+        print(f"Erro na triagem customizada: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

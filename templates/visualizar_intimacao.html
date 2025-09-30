@@ -299,6 +299,30 @@
         </div>
         {% endif %}
 
+        <!-- Prompts Usados com Taxa de Acerto -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    Prompts Usados com Taxa de Acerto
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="carregarPromptsAcerto()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Atualizar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="prompts-acerto-content">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Carregando prompts e taxas de acerto...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Histórico de Análises -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -594,9 +618,17 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Marked.js para renderização de Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+
 <script type="application/json" id="intimacao-data">
 {
     "id": {{ intimacao.id | tojson | safe }},
+    "processo": {{ intimacao.processo | tojson | safe }},
+    "classe": {{ intimacao.classe | tojson | safe }},
+    "orgao_julgador": {{ intimacao.orgao_julgador | tojson | safe }},
+    "intimado": {{ intimacao.intimado | tojson | safe }},
+    "defensor": {{ intimacao.defensor | tojson | safe }},
     "contexto": {{ intimacao.contexto | tojson | safe }},
     "classificacao_manual": {{ intimacao.classificacao_manual | tojson | safe }},
     "informacao_adicional": {{ (intimacao.informacao_adicional or "") | tojson | safe }},
@@ -617,6 +649,15 @@
 const intimacaoData = JSON.parse(document.getElementById('intimacao-data').textContent);
 const analisesData = JSON.parse(document.getElementById('analises-data').textContent);
 const defensoresData = JSON.parse(document.getElementById('defensores-data').textContent);
+
+// Debug: mostrar dados da intimação
+console.log('=== DEBUG: Dados da intimação carregados ===');
+console.log('intimacaoData:', intimacaoData);
+
+// Disponibilizar dados globalmente
+window.intimacaoData = intimacaoData;
+window.analisesData = analisesData;
+window.defensoresData = defensoresData;
 // Função para copiar texto
 function copiarTexto(elementId) {
     const elemento = document.getElementById(elementId);
@@ -952,6 +993,2072 @@ document.getElementById('btn-confirmar-exclusao').addEventListener('click', func
         btnConfirmar.innerHTML = originalText;
         btnConfirmar.disabled = false;
     });
+});
+
+// Variável global para armazenar dados da tabela
+let dadosPromptsAcerto = [];
+let ordenacaoAtual = { coluna: null, direcao: 'asc' };
+
+// Função para ordenar tabela
+function ordenarTabela(coluna) {
+    console.log('=== DEBUG: Ordenando por coluna ===', coluna);
+    
+    // Determinar direção da ordenação
+    if (ordenacaoAtual.coluna === coluna) {
+        ordenacaoAtual.direcao = ordenacaoAtual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordenacaoAtual.coluna = coluna;
+        ordenacaoAtual.direcao = 'asc';
+    }
+    
+    // Ordenar dados
+    dadosPromptsAcerto.sort((a, b) => {
+        let valorA, valorB;
+        
+        switch (coluna) {
+            case 'prompt_nome':
+                valorA = a.prompt_nome.toLowerCase();
+                valorB = b.prompt_nome.toLowerCase();
+                break;
+            case 'taxa_acerto':
+                valorA = parseFloat(a.taxa_acerto);
+                valorB = parseFloat(b.taxa_acerto);
+                break;
+            case 'total_analises':
+                valorA = parseInt(a.total_analises);
+                valorB = parseInt(b.total_analises);
+                break;
+            case 'acertos':
+                valorA = parseInt(a.acertos);
+                valorB = parseInt(b.acertos);
+                break;
+            case 'modelo':
+                valorA = (a.modelo || '').toLowerCase();
+                valorB = (b.modelo || '').toLowerCase();
+                break;
+            case 'temperatura':
+                valorA = parseFloat(a.temperatura || 0);
+                valorB = parseFloat(b.temperatura || 0);
+                break;
+            case 'ultima_analise':
+                valorA = new Date(a.ultima_analise || 0);
+                valorB = new Date(b.ultima_analise || 0);
+                break;
+            default:
+                return 0;
+        }
+        
+        if (valorA < valorB) return ordenacaoAtual.direcao === 'asc' ? -1 : 1;
+        if (valorA > valorB) return ordenacaoAtual.direcao === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    // Re-renderizar tabela
+    renderizarTabelaPrompts();
+    
+    // Atualizar ícones de ordenação
+    atualizarIconesOrdenacao(coluna, ordenacaoAtual.direcao);
+}
+
+// Função para atualizar ícones de ordenação
+function atualizarIconesOrdenacao(colunaAtiva, direcao) {
+    // Resetar todos os ícones
+    document.querySelectorAll('thead th i').forEach(icon => {
+        icon.className = 'bi bi-arrow-down-up';
+    });
+    
+    // Atualizar ícone da coluna ativa
+    const colunas = ['prompt_nome', 'taxa_acerto', 'total_analises', 'acertos', 'modelo', 'temperatura', 'ultima_analise'];
+    const indiceColuna = colunas.indexOf(colunaAtiva);
+    
+    if (indiceColuna !== -1) {
+        const th = document.querySelectorAll('thead th')[indiceColuna];
+        const icon = th.querySelector('i');
+        if (icon) {
+            icon.className = direcao === 'asc' ? 'bi bi-arrow-up' : 'bi bi-arrow-down';
+        }
+    }
+}
+
+// Função para renderizar tabela
+function renderizarTabelaPrompts() {
+    const contentDiv = document.getElementById('prompts-acerto-content');
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th onclick="ordenarTabela('prompt_nome')" style="cursor: pointer;">
+                            Prompt <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('taxa_acerto')" style="cursor: pointer;">
+                            Taxa de Acerto <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('total_analises')" style="cursor: pointer;">
+                            Análises <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('acertos')" style="cursor: pointer;">
+                            Acertos <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('modelo')" style="cursor: pointer;">
+                            Modelo <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('temperatura')" style="cursor: pointer;">
+                            Temperatura <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center" onclick="ordenarTabela('ultima_analise')" style="cursor: pointer;">
+                            Última Análise <i class="bi bi-arrow-down-up"></i>
+                        </th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    dadosPromptsAcerto.forEach(prompt => {
+        const taxa = prompt.taxa_acerto;
+        const acertos = prompt.acertos;
+        const total = prompt.total_analises;
+        
+        let badgeClass = 'bg-secondary';
+        if (taxa >= 80) { badgeClass = 'bg-success'; } 
+        else if (taxa >= 60) { badgeClass = 'bg-warning'; } 
+        else if (taxa >= 40) { badgeClass = 'bg-danger'; }
+        
+        html += `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-file-text text-primary me-2"></i>
+                        <div>
+                            <a href="{{ url_for('visualizar_prompt', id='') }}${prompt.prompt_id}" 
+                               target="_blank" 
+                               class="text-decoration-none fw-bold">
+                                ${prompt.prompt_nome}
+                            </a>
+                            <br>
+                            <small class="text-muted">ID: ${prompt.prompt_id}</small>
+                        </div>
+                    </div>
+                </td>
+                <td class="text-center">
+                    <span class="badge ${badgeClass} fs-6">${taxa}%</span>
+                </td>
+                <td class="text-center"><span class="badge bg-primary">${total}</span></td>
+                <td class="text-center"><span class="badge bg-success">${acertos}</span></td>
+                <td class="text-center"><small class="text-muted"><i class="bi bi-cpu"></i> ${prompt.modelo || 'N/A'}</small></td>
+                <td class="text-center"><small class="text-muted"><i class="bi bi-thermometer"></i> ${prompt.temperatura || 'N/A'}</small></td>
+                <td class="text-center"><small class="text-muted"><i class="bi bi-clock"></i> ${prompt.ultima_analise ? new Date(prompt.ultima_analise).toLocaleDateString('pt-BR') : 'N/A'}</small></td>
+                <td class="text-center">
+                    <button type="button" 
+                            class="btn btn-sm btn-warning" 
+                            onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}')"
+                            title="Analisar este prompt com a intimação">
+                        <i class="bi bi-robot"></i>
+                        Analisar
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `</tbody></table></div>`;
+    contentDiv.innerHTML = html;
+    
+    // Aplicar ordenação atual se existir
+    if (ordenacaoAtual.coluna) {
+        atualizarIconesOrdenacao(ordenacaoAtual.coluna, ordenacaoAtual.direcao);
+    }
+}
+
+// Função para carregar prompts e taxas de acerto
+function carregarPromptsAcerto() {
+    const contentDiv = document.getElementById('prompts-acerto-content');
+    
+    if (!contentDiv) {
+        console.error('Elemento prompts-acerto-content não encontrado!');
+        return;
+    }
+    
+    // Mostrar loading
+    contentDiv.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="mt-3 text-muted">Carregando prompts e taxas de acerto...</p>
+        </div>
+    `;
+    
+    // Fazer requisição para API
+    fetch(`/api/intimacoes/{{ intimacao.id }}/prompts-acerto`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.prompts_acerto && data.prompts_acerto.length > 0) {
+                // Renderizar prompts em tabela
+                let html = `
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th onclick="ordenarTabela('prompt_nome')" style="cursor: pointer;">
+                                        Prompt <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('taxa_acerto')" style="cursor: pointer;">
+                                        Taxa de Acerto <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('total_analises')" style="cursor: pointer;">
+                                        Análises <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('acertos')" style="cursor: pointer;">
+                                        Acertos <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('modelo')" style="cursor: pointer;">
+                                        Modelo <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('temperatura')" style="cursor: pointer;">
+                                        Temperatura <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center" onclick="ordenarTabela('ultima_analise')" style="cursor: pointer;">
+                                        Última Análise <i class="bi bi-arrow-down-up"></i>
+                                    </th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.prompts_acerto.forEach(prompt => {
+                    const taxa = prompt.taxa_acerto;
+                    const acertos = prompt.acertos;
+                    const total = prompt.total_analises;
+                    
+                    // Definir cor do badge baseado na taxa
+                    let badgeClass = 'bg-secondary';
+                    if (taxa >= 80) {
+                        badgeClass = 'bg-success';
+                    } else if (taxa >= 60) {
+                        badgeClass = 'bg-warning';
+                    } else if (taxa >= 40) {
+                        badgeClass = 'bg-danger';
+                    }
+                    
+                    html += `
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-file-text text-primary me-2"></i>
+                                    <div>
+                                        <a href="{{ url_for('visualizar_prompt', id='') }}${prompt.prompt_id}" 
+                                           target="_blank" 
+                                           class="text-decoration-none fw-bold">
+                                            ${prompt.prompt_nome}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">ID: ${prompt.prompt_id}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge ${badgeClass} fs-6">
+                                    ${taxa}%
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-primary">${total}</span>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-success">${acertos}</span>
+                            </td>
+                            <td class="text-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-cpu"></i>
+                                    ${prompt.modelo || 'N/A'}
+                                </small>
+                            </td>
+                            <td class="text-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-thermometer"></i>
+                                    ${prompt.temperatura || 'N/A'}
+                                </small>
+                            </td>
+                            <td class="text-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock"></i>
+                                    ${prompt.ultima_analise ? new Date(prompt.ultima_analise).toLocaleDateString('pt-BR') : 'N/A'}
+                                </small>
+                            </td>
+                            <td class="text-center">
+                                <button type="button" 
+                                        class="btn btn-sm btn-warning" 
+                                        onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}')"
+                                        title="Analisar este prompt com a intimação">
+                                    <i class="bi bi-robot"></i>
+                                    Analisar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                contentDiv.innerHTML = html;
+                
+                // Armazenar dados para ordenação
+                dadosPromptsAcerto = data.prompts_acerto;
+                
+                // Aplicar ordenação padrão por análise mais recente
+                ordenacaoAtual = { coluna: 'ultima_analise', direcao: 'desc' };
+                dadosPromptsAcerto.sort((a, b) => {
+                    const dataA = new Date(a.ultima_analise || 0);
+                    const dataB = new Date(b.ultima_analise || 0);
+                    return dataB - dataA; // Mais recente primeiro
+                });
+                
+                // Re-renderizar com ordenação aplicada
+                setTimeout(() => {
+                    renderizarTabelaPrompts();
+                }, 100);
+            } else {
+                // Nenhum prompt encontrado
+                contentDiv.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="bi bi-graph-up fa-2x text-muted mb-3"></i>
+                        <h6 class="text-muted">Nenhum prompt testado</h6>
+                        <p class="text-muted">Esta intimação ainda não foi analisada com prompts.</p>
+                        <a href="{{ url_for('analise') }}?intimacao_ids={{ intimacao.id }}" class="btn btn-primary">
+                            <i class="bi bi-cpu"></i>
+                            Realizar Primeira Análise
+                        </a>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar prompts:', error);
+            contentDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Erro ao carregar prompts</h6>
+                    <p class="mb-0">Erro ao conectar com o servidor. Tente novamente.</p>
+                </div>
+            `;
+        });
+}
+
+// Configuração padrão do prompt de análise INDIVIDUAL (separada da comparação)
+const configPromptIndividualDefault = {
+    persona: 'Você é um especialista na Defensoria Pública em análise de prompts de IA para classificação jurídica de intimações recebidas pelo poder judiciário.\n\nTAREFA: Analise a eficácia deste prompt específico para classificar a intimação fornecida.\n\nCRÍTICO: Use EXATAMENTE as informações fornecidas. NÃO invente, NÃO altere, NÃO ignore os dados fornecidos.',
+    incluirContextoIntimacao: true,
+    incluirInformacaoAdicional: true,
+    instrucoesResposta: 'IMPORTANTE: Use APENAS as informações fornecidas no prompt. NUNCA invente ou altere o gabarito fornecido.\n\nResponda em formato JSON com as seguintes chaves:\n- "analise": análise geral (2-3 frases) sobre a eficácia do prompt\n- "pontos_fortes": array com 3-5 pontos fortes do prompt\n- "pontos_fracos": array com 3-5 pontos fracos do prompt\n- "recomendacoes": array com 3-5 recomendações para melhorar o prompt\n\nSeja objetivo, técnico e focado em eficácia para classificação jurídica.'
+};
+
+// Configuração do prompt de análise INDIVIDUAL (carregada do localStorage ou padrão)
+let configPromptIndividual = { ...configPromptIndividualDefault };
+
+// Variáveis para teste de triagem
+let resultadoAnaliseAtual = null;
+let promptIdAtual = null;
+let regrasTestadasAtual = null;
+let promptBaseAtual = null;
+
+// Função para carregar configurações do localStorage (ANÁLISE INDIVIDUAL)
+function carregarConfiguracoesAnalise() {
+    try {
+        const configSalva = localStorage.getItem('configPromptIndividual');
+        if (configSalva) {
+            const config = JSON.parse(configSalva);
+            configPromptIndividual = { ...configPromptIndividualDefault, ...config };
+            console.log('Configurações de análise INDIVIDUAL carregadas do localStorage:', configPromptIndividual);
+        } else {
+            console.log('Nenhuma configuração de análise INDIVIDUAL salva encontrada, usando padrão');
+        }
+    } catch (e) {
+        console.error('Erro ao carregar configurações de análise INDIVIDUAL do localStorage:', e);
+        configPromptIndividual = { ...configPromptIndividualDefault };
+    }
+}
+
+// Função para analisar prompt individual
+function analisarPromptIndividual(promptId, promptNome) {
+    console.log('Analisando prompt individual:', { promptId, promptNome });
+    
+    // Carregar configurações
+    carregarConfiguracoesAnalise();
+    
+    // Criar modal de configuração
+    const modalHtml = `
+        <div class="modal fade" id="modalAnaliseIndividual" tabindex="-1" aria-labelledby="modalAnaliseIndividualLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalAnaliseIndividualLabel">
+                            <i class="bi bi-robot"></i>
+                            Analisar Prompt: ${promptNome}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="formAnaliseIndividual">
+                            <div class="mb-3">
+                                <label for="personaIndividual" class="form-label">
+                                    <strong>Persona + Instruções de Análise:</strong>
+                                    <small class="text-muted">Como a IA deve se comportar e o que deve fazer</small>
+                                </label>
+                                <textarea class="form-control" id="personaIndividual" rows="6" placeholder="Ex: Você é um especialista em análise de prompts de IA para classificação jurídica.&#10;&#10;Analise a eficácia deste prompt específico para classificar a intimação fornecida.&#10;&#10;1. Identifique os pontos fortes do prompt&#10;2. Identifique os pontos fracos do prompt&#10;3. Forneça recomendações para melhorar o prompt">${configPromptIndividual.persona}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="instrucoesRespostaIndividual" class="form-label">
+                                    <strong>Instruções de Resposta:</strong>
+                                    <small class="text-muted">Como a IA deve formatar e estruturar sua resposta</small>
+                                </label>
+                                <textarea class="form-control" id="instrucoesRespostaIndividual" rows="5" placeholder="Ex: Responda em formato JSON com as seguintes chaves:&#10;- &quot;analise&quot;: análise geral (2-3 frases)&#10;- &quot;pontos_fortes&quot;: array com 3-5 pontos fortes&#10;- &quot;pontos_fracos&quot;: array com 3-5 pontos fracos&#10;- &quot;recomendacoes&quot;: array com 3-5 recomendações&#10;&#10;Seja objetivo, técnico e focado em eficácia para classificação jurídica.">${configPromptIndividual.instrucoesResposta}</textarea>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="incluirContextoIndividual" ${configPromptIndividual.incluirContextoIntimacao ? 'checked' : ''}>
+                                    <label class="form-check-label" for="incluirContextoIndividual">
+                                        <strong>Incluir Contexto da Intimação</strong>
+                                        <small class="text-muted d-block">Dados completos da intimação (processo, classe, órgão, etc.)</small>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="incluirGabaritoIndividual" ${configPromptIndividual.incluirInformacaoAdicional ? 'checked' : ''}>
+                                    <label class="form-check-label" for="incluirGabaritoIndividual">
+                                        <strong>Incluir Gabarito (Classificação Manual)</strong>
+                                        <small class="text-muted d-block">A classificação correta para análise de performance</small>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-info-circle"></i> Estrutura do Prompt:</h6>
+                                <ol class="mb-0">
+                                    <li><strong>Persona:</strong> Como a IA deve se comportar</li>
+                                    <li><strong>Contexto da Intimação:</strong> Dados completos (se habilitado)</li>
+                                    <li><strong>Gabarito:</strong> Classificação correta (se habilitado)</li>
+                                    <li><strong>Prompt a Analisar:</strong> O prompt específico</li>
+                                    <li><strong>Instruções de Resposta:</strong> Como formatar a resposta</li>
+                                </ol>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="resetarConfigAnaliseIndividual()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Resetar
+                        </button>
+                        <button type="button" class="btn btn-outline-success" onclick="salvarConfigAnaliseIndividual()">
+                            <i class="bi bi-save"></i>
+                            Salvar Config
+                        </button>
+                        <button type="button" class="btn btn-outline-info" onclick="visualizarPromptAnaliseIndividual('${promptId}', '${promptNome}')">
+                            <i class="bi bi-eye"></i>
+                            Ver Prompt
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-warning" onclick="executarAnaliseIndividual('${promptId}', '${promptNome}')">
+                            <i class="bi bi-robot"></i>
+                            Analisar com IA
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalAnaliseIndividual');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalAnaliseIndividual'));
+    modal.show();
+}
+
+// Função para salvar configuração personalizada
+function salvarConfigAnaliseIndividual() {
+    // Capturar valores atuais dos campos
+    const configAtual = {
+        persona: document.getElementById('personaIndividual').value.trim(),
+        instrucoesResposta: document.getElementById('instrucoesRespostaIndividual').value.trim(),
+        incluirContextoIntimacao: document.getElementById('incluirContextoIndividual').checked,
+        incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked
+    };
+    
+    // Atualizar configuração atual
+    configPromptIndividual = { ...configPromptIndividualDefault, ...configAtual };
+    
+    // Salvar no localStorage com CHAVE SEPARADA da comparação
+    localStorage.setItem('configPromptIndividual', JSON.stringify(configPromptIndividual));
+    
+    showToast('Configuração INDIVIDUAL salva com sucesso!', 'success');
+}
+
+// Função para resetar configuração
+function resetarConfigAnaliseIndividual() {
+    configPromptIndividual = { ...configPromptIndividualDefault };
+    
+    // Salvar no localStorage (CHAVE SEPARADA)
+    localStorage.setItem('configPromptIndividual', JSON.stringify(configPromptIndividual));
+    
+    // Atualizar campos do formulário
+    document.getElementById('personaIndividual').value = configPromptIndividual.persona;
+    document.getElementById('instrucoesRespostaIndividual').value = configPromptIndividual.instrucoesResposta;
+    document.getElementById('incluirContextoIndividual').checked = configPromptIndividual.incluirContextoIntimacao;
+    document.getElementById('incluirGabaritoIndividual').checked = configPromptIndividual.incluirInformacaoAdicional;
+    
+    showToast('Configuração INDIVIDUAL resetada para padrão!', 'info');
+}
+
+// Função para visualizar prompt de análise
+async function visualizarPromptAnaliseIndividual(promptId, promptNome) {
+    // Buscar conteúdo do prompt via API
+    fetch(`/api/prompts/${promptId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.prompt) {
+                // Usar regras de negócio em vez do conteúdo completo
+                const regrasNegocio = data.prompt.regra_negocio || 'Regras de negócio não disponíveis';
+                
+                // Construir prompt baseado na configuração
+                let promptAnalise = `=== INSTRUÇÕES ===
+${configPromptIndividual.persona}
+
+=== CONTEXTO DA INTIMAÇÃO ===
+`;
+
+                // Adicionar contexto da intimação se habilitado
+                if (configPromptIndividual.incluirContextoIntimacao) {
+                    const intimacaoData = window.intimacaoData;
+                    console.log('=== DEBUG: Dados da intimação ===');
+                    console.log('intimacaoData:', intimacaoData);
+                    console.log('incluirContextoIntimacao:', configPromptIndividual.incluirContextoIntimacao);
+                    
+                    if (intimacaoData && intimacaoData.id) {
+                        promptAnalise += `CONTEXTO DA INTIMAÇÃO:
+- ID: ${intimacaoData.id}
+- Processo: ${intimacaoData.processo || 'N/A'}
+- Classe: ${intimacaoData.classe || 'N/A'}
+- Órgão Julgador: ${intimacaoData.orgao_julgador || 'N/A'}
+- Intimado: ${intimacaoData.intimado || 'N/A'}
+- Defensor: ${intimacaoData.defensor || 'N/A'}
+- Data: ${intimacaoData.data_criacao || 'N/A'}
+
+CONTEÚDO DA INTIMAÇÃO:
+${intimacaoData.contexto || 'N/A'}
+
+`;
+                    }
+                }
+
+                // Adicionar gabarito se habilitado
+                if (configPromptIndividual.incluirInformacaoAdicional) {
+                    const intimacaoData = window.intimacaoData;
+                    if (intimacaoData && intimacaoData.id) {
+                        promptAnalise += `=== GABARITO ===
+Classificação: ${intimacaoData.classificacao_manual || 'N/A'}
+Informações: ${intimacaoData.informacao_adicional || 'N/A'}
+
+=== PROMPT A ANALISAR ===
+`;
+                    }
+                }
+
+                // Buscar taxa de acerto do prompt de forma assíncrona
+                fetch(`/api/intimacoes/{{ intimacao.id }}/prompts-acerto`)
+                    .then(response => response.json())
+                    .then(acertoData => {
+                        let taxaAcerto = '';
+                        if (acertoData.success && acertoData.prompts_acerto) {
+                            const promptData = acertoData.prompts_acerto.find(p => p.prompt_id === promptId);
+                            if (promptData) {
+                                taxaAcerto = ` (Taxa de acerto: ${promptData.taxa_acerto}%)`;
+                            }
+                        }
+
+                        // Adicionar prompt específico com regras de negócio
+                        promptAnalise += `=== PROMPT A ANALISAR ===
+PROMPT: ${promptNome}${taxaAcerto}
+${regrasNegocio}
+
+${configPromptIndividual.instrucoesResposta}`;
+                        
+                        console.log('=== DEBUG: Prompt completo construído ===');
+                        console.log('Contexto incluído:', configPromptIndividual.incluirContextoIntimacao);
+                        console.log('Gabarito incluído:', configPromptIndividual.incluirInformacaoAdicional);
+                        console.log('Taxa de acerto:', taxaAcerto);
+                        console.log('Tamanho do prompt:', promptAnalise.length);
+                        
+                        // Mostrar modal com prompt completo
+                        mostrarModalPromptCompleto(promptAnalise, promptNome);
+                    })
+                    .catch(error => {
+                        console.error('Erro ao buscar taxa de acerto:', error);
+                        
+                        // Adicionar prompt específico sem taxa de acerto
+                        promptAnalise += `=== PROMPT A ANALISAR ===
+PROMPT: ${promptNome}
+${regrasNegocio}
+
+${configPromptIndividual.instrucoesResposta}`;
+                        
+                        // Mostrar modal com prompt completo
+                        mostrarModalPromptCompleto(promptAnalise, promptNome);
+                    });
+            } else {
+                showToast('Erro ao carregar conteúdo do prompt', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar prompt:', error);
+            showToast('Erro ao carregar conteúdo do prompt', 'error');
+        });
+}
+
+// Função para mostrar modal com prompt completo
+function mostrarModalPromptCompleto(promptAnalise, promptNome) {
+    // Criar modal para mostrar o prompt
+    const modalHtml = `
+        <div class="modal fade" id="modalPromptAnaliseIndividual" tabindex="-1" aria-labelledby="modalPromptAnaliseIndividualLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPromptAnaliseIndividualLabel">
+                            <i class="bi bi-eye"></i>
+                            Prompt de Análise Individual
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Prompt Enviado para a IA:</strong></label>
+                            <div class="bg-light p-3 rounded" style="max-height: 500px; overflow-y: auto;">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em; margin: 0;">${promptAnalise}</pre>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Estatísticas:</strong></label>
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Total de caracteres:</span>
+                                        <span class="badge bg-primary">${promptAnalise.length}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Total de palavras:</span>
+                                        <span class="badge bg-primary">${promptAnalise.split(' ').length}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Total de linhas:</span>
+                                        <span class="badge bg-primary">${promptAnalise.split('\n').length}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Configuração:</strong></label>
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Incluir Contexto:</span>
+                                        <span class="badge ${configPromptIndividual.incluirContextoIntimacao ? 'bg-success' : 'bg-secondary'}">${configPromptIndividual.incluirContextoIntimacao ? 'Sim' : 'Não'}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Incluir Gabarito:</span>
+                                        <span class="badge ${configPromptIndividual.incluirInformacaoAdicional ? 'bg-success' : 'bg-secondary'}">${configPromptIndividual.incluirInformacaoAdicional ? 'Sim' : 'Não'}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span>Prompt:</span>
+                                        <span class="badge bg-info">${promptNome}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarPromptAnaliseIndividual()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Prompt
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalPromptAnaliseIndividual');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalPromptAnaliseIndividual'));
+    modal.show();
+}
+
+// Função para copiar prompt de análise
+function copiarPromptAnaliseIndividual() {
+    // Construir prompt baseado na configuração atual
+    let promptAnalise = `=== INSTRUÇÕES ===
+${configPromptIndividual.persona}
+
+=== CONTEXTO DA INTIMAÇÃO ===
+`;
+
+    // Adicionar contexto da intimação se habilitado
+    if (configPromptIndividual.incluirContextoIntimacao) {
+        const intimacaoData = window.intimacaoData;
+        if (intimacaoData && intimacaoData.id) {
+            promptAnalise += `CONTEXTO DA INTIMAÇÃO:
+- ID: ${intimacaoData.id}
+- Processo: ${intimacaoData.processo || 'N/A'}
+- Classe: ${intimacaoData.classe || 'N/A'}
+- Órgão Julgador: ${intimacaoData.orgao_julgador || 'N/A'}
+- Intimado: ${intimacaoData.intimado || 'N/A'}
+- Defensor: ${intimacaoData.defensor || 'N/A'}
+- Data: ${intimacaoData.data_criacao || 'N/A'}
+
+CONTEÚDO DA INTIMAÇÃO:
+${intimacaoData.contexto || 'N/A'}
+
+`;
+        }
+    }
+
+    // Adicionar gabarito se habilitado
+    if (configPromptIndividual.incluirInformacaoAdicional) {
+        const intimacaoData = window.intimacaoData;
+        if (intimacaoData && intimacaoData.id) {
+            promptAnalise += `=== GABARITO ===
+Classificação: ${intimacaoData.classificacao_manual || 'N/A'}
+Informações: ${intimacaoData.informacao_adicional || 'N/A'}
+
+=== PROMPT A ANALISAR ===
+`;
+        }
+    }
+
+    // Adicionar prompt específico (vai buscar do banco)
+    promptAnalise += `=== PROMPT A ANALISAR ===
+PROMPT: [Nome do prompt será carregado do banco de dados] (Taxa de acerto: [será carregada do banco])
+[Regras de negócio específicas do prompt serão carregadas do banco de dados]
+
+${configPromptIndividual.instrucoesResposta}`;
+
+    // Copiar para clipboard
+    navigator.clipboard.writeText(promptAnalise).then(function() {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar prompt: ', err);
+        showToast('Erro ao copiar prompt.', 'error');
+    });
+}
+
+// Função para executar análise individual
+function executarAnaliseIndividual(promptId, promptNome) {
+    // Armazenar prompt ID para uso no teste de triagem
+    promptIdAtual = promptId;
+    // Salvar configuração atual
+    configPromptIndividual = {
+        persona: document.getElementById('personaIndividual').value.trim(),
+        instrucoesResposta: document.getElementById('instrucoesRespostaIndividual').value.trim(),
+        incluirContextoIntimacao: document.getElementById('incluirContextoIndividual').checked,
+        incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked
+    };
+    
+    // Salvar no localStorage (CHAVE SEPARADA)
+    localStorage.setItem('configPromptIndividual', JSON.stringify(configPromptIndividual));
+    
+    // Fechar modal de configuração
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalAnaliseIndividual'));
+    modal.hide();
+    
+    // Mostrar loading
+    showToast('Iniciando análise com IA...', 'info');
+    
+    // Fazer requisição para análise
+    fetch('/api/analisar-prompt-individual', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            prompt_id: promptId,
+            prompt_nome: promptNome,
+            intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
+            config_personalizada: configPromptIndividual
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostrar resultado da análise
+            mostrarResultadoAnaliseIndividual(data.resultado);
+        } else {
+            showToast(`Erro na análise: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erro na análise:', error);
+        showToast('Erro ao conectar com a IA. Tente novamente.', 'error');
+    });
+}
+
+// Função para mostrar resultado da análise
+function mostrarResultadoAnaliseIndividual(resultado) {
+    // Armazenar resultado para uso no teste de triagem
+    resultadoAnaliseAtual = resultado;
+    const modalHtml = `
+        <div class="modal fade" id="modalResultadoAnaliseIndividual" tabindex="-1" aria-labelledby="modalResultadoAnaliseIndividualLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalResultadoAnaliseIndividualLabel">
+                            <i class="bi bi-robot"></i>
+                            Resultado da Análise Individual
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-lightbulb"></i> Análise da IA:</h6>
+                            <div class="markdown-content" id="resultado-analise-individual">${resultado}</div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="bi bi-gear"></i> Configuração do Teste</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <label for="quantidadeTestes" class="form-label">
+                                                <i class="bi bi-hash"></i> Quantidade de Testes
+                                            </label>
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   id="quantidadeTestes" 
+                                                   value="10" 
+                                                   min="1" 
+                                                   max="50"
+                                                   placeholder="10">
+                                            <div class="form-text">
+                                                <i class="bi bi-info-circle"></i> 
+                                                Número de testes a serem executados (1-50)
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">
+                                                <i class="bi bi-clock"></i> Tempo Estimado
+                                            </label>
+                                            <div class="alert alert-info py-2 mb-0">
+                                                <small id="tempoEstimado">
+                                                    <i class="bi bi-hourglass-split"></i> 
+                                                    Aproximadamente <span id="tempoCalculado">10</span> segundos
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="regrasNegocioManual" class="form-label">
+                                            <i class="bi bi-gear"></i> Regras de Negócio para Teste
+                                        </label>
+                                        <p class="text-muted mb-2">
+                                            <i class="bi bi-info-circle"></i> 
+                                            Copie e cole aqui as regras de negócio sugeridas pela análise acima:
+                                        </p>
+                                        <textarea 
+                                            class="form-control" 
+                                            id="regrasNegocioManual" 
+                                            rows="8" 
+                                            placeholder="Cole aqui as regras de negócio sugeridas pela IA..."
+                                            style="font-family: 'Courier New', monospace; font-size: 0.9em;"
+                                        ></textarea>
+                                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="bi bi-lightbulb"></i> 
+                                                Dica: Copie as regras sugeridas da análise acima e cole aqui para testar a triagem.
+                                            </small>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="preencherRegrasAutomaticamente()">
+                                                <i class="bi bi-magic"></i>
+                                                Tentar Extrair Automaticamente
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarResultadoAnaliseIndividual()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Resultado
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="mostrarPromptTriagem()" id="btnVerPromptTriagem">
+                            <i class="bi bi-eye"></i>
+                            Ver Prompt
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="testarTriagemComSugestao()" id="btnTestarTriagem">
+                            <i class="bi bi-play-circle"></i>
+                            Testar Triagem
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalResultadoAnaliseIndividual');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalResultadoAnaliseIndividual'));
+    modal.show();
+    
+    // Adicionar event listener para calcular tempo estimado
+    setTimeout(() => {
+        const inputQuantidade = document.getElementById('quantidadeTestes');
+        if (inputQuantidade) {
+            inputQuantidade.addEventListener('input', calcularTempoEstimado);
+            calcularTempoEstimado(); // Calcular tempo inicial
+        }
+    }, 100);
+    
+    // Renderizar Markdown se a biblioteca estiver disponível
+    setTimeout(() => {
+        const resultadoElement = document.getElementById('resultado-analise-individual');
+        if (resultadoElement) {
+            console.log('=== DEBUG: Renderizando Markdown ===');
+            console.log('marked disponível:', typeof marked !== 'undefined');
+            console.log('resultado original:', resultado);
+            
+            if (typeof marked !== 'undefined') {
+                const htmlRenderizado = marked.parse(resultado);
+                console.log('HTML renderizado:', htmlRenderizado);
+                resultadoElement.innerHTML = htmlRenderizado;
+            } else {
+                console.error('Biblioteca marked não está disponível!');
+                // Fallback: converter Markdown básico manualmente
+                let htmlBasico = resultado
+                    // Títulos
+                    .replace(/^### (.*)$/gm, '<h3>$1</h3>')
+                    .replace(/^#### (.*)$/gm, '<h4>$1</h4>')
+                    .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+                    .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+                    // Negrito e itálico
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    // Listas
+                    .replace(/^- (.*)$/gm, '<li>$1</li>')
+                    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                    // Parágrafos
+                    .replace(/\n\n/g, '</p><p>')
+                    .replace(/^/, '<p>')
+                    .replace(/$/, '</p>')
+                    // Limpar tags vazias
+                    .replace(/<p><\/p>/g, '')
+                    .replace(/<p>\s*<\/p>/g, '');
+                resultadoElement.innerHTML = htmlBasico;
+            }
+        }
+    }, 100);
+}
+
+// Função para copiar resultado da análise
+function copiarResultadoAnaliseIndividual() {
+    const resultadoElement = document.getElementById('resultado-analise-individual');
+    if (resultadoElement) {
+        // Copiar texto puro (sem HTML)
+        const texto = resultadoElement.textContent || resultadoElement.innerText;
+        navigator.clipboard.writeText(texto).then(function() {
+            showToast('Resultado copiado para a área de transferência!', 'success');
+        }).catch(function(err) {
+            console.error('Erro ao copiar resultado: ', err);
+            showToast('Erro ao copiar resultado.', 'error');
+        });
+    } else {
+        showToast('Nenhum resultado encontrado para copiar.', 'warning');
+    }
+}
+
+// Carregar prompts automaticamente ao carregar a página
+
+// Função para preencher regras automaticamente (fallback)
+function preencherRegrasAutomaticamente() {
+    if (!resultadoAnaliseAtual) {
+        showToast('Dados da análise não disponíveis', 'error');
+        return;
+    }
+    
+    try {
+        const regrasExtraidas = extrairRegrasSugeridas(resultadoAnaliseAtual);
+        
+        if (regrasExtraidas) {
+            document.getElementById('regrasNegocioManual').value = regrasExtraidas;
+            showToast('Regras extraídas automaticamente! Revise e ajuste se necessário.', 'success');
+        } else {
+            showToast('Não foi possível extrair regras automaticamente. Cole manualmente.', 'warning');
+        }
+    } catch (error) {
+        console.error('Erro ao extrair regras:', error);
+        showToast('Erro ao extrair regras automaticamente. Cole manualmente.', 'error');
+    }
+}
+
+// Função para mostrar o prompt que será usado na triagem
+async function mostrarPromptTriagem() {
+    if (!resultadoAnaliseAtual || !promptIdAtual) {
+        showToast('Dados da análise não disponíveis', 'error');
+        return;
+    }
+    
+    try {
+        // Obter regras de negócio da textarea manual
+        const regrasSugeridas = document.getElementById('regrasNegocioManual').value.trim();
+        
+        if (!regrasSugeridas) {
+            showToast('Por favor, cole as regras de negócio sugeridas na textarea acima', 'warning');
+            return;
+        }
+        
+        // Buscar prompt base se disponível
+        let promptBase = null;
+        try {
+            const response = await fetch(`/api/prompts/${promptIdAtual}`);
+            const data = await response.json();
+            if (data.success && data.prompt) {
+                promptBase = data.prompt;
+            }
+        } catch (error) {
+            console.log('Prompt base não encontrado, usando template padrão');
+        }
+        
+        // Preparar contexto da intimação
+        const contexto = `
+Contexto da Intimação:
+${window.intimacaoData.contexto || 'N/A'}
+`;
+        
+        // Construir prompt final
+        let promptFinal;
+        if (promptBase && promptBase.conteudo) {
+            // Usar prompt base como template
+            promptFinal = promptBase.conteudo;
+            // Substituir {REGRADENEGOCIO} pelas regras customizadas
+            if (promptFinal.includes('{REGRADENEGOCIO}')) {
+                promptFinal = promptFinal.replace('{REGRADENEGOCIO}', regrasSugeridas);
+            }
+            // Substituir {CONTEXTO}
+            if (promptFinal.includes('{CONTEXTO}')) {
+                promptFinal = promptFinal.replace('{CONTEXTO}', contexto);
+            }
+        } else {
+            // Usar prompt padrão simples
+            promptFinal = `
+Você é um especialista em análise jurídica da Defensoria Pública.
+
+${regrasSugeridas}
+
+${contexto}
+
+Com base nas regras de negócio fornecidas e no contexto da intimação, classifique a ação necessária.
+
+Responda apenas com uma das seguintes opções:
+- RENUNCIAR_PRAZO
+- OCULTAR
+- ELABORAR_PECA
+- CONTATAR_ASSISTIDO
+- ANALISAR_PROCESSO
+- ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
+- URGENCIA
+`;
+        }
+        
+        // Mostrar modal com o prompt
+        mostrarModalPromptTriagem(promptFinal, regrasSugeridas);
+        
+    } catch (error) {
+        console.error('Erro ao preparar prompt:', error);
+        showToast('Erro ao preparar prompt para visualização', 'error');
+    }
+}
+
+// Função para mostrar modal com o prompt da triagem
+function mostrarModalPromptTriagem(promptFinal, regrasSugeridas) {
+    const modalHtml = `
+        <div class="modal fade" id="modalPromptTriagem" tabindex="-1" aria-labelledby="modalPromptTriagemLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPromptTriagemLabel">
+                            <i class="bi bi-file-text"></i>
+                            Prompt para Teste de Triagem
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-lightbulb"></i> Este é o prompt que será usado para testar a triagem:</h6>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="bi bi-gear"></i> Regras de Negócio Extraídas da Análise:</h6>
+                            <div class="bg-light p-3 rounded">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${regrasSugeridas}</pre>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="bi bi-file-text"></i> Prompt Completo:</h6>
+                            <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${promptFinal}</pre>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> Informações</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-unstyled mb-0">
+                                            <li><strong>Intimação:</strong> ${window.intimacaoData.id}</li>
+                                            <li><strong>Prompt Base:</strong> ${promptIdAtual || 'Template padrão'}</li>
+                                            <li><strong>Caracteres:</strong> ${promptFinal.length}</li>
+                                            <li><strong>Linhas:</strong> ${promptFinal.split('\n').length}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-check-circle"></i> Próximos Passos</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-2">Este prompt será enviado para a IA para classificar a intimação.</p>
+                                        <p class="mb-0">Clique em "Testar Triagem" para executar o teste.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarPromptTriagem()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Prompt
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="executarTesteTriagem()">
+                            <i class="bi bi-play-circle"></i>
+                            Executar Teste
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalPromptTriagem');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalPromptTriagem'));
+    modal.show();
+}
+
+// Função para copiar prompt da triagem
+function copiarPromptTriagem() {
+    const promptElement = document.querySelector('#modalPromptTriagem pre');
+    if (promptElement) {
+        navigator.clipboard.writeText(promptElement.textContent).then(function() {
+            showToast('Prompt copiado para a área de transferência!', 'success');
+        }).catch(function(err) {
+            console.error('Erro ao copiar prompt:', err);
+            showToast('Erro ao copiar prompt.', 'error');
+        });
+    }
+}
+
+// Função para executar teste diretamente do modal de prompt
+function executarTesteTriagem() {
+    // Fechar modal de prompt
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalPromptTriagem'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // Executar teste de triagem
+    testarTriagemComSugestao();
+}
+
+// Função para ver prompt combinado (regras originais + regras testadas)
+async function verPromptCombinado() {
+    if (!promptIdAtual || !regrasTestadasAtual) {
+        showToast('Dados não disponíveis para gerar prompt combinado', 'error');
+        return;
+    }
+    
+    try {
+        // Buscar prompt base
+        let promptBase = null;
+        try {
+            const response = await fetch(`/api/prompts/${promptIdAtual}`);
+            const data = await response.json();
+            if (data.success && data.prompt) {
+                promptBase = data.prompt;
+                promptBaseAtual = promptBase;
+            }
+        } catch (error) {
+            console.log('Prompt base não encontrado, usando template padrão');
+        }
+        
+        // Preparar contexto da intimação
+        const contexto = `
+Contexto da Intimação:
+${window.intimacaoData.contexto || 'N/A'}
+`;
+        
+        // Construir regras combinadas
+        let regrasCombinadas = '';
+        if (promptBase && promptBase.regra_negocio) {
+            regrasCombinadas = `${promptBase.regra_negocio}\n\n=== REGRAS ADICIONAIS TESTADAS ===\n${regrasTestadasAtual}`;
+        } else {
+            regrasCombinadas = regrasTestadasAtual;
+        }
+        
+        // Construir prompt final
+        let promptFinal;
+        if (promptBase && promptBase.conteudo) {
+            // Usar prompt base como template
+            promptFinal = promptBase.conteudo;
+            // Substituir {REGRADENEGOCIO} pelas regras combinadas
+            if (promptFinal.includes('{REGRADENEGOCIO}')) {
+                promptFinal = promptFinal.replace('{REGRADENEGOCIO}', regrasCombinadas);
+            }
+            // Substituir {CONTEXTO}
+            if (promptFinal.includes('{CONTEXTO}')) {
+                promptFinal = promptFinal.replace('{CONTEXTO}', contexto);
+            }
+        } else {
+            // Usar prompt padrão simples
+            promptFinal = `
+Você é um especialista em análise jurídica da Defensoria Pública.
+
+${regrasCombinadas}
+
+${contexto}
+
+Com base nas regras de negócio fornecidas e no contexto da intimação, classifique a ação necessária.
+
+Responda apenas com uma das seguintes opções:
+- RENUNCIAR_PRAZO
+- OCULTAR
+- ELABORAR_PECA
+- CONTATAR_ASSISTIDO
+- ANALISAR_PROCESSO
+- ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
+- URGENCIA
+`;
+        }
+        
+        // Mostrar modal com o prompt combinado
+        mostrarModalPromptCombinado(promptFinal, regrasCombinadas);
+        
+    } catch (error) {
+        console.error('Erro ao preparar prompt combinado:', error);
+        showToast('Erro ao preparar prompt combinado', 'error');
+    }
+}
+
+// Função para mostrar modal com o prompt combinado
+function mostrarModalPromptCombinado(promptFinal, regrasCombinadas) {
+    const modalHtml = `
+        <div class="modal fade" id="modalPromptCombinado" tabindex="-1" aria-labelledby="modalPromptCombinadoLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPromptCombinadoLabel">
+                            <i class="bi bi-file-text"></i>
+                            Prompt Combinado - Regras Originais + Testadas
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <h6><i class="bi bi-lightbulb"></i> Este prompt combina as regras originais do prompt com as regras testadas:</h6>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="bi bi-gear"></i> Regras Combinadas:</h6>
+                            <div class="bg-light p-3 rounded">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${regrasCombinadas}</pre>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6><i class="bi bi-file-text"></i> Prompt Completo:</h6>
+                            <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${promptFinal}</pre>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-info-circle"></i> Informações</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <ul class="list-unstyled mb-0">
+                                            <li><strong>Intimação:</strong> ${window.intimacaoData.id}</li>
+                                            <li><strong>Prompt Base:</strong> ${promptIdAtual || 'Template padrão'}</li>
+                                            <li><strong>Caracteres:</strong> ${promptFinal.length}</li>
+                                            <li><strong>Linhas:</strong> ${promptFinal.split('\n').length}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-check-circle"></i> Próximos Passos</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-2">Este prompt combina as regras originais com as regras testadas.</p>
+                                        <p class="mb-0">Clique em "Testar com Regras Combinadas" para executar o teste.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarPromptCombinado()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Prompt
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="executarTesteCombinado()">
+                            <i class="bi bi-play-circle"></i>
+                            Executar Teste Combinado
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalPromptCombinado');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalPromptCombinado'));
+    modal.show();
+}
+
+// Função para copiar prompt combinado
+function copiarPromptCombinado() {
+    const promptElement = document.querySelector('#modalPromptCombinado pre');
+    if (promptElement) {
+        navigator.clipboard.writeText(promptElement.textContent).then(function() {
+            showToast('Prompt combinado copiado para a área de transferência!', 'success');
+        }).catch(function(err) {
+            console.error('Erro ao copiar prompt:', err);
+            showToast('Erro ao copiar prompt.', 'error');
+        });
+    }
+}
+
+// Função para executar teste combinado
+function executarTesteCombinado() {
+    // Fechar modal de prompt
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalPromptCombinado'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // Executar teste com regras combinadas
+    testarComRegrasCombinadas();
+}
+
+// Função para testar com regras combinadas
+async function testarComRegrasCombinadas() {
+    if (!promptIdAtual || !regrasTestadasAtual) {
+        showToast('Dados não disponíveis para teste combinado', 'error');
+        return;
+    }
+    
+    try {
+        // Buscar prompt base
+        let promptBase = null;
+        if (!promptBaseAtual) {
+            try {
+                const response = await fetch(`/api/prompts/${promptIdAtual}`);
+                const data = await response.json();
+                if (data.success && data.prompt) {
+                    promptBase = data.prompt;
+                    promptBaseAtual = promptBase;
+                }
+            } catch (error) {
+                console.log('Prompt base não encontrado, usando template padrão');
+            }
+        } else {
+            promptBase = promptBaseAtual;
+        }
+        
+        // Construir regras combinadas
+        let regrasCombinadas = '';
+        if (promptBase && promptBase.regra_negocio) {
+            regrasCombinadas = `${promptBase.regra_negocio}\n\n=== REGRAS ADICIONAIS TESTADAS ===\n${regrasTestadasAtual}`;
+        } else {
+            regrasCombinadas = regrasTestadasAtual;
+        }
+        
+        // Obter quantidade de testes
+        const quantidadeTestes = parseInt(document.getElementById('quantidadeTestes').value) || 10;
+        
+        if (quantidadeTestes < 1 || quantidadeTestes > 50) {
+            showToast('Quantidade de testes deve estar entre 1 e 50', 'warning');
+            return;
+        }
+        
+        // Mostrar modal de confirmação
+        const confirmar = confirm(`Deseja executar ${quantidadeTestes} testes de triagem com as regras combinadas (originais + testadas)?\n\nRegras que serão testadas:\n${regrasCombinadas.substring(0, 200)}...`);
+        
+        if (!confirmar) {
+            return;
+        }
+        
+        // Desabilitar botão durante o teste
+        const btnTestar = document.getElementById('btnTestarTriagem');
+        if (btnTestar) {
+            btnTestar.disabled = true;
+            btnTestar.innerHTML = `<i class="bi bi-hourglass-split"></i> Executando ${quantidadeTestes} testes combinados...`;
+        }
+        
+        // Executar testes
+        const resultados = [];
+        for (let i = 1; i <= quantidadeTestes; i++) {
+            try {
+                btnTestar.innerHTML = `<i class="bi bi-hourglass-split"></i> Executando teste ${i}/${quantidadeTestes}...`;
+                
+                const response = await fetch('/api/testar-triagem-customizada', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        intimacao_id: window.intimacaoData.id,
+                        regras_negocio: regrasCombinadas,
+                        prompt_base_id: promptIdAtual
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultados.push({
+                        teste: i,
+                        ...data.resultado
+                    });
+                } else {
+                    resultados.push({
+                        teste: i,
+                        erro: data.message
+                    });
+                }
+                
+                // Pequena pausa entre testes
+                if (i < quantidadeTestes) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+            } catch (error) {
+                console.error(`Erro no teste ${i}:`, error);
+                resultados.push({
+                    teste: i,
+                    erro: 'Erro de conexão'
+                });
+            }
+        }
+        
+        // Mostrar resultado consolidado dos testes combinados
+        mostrarResultadoConsolidadoTestes(resultados, regrasCombinadas);
+        
+    } catch (error) {
+        console.error('Erro ao testar com regras combinadas:', error);
+        showToast('Erro ao conectar com a API. Tente novamente.', 'error');
+    } finally {
+        // Reabilitar botão
+        const btnTestar = document.getElementById('btnTestarTriagem');
+        if (btnTestar) {
+            btnTestar.disabled = false;
+            btnTestar.innerHTML = '<i class="bi bi-play-circle"></i> Testar Triagem';
+        }
+    }
+}
+
+// Função para copiar resposta completa da IA
+function copiarRespostaCompleta() {
+    const respostaElement = document.getElementById('resposta-completa-ia');
+    if (respostaElement) {
+        navigator.clipboard.writeText(respostaElement.textContent).then(function() {
+            showToast('Resposta da IA copiada para a área de transferência!', 'success');
+        }).catch(function(err) {
+            console.error('Erro ao copiar resposta:', err);
+            showToast('Erro ao copiar resposta da IA.', 'error');
+        });
+    } else {
+        showToast('Resposta da IA não encontrada para copiar.', 'warning');
+    }
+}
+
+// Função para copiar regras utilizadas
+function copiarRegrasUtilizadas() {
+    if (!regrasTestadasAtual) {
+        showToast('Nenhuma regra disponível para copiar', 'warning');
+        return;
+    }
+    
+    navigator.clipboard.writeText(regrasTestadasAtual).then(function() {
+        showToast('Regras copiadas para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar regras:', err);
+        showToast('Erro ao copiar regras.', 'error');
+    });
+}
+
+// Função para escapar texto para tooltip
+function escaparTextoParaTooltip(texto) {
+    if (!texto) return 'N/A';
+    
+    return texto
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, ' ')
+        .replace(/\t/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .substring(0, 500) + (texto.length > 500 ? '...' : '');
+}
+
+// Função para calcular tempo estimado
+function calcularTempoEstimado() {
+    const quantidade = parseInt(document.getElementById('quantidadeTestes').value) || 10;
+    const tempoPorTeste = 3; // segundos por teste (estimativa)
+    const tempoTotal = quantidade * tempoPorTeste;
+    
+    const tempoCalculado = document.getElementById('tempoCalculado');
+    if (tempoCalculado) {
+        tempoCalculado.textContent = tempoTotal;
+    }
+}
+
+// Função para testar triagem com sugestão da IA (quantidade configurável)
+async function testarTriagemComSugestao() {
+    if (!resultadoAnaliseAtual || !promptIdAtual) {
+        showToast('Dados da análise não disponíveis para teste', 'error');
+        return;
+    }
+    
+    try {
+        // Obter regras de negócio da textarea manual
+        const regrasSugeridas = document.getElementById('regrasNegocioManual').value.trim();
+        
+        if (!regrasSugeridas) {
+            showToast('Por favor, cole as regras de negócio sugeridas na textarea acima', 'warning');
+            return;
+        }
+        
+        // Obter quantidade de testes
+        const quantidadeTestes = parseInt(document.getElementById('quantidadeTestes').value) || 10;
+        
+        if (quantidadeTestes < 1 || quantidadeTestes > 50) {
+            showToast('Quantidade de testes deve estar entre 1 e 50', 'warning');
+            return;
+        }
+        
+        // Mostrar modal de confirmação
+        const confirmar = confirm(`Deseja executar ${quantidadeTestes} testes de triagem desta intimação usando as regras de negócio sugeridas pela IA?\n\nRegras que serão testadas:\n${regrasSugeridas.substring(0, 200)}...`);
+        
+        if (!confirmar) {
+            return;
+        }
+        
+        // Desabilitar botão durante o teste
+        const btnTestar = document.getElementById('btnTestarTriagem');
+        if (btnTestar) {
+            btnTestar.disabled = true;
+            btnTestar.innerHTML = `<i class="bi bi-hourglass-split"></i> Executando ${quantidadeTestes} testes...`;
+        }
+        
+        // Executar testes
+        const resultados = [];
+        for (let i = 1; i <= quantidadeTestes; i++) {
+            try {
+                btnTestar.innerHTML = `<i class="bi bi-hourglass-split"></i> Executando teste ${i}/${quantidadeTestes}...`;
+                
+                const response = await fetch('/api/testar-triagem-customizada', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        intimacao_id: window.intimacaoData.id,
+                        regras_negocio: regrasSugeridas,
+                        prompt_base_id: promptIdAtual
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultados.push({
+                        teste: i,
+                        ...data.resultado
+                    });
+                } else {
+                    resultados.push({
+                        teste: i,
+                        erro: data.message
+                    });
+                }
+                
+                // Pequena pausa entre testes
+                if (i < quantidadeTestes) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+            } catch (error) {
+                console.error(`Erro no teste ${i}:`, error);
+                resultados.push({
+                    teste: i,
+                    erro: 'Erro de conexão'
+                });
+            }
+        }
+        
+        // Mostrar resultado consolidado dos testes
+        mostrarResultadoConsolidadoTestes(resultados, regrasSugeridas);
+        
+    } catch (error) {
+        console.error('Erro ao testar triagem:', error);
+        showToast('Erro ao conectar com a API. Tente novamente.', 'error');
+    } finally {
+        // Reabilitar botão
+        const btnTestar = document.getElementById('btnTestarTriagem');
+        if (btnTestar) {
+            btnTestar.disabled = false;
+            btnTestar.innerHTML = '<i class="bi bi-play-circle"></i> Testar Triagem';
+        }
+    }
+}
+
+// Função para extrair regras de negócio sugeridas do resultado da análise
+function extrairRegrasSugeridas(resultado) {
+    try {
+        // Tentar extrair do JSON se estiver em formato estruturado
+        if (resultado.includes('"recomendacoes"')) {
+            const jsonMatch = resultado.match(/"recomendacoes":\s*\[(.*?)\]/s);
+            if (jsonMatch) {
+                const recomendacoes = jsonMatch[1];
+                // Extrair apenas as regras de negócio (não as explicações)
+                const regras = recomendacoes
+                    .split(',')
+                    .map(rec => rec.trim().replace(/^"|"$/g, ''))
+                    .filter(rec => rec.length > 10 && !rec.includes('análise') && !rec.includes('melhorar'))
+                    .join('\n- ');
+                
+                if (regras) {
+                    return `- ${regras}`;
+                }
+            }
+        }
+        
+        // Fallback: extrair seções que parecem ser regras de negócio
+        const linhas = resultado.split('\n');
+        const regras = [];
+        let capturandoRegras = false;
+        
+        for (const linha of linhas) {
+            const linhaLimpa = linha.trim();
+            
+            // Detectar início de seção de regras
+            if (linhaLimpa.includes('recomendação') || linhaLimpa.includes('regra') || 
+                linhaLimpa.includes('sugestão') || linhaLimpa.includes('melhoria')) {
+                capturandoRegras = true;
+                continue;
+            }
+            
+            // Capturar linhas que parecem ser regras
+            if (capturandoRegras && (linhaLimpa.startsWith('-') || linhaLimpa.startsWith('•') || 
+                linhaLimpa.startsWith('*') || linhaLimpa.match(/^\d+\./))) {
+                regras.push(linhaLimpa);
+            }
+            
+            // Parar se encontrar próxima seção
+            if (capturandoRegras && (linhaLimpa.includes('##') || linhaLimpa.includes('**') || 
+                linhaLimpa.includes('conclusão') || linhaLimpa.includes('resumo'))) {
+                break;
+            }
+        }
+        
+        return regras.length > 0 ? regras.join('\n') : null;
+        
+    } catch (error) {
+        console.error('Erro ao extrair regras:', error);
+        return null;
+    }
+}
+
+// Função para mostrar resultado consolidado dos 3 testes
+function mostrarResultadoConsolidadoTestes(resultados, regrasSugeridas) {
+    // Armazenar regras testadas para uso posterior
+    regrasTestadasAtual = regrasSugeridas;
+    // Calcular estatísticas
+    const testesComSucesso = resultados.filter(r => !r.erro);
+    const acertos = testesComSucesso.filter(r => r.acertou === true).length;
+    const taxaAcerto = testesComSucesso.length > 0 ? (acertos / testesComSucesso.length * 100).toFixed(1) : 0;
+    
+    // Agrupar classificações
+    const classificacoes = {};
+    testesComSucesso.forEach(r => {
+        const classificacao = r.classificacao_ia;
+        classificacoes[classificacao] = (classificacoes[classificacao] || 0) + 1;
+    });
+    
+    const modalHtml = `
+        <div class="modal fade" id="modalResultadoConsolidadoTestes" tabindex="-1" aria-labelledby="modalResultadoConsolidadoTestesLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalResultadoConsolidadoTestesLabel">
+                            <i class="bi bi-graph-up text-success"></i>
+                            Resultado Consolidado - ${resultados.length} Testes de Triagem
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-4">
+                            <div class="col-md-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h3 class="text-primary">${testesComSucesso.length}</h3>
+                                        <p class="mb-0">Testes Executados</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h3 class="text-success">${acertos}</h3>
+                                        <p class="mb-0">Acertos</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h3 class="text-info">${taxaAcerto}%</h3>
+                                        <p class="mb-0">Taxa de Acerto</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card text-center">
+                                    <div class="card-body">
+                                        <h3 class="text-warning">${Object.keys(classificacoes).length}</h3>
+                                        <p class="mb-0">Classificações Diferentes</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-list-check"></i> Detalhes dos Testes:</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Teste</th>
+                                                <th>Classificação</th>
+                                                <th>Acertou</th>
+                                                <th>Tempo</th>
+                                                <th>Resposta</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${resultados.map(r => `
+                                                <tr class="${r.erro ? 'table-danger' : (r.acertou ? 'table-success' : 'table-warning')}">
+                                                    <td><strong>${r.teste}</strong></td>
+                                                    <td>
+                                                        ${r.erro ? 
+                                                            '<span class="badge bg-danger">Erro</span>' : 
+                                                            `<span class="badge bg-primary">${r.classificacao_ia}</span>`
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        ${r.erro ? 
+                                                            '<span class="text-muted">-</span>' : 
+                                                            (r.acertou ? 
+                                                                '<span class="badge bg-success">✓</span>' : 
+                                                                '<span class="badge bg-danger">✗</span>'
+                                                            )
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        ${r.erro ? 
+                                                            '<span class="text-muted">-</span>' : 
+                                                            `${r.tempo_processamento}s`
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        ${r.erro ? 
+                                                            '<span class="text-muted">-</span>' : 
+                                                            `<span class="badge bg-info" 
+                                                                   data-bs-toggle="tooltip" 
+                                                                   data-bs-placement="top" 
+                                                                   data-bs-html="false"
+                                                                   title="${escaparTextoParaTooltip(r.resposta_completa)}">
+                                                                <i class="bi bi-journal-text"></i>
+                                                            </span>`
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="bi bi-pie-chart"></i> Distribuição das Classificações:</h6>
+                                <div class="mb-3">
+                                    ${Object.entries(classificacoes).map(([classificacao, count]) => `
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span class="badge bg-primary">${classificacao}</span>
+                                            <span class="badge bg-secondary">${count} vez(es)</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                
+                                <h6><i class="bi bi-info-circle"></i> Informações Técnicas:</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>Modelo:</strong> ${testesComSucesso[0]?.modelo_utilizado || 'N/A'}</li>
+                                    <li><strong>Temperatura:</strong> ${testesComSucesso[0]?.temperatura_utilizada || 'N/A'}</li>
+                                    <li><strong>Max Tokens:</strong> ${testesComSucesso[0]?.max_tokens_utilizado || 'N/A'}</li>
+                                    <li><strong>Classificação Manual:</strong> ${testesComSucesso[0]?.classificacao_manual || 'N/A'}</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6><i class="bi bi-gear"></i> Regras Utilizadas:</h6>
+                            <div class="bg-light p-3 rounded">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${regrasSugeridas}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" onclick="copiarRegrasUtilizadas()">
+                            <i class="bi bi-clipboard"></i>
+                            Copiar Regras
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="verPromptCombinado()">
+                            <i class="bi bi-eye"></i>
+                            Ver Prompt Combinado
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="testarComRegrasCombinadas()">
+                            <i class="bi bi-play-circle"></i>
+                            Testar com Regras Combinadas
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalResultadoConsolidadoTestes');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalResultadoConsolidadoTestes'));
+    modal.show();
+    
+    // Inicializar tooltips
+    setTimeout(() => {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }, 100);
+}
+
+// Função para mostrar resultado do teste de triagem (mantida para compatibilidade)
+function mostrarResultadoTesteTriagem(resultado) {
+    const modalHtml = `
+        <div class="modal fade" id="modalResultadoTesteTriagem" tabindex="-1" aria-labelledby="modalResultadoTesteTriagemLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalResultadoTesteTriagemLabel">
+                            <i class="bi bi-check-circle text-success"></i>
+                            Resultado do Teste de Triagem
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-robot"></i> Classificação da IA</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge bg-primary fs-6">${resultado.classificacao_ia}</span>
+                                            <span class="badge bg-info" 
+                                                  data-bs-toggle="tooltip" 
+                                                  data-bs-placement="top" 
+                                                  data-bs-html="false"
+                                                  title="${escaparTextoParaTooltip(resultado.resposta_completa)}">
+                                                <i class="bi bi-journal-text"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0"><i class="bi bi-person-check"></i> Classificação Manual</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <span class="badge bg-secondary fs-6">${resultado.classificacao_manual || 'N/A'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <div class="alert ${resultado.acertou ? 'alert-success' : 'alert-danger'}">
+                                <h6><i class="bi bi-${resultado.acertou ? 'check-circle' : 'x-circle'}"></i> 
+                                    ${resultado.acertou ? 'ACERTOU!' : 'NÃO ACERTOU'}
+                                </h6>
+                                <p class="mb-0">
+                                    ${resultado.acertou ? 
+                                        'A IA classificou corretamente a intimação usando as regras sugeridas!' : 
+                                        'A IA não conseguiu classificar corretamente com as regras sugeridas.'}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6><i class="bi bi-info-circle"></i> Detalhes do Teste:</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li><strong>Tempo de processamento:</strong> ${resultado.tempo_processamento}s</li>
+                                        <li><strong>Modelo utilizado:</strong> ${resultado.modelo_utilizado || 'N/A'}</li>
+                                        <li><strong>Temperatura:</strong> ${resultado.temperatura_utilizada || 'N/A'}</li>
+                                        <li><strong>Max Tokens:</strong> ${resultado.max_tokens_utilizado || 'N/A'}</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-unstyled">
+                                        <li><strong>Tokens de entrada:</strong> ${resultado.tokens_info?.prompt_tokens || 'N/A'}</li>
+                                        <li><strong>Tokens de saída:</strong> ${resultado.tokens_info?.completion_tokens || 'N/A'}</li>
+                                        <li><strong>Total de tokens:</strong> ${resultado.tokens_info?.total_tokens || 'N/A'}</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        
+                        <div class="mt-3">
+                            <h6><i class="bi bi-gear"></i> Regras Utilizadas:</h6>
+                            <div class="bg-light p-3 rounded">
+                                <pre style="white-space: pre-wrap; font-size: 0.9em;">${resultado.regras_utilizadas}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remover modal anterior se existir
+    const existingModal = document.getElementById('modalResultadoTesteTriagem');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Adicionar novo modal
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Mostrar modal
+    const modal = new bootstrap.Modal(document.getElementById('modalResultadoTesteTriagem'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    carregarPromptsAcerto();
+    carregarConfiguracoesAnalise();
 });
 
 // Atalhos de teclado

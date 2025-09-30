@@ -781,3 +781,31 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Modelo GPT-4o**: Configurado para máxima precisão
 - ✅ **16k tokens**: Configurado para respostas completas
 - ✅ **Sistema robusto**: Todos os botões funcionando perfeitamente
+
+### **Sistema de Análise Individual de Prompts (Janeiro 2025)**
+- ✅ **Seção "Prompts Usados com Taxa de Acerto"**: Nova seção na página de visualizar intimação
+- ✅ **Tabela ordenável**: Colunas clicáveis para ordenação (taxa de acerto, última análise, análises, modelo)
+- ✅ **Ordenação padrão**: Por análise mais recente (descendente)
+- ✅ **Botão "Analisar"**: Para cada prompt na tabela
+- ✅ **Modal de configuração**: Sistema de configuração separado para análise individual
+- ✅ **Configuração persistente**: localStorage com chave 'configPromptIndividual'
+- ✅ **Persona personalizada**: Especializada em análise de eficácia de prompts
+- ✅ **Opções de contexto**: Incluir contexto da intimação e gabarito
+- ✅ **Instruções de resposta**: Formato JSON estruturado para análise
+- ✅ **Modal "Ver Prompt"**: Visualização do prompt completo com contexto
+- ✅ **Análise com IA**: Execução da análise usando configurações personalizadas
+- ✅ **Resultado em Markdown**: Renderização adequada com estilos CSS
+- ✅ **Botão "Testar Triagem"**: Teste da intimação com regras sugeridas pela IA
+- ✅ **Configuração de quantidade**: Usuário pode especificar número de testes (1-50, padrão 10)
+- ✅ **Tempo estimado**: Cálculo automático do tempo estimado baseado na quantidade
+- ✅ **Textarea para regras**: Campo para colar regras de negócio sugeridas
+- ✅ **Botão "Tentar Extrair Automaticamente"**: Extração automática das regras da análise
+- ✅ **Modal de resultado**: Exibição de modelo, temperatura, tokens e resposta completa
+- ✅ **Tooltip de resposta**: Badge com tooltip mostrando resposta completa da IA
+- ✅ **Resultado consolidado**: Tabela com todos os testes executados
+- ✅ **Botões de ação**: "Ver Prompt Combinado" e "Testar com Regras Combinadas"
+- ✅ **Botão "Copiar Regras"**: Copia as regras utilizadas para área de transferência
+- ✅ **Combinação de regras**: Regras originais do prompt + regras testadas
+- ✅ **Modal de prompt combinado**: Visualização do prompt final com regras combinadas
+- ✅ **Teste com regras combinadas**: Execução de testes usando regras originais + testadas
+- ✅ **Sistema completo**: Análise → Sugestão → Teste → Combinação → Iteração
