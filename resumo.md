@@ -809,3 +809,20 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Modal de prompt combinado**: Visualização do prompt final com regras combinadas
 - ✅ **Teste com regras combinadas**: Execução de testes usando regras originais + testadas
 - ✅ **Sistema completo**: Análise → Sugestão → Teste → Combinação → Iteração
+
+### **Correções de Taxa de Acerto (Janeiro 2025)**
+- ✅ **Problema identificado**: Taxa de acerto inconsistente entre tabela e modais
+- ✅ **Modal de análise individual**: Taxa de acerto agora calculada usando dados da linha da tabela
+- ✅ **Modal "Ver Prompt"**: Taxa de acerto corrigida para usar dados da linha da tabela
+- ✅ **Botão "Analisar com IA"**: Taxa de acerto corrigida para usar dados da linha da tabela
+- ✅ **Função `analisarPromptIndividual()`**: Agora recebe parâmetros `(promptId, promptNome, acertos, total)`
+- ✅ **Função `visualizarPromptAnaliseIndividual()`**: Agora recebe parâmetros `(promptId, promptNome, acertos, total)`
+- ✅ **Função `executarAnaliseIndividual()`**: Agora recebe parâmetros `(promptId, promptNome, acertos, total)`
+- ✅ **Cálculo direto**: Taxa calculada como `((acertos / total) * 100).toFixed(1)`
+- ✅ **Backend atualizado**: Endpoint `/api/analisar-prompt-individual` agora usa dados do frontend
+- ✅ **Consistência total**: Mesma taxa de acerto em tabela, modais e análises
+- ✅ **Performance melhorada**: Sem requisições extras à API
+- ✅ **Dados sincronizados**: Fonte única de dados da linha da tabela
+- ✅ **Logs de debug**: Adicionados para facilitar investigação de problemas
+- ✅ **Fallback seguro**: Backend mantém busca na API como fallback
+- ✅ **Interface unificada**: Todas as interfaces mostram taxa de acerto idêntica

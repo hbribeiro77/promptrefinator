@@ -1153,7 +1153,7 @@ function renderizarTabelaPrompts() {
                 <td class="text-center">
                     <button type="button" 
                             class="btn btn-sm btn-warning" 
-                            onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}')"
+                            onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}', ${prompt.acertos}, ${prompt.total_analises})"
                             title="Analisar este prompt com a intimação">
                         <i class="bi bi-robot"></i>
                         Analisar
@@ -1292,7 +1292,7 @@ function carregarPromptsAcerto() {
                             <td class="text-center">
                                 <button type="button" 
                                         class="btn btn-sm btn-warning" 
-                                        onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}')"
+                                        onclick="analisarPromptIndividual('${prompt.prompt_id}', '${prompt.prompt_nome}', ${prompt.acertos}, ${prompt.total_analises})"
                                         title="Analisar este prompt com a intimação">
                                     <i class="bi bi-robot"></i>
                                     Analisar
@@ -1385,11 +1385,25 @@ function carregarConfiguracoesAnalise() {
 }
 
 // Função para analisar prompt individual
-function analisarPromptIndividual(promptId, promptNome) {
-    console.log('Analisando prompt individual:', { promptId, promptNome });
+function analisarPromptIndividual(promptId, promptNome, acertos, total) {
+    console.log('Analisando prompt individual:', { promptId, promptNome, acertos, total });
     
     // Carregar configurações
     carregarConfiguracoesAnalise();
+    
+    // Calcular taxa de acerto usando os dados da linha
+    let taxaAcerto = 'N/A';
+    if (total > 0) {
+        taxaAcerto = ((acertos / total) * 100).toFixed(1);
+    }
+    
+    console.log('✅ Taxa de acerto calculada:', {
+        taxaAcerto,
+        acertos,
+        total,
+        promptId,
+        promptNome
+    });
     
     // Criar modal de configuração
     const modalHtml = `
@@ -1400,6 +1414,7 @@ function analisarPromptIndividual(promptId, promptNome) {
                         <h5 class="modal-title" id="modalAnaliseIndividualLabel">
                             <i class="bi bi-robot"></i>
                             Analisar Prompt: ${promptNome}
+                            <span class="badge bg-info ms-2">Taxa: ${taxaAcerto}% (${acertos}/${total})</span>
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
@@ -1462,12 +1477,12 @@ function analisarPromptIndividual(promptId, promptNome) {
                             <i class="bi bi-save"></i>
                             Salvar Config
                         </button>
-                        <button type="button" class="btn btn-outline-info" onclick="visualizarPromptAnaliseIndividual('${promptId}', '${promptNome}')">
+                        <button type="button" class="btn btn-outline-info" onclick="visualizarPromptAnaliseIndividual('${promptId}', '${promptNome}', ${acertos}, ${total})">
                             <i class="bi bi-eye"></i>
                             Ver Prompt
                         </button>
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-warning" onclick="executarAnaliseIndividual('${promptId}', '${promptNome}')">
+                        <button type="button" class="btn btn-warning" onclick="executarAnaliseIndividual('${promptId}', '${promptNome}', ${acertos}, ${total})">
                             <i class="bi bi-robot"></i>
                             Analisar com IA
                         </button>
@@ -1527,7 +1542,23 @@ function resetarConfigAnaliseIndividual() {
 }
 
 // Função para visualizar prompt de análise
-async function visualizarPromptAnaliseIndividual(promptId, promptNome) {
+async function visualizarPromptAnaliseIndividual(promptId, promptNome, acertos, total) {
+    console.log('Visualizando prompt individual:', { promptId, promptNome, acertos, total });
+    
+    // Calcular taxa de acerto usando os dados da linha
+    let taxaAcerto = '';
+    if (total > 0) {
+        const taxa = ((acertos / total) * 100).toFixed(1);
+        taxaAcerto = ` (Taxa de acerto: ${taxa}%)`;
+    }
+    
+    console.log('✅ Taxa de acerto calculada para Ver Prompt:', {
+        taxaAcerto,
+        acertos,
+        total,
+        promptId,
+        promptNome
+    });
     // Buscar conteúdo do prompt via API
     fetch(`/api/prompts/${promptId}`)
         .then(response => response.json())
@@ -1580,47 +1611,21 @@ Informações: ${intimacaoData.informacao_adicional || 'N/A'}
                     }
                 }
 
-                // Buscar taxa de acerto do prompt de forma assíncrona
-                fetch(`/api/intimacoes/{{ intimacao.id }}/prompts-acerto`)
-                    .then(response => response.json())
-                    .then(acertoData => {
-                        let taxaAcerto = '';
-                        if (acertoData.success && acertoData.prompts_acerto) {
-                            const promptData = acertoData.prompts_acerto.find(p => p.prompt_id === promptId);
-                            if (promptData) {
-                                taxaAcerto = ` (Taxa de acerto: ${promptData.taxa_acerto}%)`;
-                            }
-                        }
-
-                        // Adicionar prompt específico com regras de negócio
-                        promptAnalise += `=== PROMPT A ANALISAR ===
+                // Adicionar prompt específico com regras de negócio e taxa de acerto calculada
+                promptAnalise += `=== PROMPT A ANALISAR ===
 PROMPT: ${promptNome}${taxaAcerto}
 ${regrasNegocio}
 
 ${configPromptIndividual.instrucoesResposta}`;
-                        
-                        console.log('=== DEBUG: Prompt completo construído ===');
-                        console.log('Contexto incluído:', configPromptIndividual.incluirContextoIntimacao);
-                        console.log('Gabarito incluído:', configPromptIndividual.incluirInformacaoAdicional);
-                        console.log('Taxa de acerto:', taxaAcerto);
-                        console.log('Tamanho do prompt:', promptAnalise.length);
-                        
-                        // Mostrar modal com prompt completo
-                        mostrarModalPromptCompleto(promptAnalise, promptNome);
-                    })
-                    .catch(error => {
-                        console.error('Erro ao buscar taxa de acerto:', error);
-                        
-                        // Adicionar prompt específico sem taxa de acerto
-                        promptAnalise += `=== PROMPT A ANALISAR ===
-PROMPT: ${promptNome}
-${regrasNegocio}
-
-${configPromptIndividual.instrucoesResposta}`;
-                        
-                        // Mostrar modal com prompt completo
-                        mostrarModalPromptCompleto(promptAnalise, promptNome);
-                    });
+                
+                console.log('=== DEBUG: Prompt completo construído ===');
+                console.log('Contexto incluído:', configPromptIndividual.incluirContextoIntimacao);
+                console.log('Gabarito incluído:', configPromptIndividual.incluirInformacaoAdicional);
+                console.log('Taxa de acerto:', taxaAcerto);
+                console.log('Tamanho do prompt:', promptAnalise.length);
+                
+                // Mostrar modal com prompt completo
+                mostrarModalPromptCompleto(promptAnalise, promptNome);
             } else {
                 showToast('Erro ao carregar conteúdo do prompt', 'error');
             }
@@ -1774,9 +1779,27 @@ ${configPromptIndividual.instrucoesResposta}`;
 }
 
 // Função para executar análise individual
-function executarAnaliseIndividual(promptId, promptNome) {
+function executarAnaliseIndividual(promptId, promptNome, acertos, total) {
+    console.log('Executando análise individual:', { promptId, promptNome, acertos, total });
+    
     // Armazenar prompt ID para uso no teste de triagem
     promptIdAtual = promptId;
+    
+    // Calcular taxa de acerto usando os dados da linha
+    let taxaAcerto = '';
+    if (total > 0) {
+        const taxa = ((acertos / total) * 100).toFixed(1);
+        taxaAcerto = taxa;
+    }
+    
+    console.log('✅ Taxa de acerto calculada para análise:', {
+        taxaAcerto,
+        acertos,
+        total,
+        promptId,
+        promptNome
+    });
+    
     // Salvar configuração atual
     configPromptIndividual = {
         persona: document.getElementById('personaIndividual').value.trim(),
@@ -1805,7 +1828,10 @@ function executarAnaliseIndividual(promptId, promptNome) {
             prompt_id: promptId,
             prompt_nome: promptNome,
             intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
-            config_personalizada: configPromptIndividual
+            config_personalizada: configPromptIndividual,
+            taxa_acerto: taxaAcerto,
+            acertos: acertos,
+            total_analises: total
         })
     })
     .then(response => response.json())

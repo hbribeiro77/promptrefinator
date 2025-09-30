@@ -3637,6 +3637,9 @@ def analisar_prompt_individual():
         prompt_nome = data.get('prompt_nome', 'Prompt')
         intimacao_id = data.get('intimacao_id')
         config_personalizada = data.get('config_personalizada')
+        taxa_acerto_frontend = data.get('taxa_acerto')
+        acertos = data.get('acertos')
+        total_analises = data.get('total_analises')
         
         if not prompt_id:
             return jsonify({
@@ -3692,16 +3695,20 @@ INFORMAÇÕES ADICIONAIS:
 
 """
             
-            # Buscar taxa de acerto do prompt
+            # Usar taxa de acerto enviada pelo frontend
             taxa_acerto = ''
-            try:
-                prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
-                for p in prompts_acerto:
-                    if p['prompt_id'] == prompt_id:
-                        taxa_acerto = f" (Taxa de acerto: {p['taxa_acerto']}%)"
-                        break
-            except Exception as e:
-                print(f"Erro ao buscar taxa de acerto: {e}")
+            if taxa_acerto_frontend:
+                taxa_acerto = f" (Taxa de acerto: {taxa_acerto_frontend}%)"
+            else:
+                # Fallback: buscar taxa de acerto do prompt
+                try:
+                    prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
+                    for p in prompts_acerto:
+                        if p['prompt_id'] == prompt_id:
+                            taxa_acerto = f" (Taxa de acerto: {p['taxa_acerto']}%)"
+                            break
+                except Exception as e:
+                    print(f"Erro ao buscar taxa de acerto: {e}")
             
             # Construir prompt de análise
             # Usar regras de negócio em vez do conteúdo completo
