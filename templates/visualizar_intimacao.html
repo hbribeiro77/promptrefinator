@@ -1173,13 +1173,17 @@ function renderizarTabelaPrompts() {
 }
 
 // Função para carregar prompts e taxas de acerto
-function carregarPromptsAcerto() {
+window.carregarPromptsAcerto = function() {
+    console.log('🔍 Iniciando carregamento de prompts acerto...');
+    
     const contentDiv = document.getElementById('prompts-acerto-content');
     
     if (!contentDiv) {
-        console.error('Elemento prompts-acerto-content não encontrado!');
+        console.error('❌ Elemento prompts-acerto-content não encontrado!');
         return;
     }
+    
+    console.log('✅ Elemento encontrado, mostrando loading...');
     
     // Mostrar loading
     contentDiv.innerHTML = `
@@ -1191,11 +1195,20 @@ function carregarPromptsAcerto() {
         </div>
     `;
     
+    console.log('🌐 Fazendo requisição para API...');
+    console.log('🔗 URL da API:', `/api/intimacoes/{{ intimacao.id }}/prompts-acerto`);
+    
     // Fazer requisição para API
     fetch(`/api/intimacoes/{{ intimacao.id }}/prompts-acerto`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('📡 Resposta recebida:', response.status, response.statusText);
+            return response.json();
+        })
         .then(data => {
+            console.log('📊 Dados recebidos:', data);
+            
             if (data.success && data.prompts_acerto && data.prompts_acerto.length > 0) {
+                console.log('✅ Dados válidos encontrados, renderizando tabela...');
                 // Renderizar prompts em tabela
                 let html = `
                     <div class="table-responsive">
@@ -1340,11 +1353,12 @@ function carregarPromptsAcerto() {
             }
         })
         .catch(error => {
-            console.error('Erro ao carregar prompts:', error);
+            console.error('❌ Erro ao carregar prompts:', error);
             contentDiv.innerHTML = `
                 <div class="alert alert-danger">
                     <h6><i class="bi bi-exclamation-triangle"></i> Erro ao carregar prompts</h6>
                     <p class="mb-0">Erro ao conectar com o servidor. Tente novamente.</p>
+                    <small class="text-muted">Erro: ${error.message}</small>
                 </div>
             `;
         });
@@ -1405,87 +1419,177 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
         promptNome
     });
     
-    // Criar modal de configuração
+    // Armazenar dados para o wizard
+    window.wizardData = {
+        promptId: promptId,
+        promptNome: promptNome,
+        acertos: acertos,
+        total: total,
+        taxaAcerto: taxaAcerto,
+        etapaAtual: 1
+    };
+    
+    // Criar wizard modal
     const modalHtml = `
-        <div class="modal fade" id="modalAnaliseIndividual" tabindex="-1" aria-labelledby="modalAnaliseIndividualLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
+        <div class="modal fade" id="modalWizardAnalise" tabindex="-1" aria-labelledby="modalWizardAnaliseLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="modalAnaliseIndividualLabel">
-                            <i class="bi bi-robot"></i>
-                            Analisar Prompt: ${promptNome}
+                        <h5 class="modal-title" id="modalWizardAnaliseLabel">
+                            <i class="bi bi-magic"></i>
+                            Wizard de Análise: ${promptNome}
                             <span class="badge bg-info ms-2">Taxa: ${taxaAcerto}% (${acertos}/${total})</span>
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <form id="formAnaliseIndividual">
-                            <div class="mb-3">
-                                <label for="personaIndividual" class="form-label">
-                                    <strong>Persona + Instruções de Análise:</strong>
-                                    <small class="text-muted">Como a IA deve se comportar e o que deve fazer</small>
-                                </label>
-                                <textarea class="form-control" id="personaIndividual" rows="6" placeholder="Ex: Você é um especialista em análise de prompts de IA para classificação jurídica.&#10;&#10;Analise a eficácia deste prompt específico para classificar a intimação fornecida.&#10;&#10;1. Identifique os pontos fortes do prompt&#10;2. Identifique os pontos fracos do prompt&#10;3. Forneça recomendações para melhorar o prompt">${configPromptIndividual.persona}</textarea>
+                        <!-- Indicador de Progresso -->
+                        <div class="progress mb-4" style="height: 8px;">
+                            <div class="progress-bar" id="wizardProgress" role="progressbar" style="width: 20%"></div>
+                        </div>
+                        
+                        <!-- Navegação das Etapas -->
+                        <div class="d-flex justify-content-between mb-4">
+                            <div class="d-flex align-items-center" style="cursor: pointer;" onclick="navegarParaEtapa(1)">
+                                <span class="badge bg-primary me-2" id="step1">1</span>
+                                <span id="step1Text">Configuração</span>
+                            </div>
+                            <div class="d-flex align-items-center" style="cursor: pointer;" onclick="navegarParaEtapa(2)">
+                                <span class="badge bg-secondary me-2" id="step2">2</span>
+                                <span id="step2Text">Análise IA</span>
+                            </div>
+                            <div class="d-flex align-items-center" style="cursor: pointer;" onclick="navegarParaEtapa(3)">
+                                <span class="badge bg-secondary me-2" id="step3">3</span>
+                                <span id="step3Text">Teste Triagem</span>
+                            </div>
+                            <div class="d-flex align-items-center" style="cursor: pointer;" onclick="navegarParaEtapa(4)">
+                                <span class="badge bg-secondary me-2" id="step4">4</span>
+                                <span id="step4Text">Resultado</span>
+                            </div>
+                            <div class="d-flex align-items-center" style="cursor: pointer;" onclick="navegarParaEtapa(5)">
+                                <span class="badge bg-secondary me-2" id="step5">5</span>
+                                <span id="step5Text">Teste Combinado</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Conteúdo das Etapas -->
+                        <div id="wizardContent">
+                            <!-- ETAPA 1: CONFIGURAÇÃO -->
+                            <div id="etapa1" class="wizard-step">
+                                <h6 class="mb-3"><i class="bi bi-gear"></i> Configuração da Análise</h6>
+                                <form id="formAnaliseIndividual">
+                                    <div class="mb-3">
+                                        <label for="personaIndividual" class="form-label">
+                                            <strong>Persona + Instruções de Análise:</strong>
+                                        </label>
+                                        <textarea class="form-control" id="personaIndividual" rows="6" 
+                                            placeholder="Digite a persona e instruções para análise do prompt...">${configPromptIndividual.persona}</textarea>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="incluirContextoIndividual" 
+                                                    ${configPromptIndividual.incluirContextoIntimacao ? 'checked' : ''}>
+                                                <label class="form-check-label" for="incluirContextoIndividual">
+                                                    Incluir contexto da intimação
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="incluirGabaritoIndividual" 
+                                                    ${configPromptIndividual.incluirInformacaoAdicional ? 'checked' : ''}>
+                                                <label class="form-check-label" for="incluirGabaritoIndividual">
+                                                    Incluir gabarito (classificação manual)
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="instrucoesRespostaIndividual" class="form-label">
+                                            <strong>Instruções de Resposta:</strong>
+                                        </label>
+                                        <textarea class="form-control" id="instrucoesRespostaIndividual" rows="4" 
+                                            placeholder="Instruções específicas para a resposta da IA...">${configPromptIndividual.instrucoesResposta}</textarea>
+                                    </div>
+                                </form>
                             </div>
                             
-                            <div class="mb-3">
-                                <label for="instrucoesRespostaIndividual" class="form-label">
-                                    <strong>Instruções de Resposta:</strong>
-                                    <small class="text-muted">Como a IA deve formatar e estruturar sua resposta</small>
-                                </label>
-                                <textarea class="form-control" id="instrucoesRespostaIndividual" rows="5" placeholder="Ex: Responda em formato JSON com as seguintes chaves:&#10;- &quot;analise&quot;: análise geral (2-3 frases)&#10;- &quot;pontos_fortes&quot;: array com 3-5 pontos fortes&#10;- &quot;pontos_fracos&quot;: array com 3-5 pontos fracos&#10;- &quot;recomendacoes&quot;: array com 3-5 recomendações&#10;&#10;Seja objetivo, técnico e focado em eficácia para classificação jurídica.">${configPromptIndividual.instrucoesResposta}</textarea>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="incluirContextoIndividual" ${configPromptIndividual.incluirContextoIntimacao ? 'checked' : ''}>
-                                    <label class="form-check-label" for="incluirContextoIndividual">
-                                        <strong>Incluir Contexto da Intimação</strong>
-                                        <small class="text-muted d-block">Dados completos da intimação (processo, classe, órgão, etc.)</small>
-                                    </label>
+                            <!-- ETAPA 2: ANÁLISE IA -->
+                            <div id="etapa2" class="wizard-step d-none">
+                                <h6 class="mb-3"><i class="bi bi-robot"></i> Análise com IA</h6>
+                                <div id="analiseContent">
+                                    <div class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Analisando...</span>
+                                        </div>
+                                        <p class="mt-3 text-muted">Executando análise com IA...</p>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="incluirGabaritoIndividual" ${configPromptIndividual.incluirInformacaoAdicional ? 'checked' : ''}>
-                                    <label class="form-check-label" for="incluirGabaritoIndividual">
-                                        <strong>Incluir Gabarito (Classificação Manual)</strong>
-                                        <small class="text-muted d-block">A classificação correta para análise de performance</small>
-                                    </label>
+                            <!-- ETAPA 3: TESTE TRIAGEM -->
+                            <div id="etapa3" class="wizard-step d-none">
+                                <h6 class="mb-3"><i class="bi bi-play-circle"></i> Teste de Triagem</h6>
+                                <div id="testeContent">
+                                    <div class="alert alert-info">
+                                        <h6><i class="bi bi-lightbulb"></i> Sugestões da IA</h6>
+                                        <p class="mb-2">Com base na análise, cole as regras de negócio sugeridas:</p>
+                                        <textarea class="form-control" id="regrasNegocioManual" rows="6" 
+                                            placeholder="Cole aqui as regras de negócio sugeridas pela IA..."></textarea>
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="preencherRegrasAutomaticamente()">
+                                                <i class="bi bi-magic"></i>
+                                                Tentar Extrair Automaticamente
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="quantidadeTestes" class="form-label">Quantidade de Testes:</label>
+                                            <input type="number" class="form-control" id="quantidadeTestes" value="10" min="1" max="50">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Tempo Estimado:</label>
+                                            <div class="form-control-plaintext" id="tempoEstimado">~30 segundos</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             
-                            <div class="alert alert-info">
-                                <h6><i class="bi bi-info-circle"></i> Estrutura do Prompt:</h6>
-                                <ol class="mb-0">
-                                    <li><strong>Persona:</strong> Como a IA deve se comportar</li>
-                                    <li><strong>Contexto da Intimação:</strong> Dados completos (se habilitado)</li>
-                                    <li><strong>Gabarito:</strong> Classificação correta (se habilitado)</li>
-                                    <li><strong>Prompt a Analisar:</strong> O prompt específico</li>
-                                    <li><strong>Instruções de Resposta:</strong> Como formatar a resposta</li>
-                                </ol>
+                            <!-- ETAPA 4: RESULTADO -->
+                            <div id="etapa4" class="wizard-step d-none">
+                                <h6 class="mb-3"><i class="bi bi-graph-up"></i> Resultado Consolidado</h6>
+                                <div id="resultadoContent">
+                                    <!-- Conteúdo será preenchido dinamicamente -->
+                                </div>
                             </div>
-                        </form>
+                            
+                            <!-- ETAPA 5: TESTE COMBINADO -->
+                            <div id="etapa5" class="wizard-step d-none">
+                                <h6 class="mb-3"><i class="bi bi-arrow-repeat"></i> Teste com Regras Combinadas</h6>
+                                <div id="testeCombinadoContent">
+                                    <!-- Conteúdo será preenchido dinamicamente -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" onclick="resetarConfigAnaliseIndividual()">
+                        <button type="button" class="btn btn-secondary" id="btnAnterior" onclick="wizardAnterior()" disabled>
+                            <i class="bi bi-arrow-left"></i>
+                            Anterior
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="resetarConfigAnaliseIndividual()">
                             <i class="bi bi-arrow-clockwise"></i>
                             Resetar
                         </button>
-                        <button type="button" class="btn btn-outline-success" onclick="salvarConfigAnaliseIndividual()">
-                            <i class="bi bi-save"></i>
-                            Salvar Config
-                        </button>
-                        <button type="button" class="btn btn-outline-info" onclick="visualizarPromptAnaliseIndividual('${promptId}', '${promptNome}', ${acertos}, ${total})">
-                            <i class="bi bi-eye"></i>
-                            Ver Prompt
-                        </button>
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-warning" onclick="executarAnaliseIndividual('${promptId}', '${promptNome}', ${acertos}, ${total})">
-                            <i class="bi bi-robot"></i>
-                            Analisar com IA
-                        </button>
+                                    <button type="button" class="btn btn-primary" id="btnProximo" onclick="wizardProximo()">
+                                        Fazer diagnóstico
+                                        <i class="bi bi-arrow-right"></i>
+                                    </button>
                     </div>
                 </div>
             </div>
@@ -1493,16 +1597,16 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
     `;
     
     // Remover modal anterior se existir
-    const existingModal = document.getElementById('modalAnaliseIndividual');
+    const existingModal = document.getElementById('modalWizardAnalise');
     if (existingModal) {
         existingModal.remove();
     }
     
-    // Adicionar novo modal
+    // Adicionar modal ao DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('modalAnaliseIndividual'));
+    const modal = new bootstrap.Modal(document.getElementById('modalWizardAnalise'));
     modal.show();
 }
 
@@ -2595,6 +2699,31 @@ function copiarRegrasUtilizadas() {
     });
 }
 
+// Função para copiar regra testada
+function copiarRegraTestada() {
+    if (!window.wizardData.regraTestada) {
+        showToast('Nenhuma regra disponível para copiar', 'warning');
+        return;
+    }
+    
+    navigator.clipboard.writeText(window.wizardData.regraTestada).then(function() {
+        showToast('Regra copiada para a área de transferência!', 'success');
+    }).catch(function(err) {
+        console.error('Erro ao copiar regra:', err);
+        showToast('Erro ao copiar regra.', 'error');
+    });
+}
+
+// Função para executar novo teste combinado
+function executarNovoTesteCombinado() {
+    // Limpar dados do teste anterior
+    window.wizardData.testeCombinado = null;
+    
+    // Ir para etapa 5 e executar novo teste
+    irParaEtapa(5);
+    executarTesteCombinadoWizard();
+}
+
 // Função para escapar texto para tooltip
 function escaparTextoParaTooltip(texto) {
     if (!texto) return 'N/A';
@@ -2622,6 +2751,18 @@ function calcularTempoEstimado() {
     const tempoCalculado = document.getElementById('tempoCalculado');
     if (tempoCalculado) {
         tempoCalculado.textContent = tempoTotal;
+    }
+}
+
+// Função para calcular tempo estimado do teste combinado
+function calcularTempoEstimadoCombinado() {
+    const quantidade = parseInt(document.getElementById('quantidadeTestesCombinado').value) || 10;
+    const tempoPorTeste = 3; // segundos por teste (estimativa)
+    const tempoTotal = quantidade * tempoPorTeste;
+    
+    const tempoEstimadoCombinado = document.getElementById('tempoEstimadoCombinado');
+    if (tempoEstimadoCombinado) {
+        tempoEstimadoCombinado.textContent = `~${tempoTotal} segundos`;
     }
 }
 
@@ -3083,8 +3224,14 @@ function mostrarResultadoTesteTriagem(resultado) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    carregarPromptsAcerto();
-    carregarConfiguracoesAnalise();
+    console.log('🚀 DOM carregado, iniciando carregamento...');
+    
+    // Aguardar um pouco para garantir que todos os elementos estejam prontos
+    setTimeout(() => {
+        console.log('⏰ Executando carregamento após timeout...');
+        carregarPromptsAcerto();
+        carregarConfiguracoesAnalise();
+    }, 100);
 });
 
 // Atalhos de teclado
@@ -3106,5 +3253,781 @@ document.addEventListener('keydown', function(e) {
         window.location.href = '{{ url_for("listar_intimacoes") }}';
     }
 });
+
+// ===== FUNÇÕES DO WIZARD =====
+
+// Funções do Wizard
+function wizardProximo() {
+    const etapaAtual = window.wizardData.etapaAtual;
+    
+    if (etapaAtual === 1) {
+        // Salvar configuração e ir para análise
+        salvarConfigAnaliseIndividual();
+        irParaEtapa(2);
+        executarAnaliseWizard();
+    } else if (etapaAtual === 2) {
+        // Ir para teste de triagem
+        irParaEtapa(3);
+    } else if (etapaAtual === 3) {
+        // Executar teste de triagem
+        executarTesteTriagemWizard();
+    } else if (etapaAtual === 4) {
+        // Verificar se teste combinado já foi executado
+        if (window.wizardData.testeCombinado && window.wizardData.testeCombinado.executado) {
+            // Ir para etapa 5 e carregar dados salvos
+            irParaEtapa(5);
+        } else {
+            // Executar teste combinado pela primeira vez
+            irParaEtapa(5);
+            executarTesteCombinadoWizard();
+        }
+    }
+}
+
+function wizardAnterior() {
+    const etapaAtual = window.wizardData.etapaAtual;
+    
+    if (etapaAtual > 1) {
+        irParaEtapa(etapaAtual - 1);
+    }
+}
+
+// Função para navegação livre entre etapas (navegação superior)
+function navegarParaEtapa(etapa) {
+    const etapaAtual = window.wizardData.etapaAtual;
+    
+    // Verificar se pode navegar para a etapa
+    if (etapa === 1) {
+        // Sempre pode ir para etapa 1
+        irParaEtapa(1);
+    } else if (etapa === 2 && window.wizardData.resultadoAnalise) {
+        // Pode ir para etapa 2 se já executou análise
+        irParaEtapa(2);
+    } else if (etapa === 3 && window.wizardData.resultadoAnalise) {
+        // Pode ir para etapa 3 se já executou análise
+        irParaEtapa(3);
+    } else if (etapa === 4 && window.wizardData.resultadoAnalise) {
+        // Pode ir para etapa 4 se já executou análise
+        irParaEtapa(4);
+    } else if (etapa === 5 && window.wizardData.testeCombinado && window.wizardData.testeCombinado.executado) {
+        // Pode ir para etapa 5 se já executou teste combinado
+        irParaEtapa(5);
+    } else {
+        // Etapa não disponível ainda
+        showToast(`Etapa ${etapa} não disponível ainda. Complete as etapas anteriores primeiro.`, 'warning');
+    }
+}
+
+function irParaEtapa(novaEtapa) {
+    // Ocultar todas as etapas
+    document.querySelectorAll('.wizard-step').forEach(etapa => {
+        etapa.classList.add('d-none');
+    });
+    
+    // Mostrar etapa atual
+    document.getElementById(`etapa${novaEtapa}`).classList.remove('d-none');
+    
+    // Atualizar indicadores
+    atualizarIndicadoresEtapas(novaEtapa);
+    
+    // Atualizar botões
+    atualizarBotoesWizard(novaEtapa);
+    
+    // Atualizar dados
+    window.wizardData.etapaAtual = novaEtapa;
+    
+    // Carregar dados salvos se existirem
+    if (novaEtapa === 2 && window.wizardData.resultadoAnalise) {
+        // Carregar resultado da análise salva
+        mostrarResultadoAnaliseWizard(window.wizardData.resultadoAnalise);
+    } else if (novaEtapa === 4 && window.wizardData.resultadoAnalise) {
+        // Carregar resultado consolidado se existir
+        if (window.wizardData.resultadoConsolidado) {
+            mostrarResultadoConsolidadoWizard(
+                window.wizardData.resultadoConsolidado.resultados,
+                window.wizardData.resultadoConsolidado.regrasSugeridas
+            );
+        }
+    } else if (novaEtapa === 5 && window.wizardData.testeCombinado && window.wizardData.testeCombinado.executado) {
+        // Carregar resultado do teste combinado salvo
+        mostrarResultadoFinalWizard(
+            window.wizardData.testeCombinado.resultados,
+            window.wizardData.testeCombinado.regrasCombinadas
+        );
+    }
+}
+
+function atualizarIndicadoresEtapas(etapaAtual) {
+    // Resetar todos os badges
+    for (let i = 1; i <= 5; i++) {
+        const badge = document.getElementById(`step${i}`);
+        const text = document.getElementById(`step${i}Text`);
+        
+        // Verificar se etapa tem resultado
+        let temResultado = false;
+        if (i === 2 && window.wizardData.resultadoAnalise) temResultado = true;
+        if (i === 4 && window.wizardData.resultadoConsolidado) temResultado = true;
+        if (i === 5 && window.wizardData.testeCombinado && window.wizardData.testeCombinado.executado) temResultado = true;
+        
+        if (i < etapaAtual) {
+            // Etapas concluídas
+            badge.className = 'badge bg-success me-2';
+            text.className = 'text-success';
+        } else if (i === etapaAtual) {
+            // Etapa atual
+            badge.className = 'badge bg-primary me-2';
+            text.className = 'text-primary fw-bold';
+        } else if (temResultado) {
+            // Etapas futuras com resultado disponível
+            badge.className = 'badge bg-info me-2';
+            text.className = 'text-info';
+        } else {
+            // Etapas futuras sem resultado
+            badge.className = 'badge bg-secondary me-2';
+            text.className = 'text-muted';
+        }
+    }
+    
+    // Atualizar barra de progresso
+    const progresso = (etapaAtual / 5) * 100;
+    document.getElementById('wizardProgress').style.width = `${progresso}%`;
+}
+
+function atualizarBotoesWizard(etapaAtual) {
+    const btnAnterior = document.getElementById('btnAnterior');
+    const btnProximo = document.getElementById('btnProximo');
+    
+    // Botão Anterior
+    btnAnterior.disabled = etapaAtual === 1;
+    
+    // Botão Próximo
+    if (etapaAtual === 5) {
+        btnProximo.style.display = 'none';
+    } else {
+        btnProximo.style.display = 'inline-block';
+        if (etapaAtual === 1) {
+            btnProximo.innerHTML = 'Fazer diagnóstico <i class="bi bi-arrow-right"></i>';
+        } else if (etapaAtual === 2) {
+            btnProximo.innerHTML = 'Próximo <i class="bi bi-arrow-right"></i>';
+        } else if (etapaAtual === 3) {
+            btnProximo.innerHTML = '<i class="bi bi-play-circle"></i> Executar Teste';
+        } else if (etapaAtual === 4) {
+            btnProximo.innerHTML = '<i class="bi bi-arrow-repeat"></i> Teste Combinado';
+        }
+    }
+}
+
+async function executarAnaliseWizard() {
+    const { promptId, promptNome, acertos, total } = window.wizardData;
+    
+    try {
+        // Salvar configuração atual
+        configPromptIndividual = {
+            persona: document.getElementById('personaIndividual').value.trim(),
+            instrucoesResposta: document.getElementById('instrucoesRespostaIndividual').value.trim(),
+            incluirContextoIntimacao: document.getElementById('incluirContextoIndividual').checked,
+            incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked
+        };
+        
+        // Salvar no localStorage
+        localStorage.setItem('configPromptIndividual', JSON.stringify(configPromptIndividual));
+        
+        // Fazer requisição para análise
+        const response = await fetch('/api/analisar-prompt-individual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt_id: promptId,
+                prompt_nome: promptNome,
+                intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
+                config_personalizada: configPromptIndividual,
+                taxa_acerto: window.wizardData.taxaAcerto,
+                acertos: acertos,
+                total_analises: total
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Armazenar resultado
+            window.wizardData.resultadoAnalise = data.resultado;
+            
+            // Mostrar resultado na etapa 2
+            mostrarResultadoAnaliseWizard(data.resultado);
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('Erro na análise:', error);
+        document.getElementById('analiseContent').innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle"></i> Erro na Análise</h6>
+                <p class="mb-0">Erro ao conectar com a IA. Tente novamente.</p>
+            </div>
+        `;
+    }
+}
+
+function mostrarResultadoAnaliseWizard(resultado) {
+    const analiseContent = document.getElementById('analiseContent');
+    
+    // Renderizar markdown
+    let html = '';
+    if (typeof marked !== 'undefined') {
+        html = marked.parse(resultado);
+    } else {
+        html = resultado.replace(/\n/g, '<br>');
+    }
+    
+    analiseContent.innerHTML = `
+        <div class="alert alert-info">
+            <h6><i class="bi bi-robot"></i> Diagnóstico da IA</h6>
+            <div class="markdown-content">${html}</div>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarResultadoAnaliseIndividual()">
+                <i class="bi bi-clipboard"></i>
+                Copiar Resultado
+            </button>
+        </div>
+    `;
+}
+
+async function executarTesteTriagemWizard() {
+    const { promptId, resultadoAnalise } = window.wizardData;
+    
+    if (!resultadoAnalise) {
+        showToast('Análise não disponível para teste', 'error');
+        return;
+    }
+    
+    try {
+        // Obter regras de negócio da textarea
+        const regrasSugeridas = document.getElementById('regrasNegocioManual').value.trim();
+        
+        if (!regrasSugeridas) {
+            showToast('Por favor, cole as regras de negócio sugeridas', 'warning');
+            return;
+        }
+        
+        // Obter quantidade de testes
+        const quantidadeTestes = parseInt(document.getElementById('quantidadeTestes').value) || 10;
+        
+        // Armazenar dados para uso posterior
+        promptIdAtual = promptId;
+        resultadoAnaliseAtual = resultadoAnalise;
+        
+        // Armazenar regra testada
+        window.wizardData.regraTestada = regrasSugeridas;
+        
+        // Ir para etapa 4
+        irParaEtapa(4);
+        
+        // Mostrar loading
+        document.getElementById('resultadoContent').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Executando testes...</span>
+                </div>
+                <p class="mt-3 text-muted">Executando ${quantidadeTestes} testes de triagem...</p>
+            </div>
+        `;
+        
+        // Executar testes
+        const resultados = [];
+        
+        for (let i = 0; i < quantidadeTestes; i++) {
+            // Atualizar progresso
+            document.getElementById('resultadoContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Executando teste ${i + 1}/${quantidadeTestes}...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Executando teste ${i + 1} de ${quantidadeTestes}...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/api/testar-triagem-customizada', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
+                        regras_negocio: regrasSugeridas,
+                        prompt_base_id: promptId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultados.push(data.resultado);
+                } else {
+                    resultados.push({
+                        erro: true,
+                        mensagem: data.message,
+                        teste: i + 1
+                    });
+                }
+            } catch (error) {
+                resultados.push({
+                    erro: true,
+                    mensagem: 'Erro de conexão',
+                    teste: i + 1
+                });
+            }
+        }
+        
+        // Mostrar resultado consolidado
+        mostrarResultadoConsolidadoWizard(resultados, regrasSugeridas);
+        
+    } catch (error) {
+        console.error('Erro ao testar triagem:', error);
+        document.getElementById('resultadoContent').innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle"></i> Erro no Teste</h6>
+                <p class="mb-0">Erro ao conectar com a API. Tente novamente.</p>
+            </div>
+        `;
+    }
+}
+
+function mostrarResultadoConsolidadoWizard(resultados, regrasSugeridas) {
+    // Armazenar regras testadas
+    regrasTestadasAtual = regrasSugeridas;
+    
+    // Armazenar resultado consolidado para navegação
+    window.wizardData.resultadoConsolidado = {
+        resultados: resultados,
+        regrasSugeridas: regrasSugeridas
+    };
+    
+    // Calcular estatísticas
+    const testesComSucesso = resultados.filter(r => !r.erro);
+    const acertos = testesComSucesso.filter(r => r.acertou === true).length;
+    const taxaAcerto = testesComSucesso.length > 0 ? (acertos / testesComSucesso.length * 100).toFixed(1) : 0;
+    
+    // Construir HTML da tabela
+    let tabelaHtml = `
+        <!-- Seção Regra em Teste -->
+        <div class="alert alert-info mb-4">
+            <h6><i class="bi bi-lightbulb"></i> Regra em Teste</h6>
+            <p class="mb-2"><strong>Sugestão da IA:</strong></p>
+            <div class="bg-light p-3 rounded" style="max-height: 150px; overflow-y: auto;">
+                <pre style="white-space: pre-wrap; margin: 0; font-size: 0.9em;">${window.wizardData.regraTestada || 'N/A'}</pre>
+            </div>
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                Esta regra foi sugerida pela IA na análise e está sendo testada com ${testesComSucesso.length} execuções.
+            </small>
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarRegraTestada()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Regra
+                </button>
+            </div>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary">${testesComSucesso.length}</h5>
+                        <p class="card-text">Testes Executados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-success">${acertos}</h5>
+                        <p class="card-text">Acertos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-info">${taxaAcerto}%</h5>
+                        <p class="card-text">Taxa de Acerto</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning">${resultados.length - testesComSucesso.length}</h5>
+                        <p class="card-text">Erros</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Teste</th>
+                        <th>Classificação IA</th>
+                        <th>Classificação Manual</th>
+                        <th>Acertou</th>
+                        <th>Modelo</th>
+                        <th>Resposta Completa</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    resultados.forEach((resultado, index) => {
+        const acertou = resultado.acertou ? 'Sim' : 'Não';
+        const badgeClass = resultado.acertou ? 'bg-success' : 'bg-danger';
+        const respostaCompleta = resultado.resposta_completa || 'N/A';
+        
+        tabelaHtml += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${resultado.classificacao_ia || 'N/A'}</td>
+                <td>${resultado.classificacao_manual || 'N/A'}</td>
+                <td><span class="badge ${badgeClass}">${acertou}</span></td>
+                <td><small class="text-muted">${resultado.modelo_utilizado || 'N/A'}</small></td>
+                <td>
+                    <span class="badge bg-info" 
+                          data-bs-toggle="tooltip" 
+                          data-bs-placement="top" 
+                          title="${escaparTextoParaTooltip(respostaCompleta)}">
+                        Ver Resposta
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tabelaHtml += `
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Configuração do Teste Combinado -->
+        <div class="card mb-4" id="configTesteCombinado">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-gear"></i> Configuração do Teste Combinado</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="quantidadeTestesCombinado" class="form-label">Quantidade de Testes:</label>
+                        <input type="number" class="form-control" id="quantidadeTestesCombinado" value="10" min="1" max="50">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Tempo Estimado:</label>
+                        <div class="form-control-plaintext" id="tempoEstimadoCombinado">~30 segundos</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-outline-secondary" onclick="copiarRegrasUtilizadas()">
+                <i class="bi bi-clipboard"></i>
+                Copiar Regras
+            </button>
+            <button type="button" class="btn btn-info" onclick="verPromptCombinado()">
+                <i class="bi bi-eye"></i>
+                Ver Prompt Combinado
+            </button>
+            <button type="button" class="btn btn-success" onclick="wizardProximo()" id="btnTesteCombinado">
+                <i class="bi bi-arrow-repeat"></i>
+                Testar com Regras Combinadas
+            </button>
+            <button type="button" class="btn btn-warning" onclick="executarNovoTesteCombinado()" id="btnNovoTesteCombinado" style="display: none;">
+                <i class="bi bi-arrow-repeat"></i>
+                Executar Novo Teste
+            </button>
+        </div>
+    `;
+    
+    document.getElementById('resultadoContent').innerHTML = tabelaHtml;
+    
+    // Verificar se teste combinado já foi executado
+    if (window.wizardData.testeCombinado && window.wizardData.testeCombinado.executado) {
+        // Mostrar botão "Executar Novo Teste", esconder "Testar com Regras Combinadas"
+        setTimeout(() => {
+            const btnTesteCombinado = document.getElementById('btnTesteCombinado');
+            const btnNovoTesteCombinado = document.getElementById('btnNovoTesteCombinado');
+            
+            if (btnTesteCombinado) btnTesteCombinado.style.display = 'none';
+            if (btnNovoTesteCombinado) btnNovoTesteCombinado.style.display = 'inline-block';
+        }, 100);
+    }
+    
+    // Inicializar tooltips
+    setTimeout(() => {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Adicionar event listener para quantidade de testes combinado
+        const quantidadeInput = document.getElementById('quantidadeTestesCombinado');
+        if (quantidadeInput) {
+            quantidadeInput.addEventListener('input', function() {
+                calcularTempoEstimadoCombinado();
+            });
+        }
+    }, 100);
+}
+
+// Função para executar teste combinado no wizard
+async function executarTesteCombinadoWizard() {
+    const { promptId } = window.wizardData;
+    
+    if (!promptId || !regrasTestadasAtual) {
+        showToast('Dados não disponíveis para teste combinado', 'error');
+        return;
+    }
+    
+    try {
+        // Mostrar loading
+        document.getElementById('testeCombinadoContent').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Executando teste combinado...</span>
+                </div>
+                <p class="mt-3 text-muted">Executando teste com regras combinadas...</p>
+            </div>
+        `;
+        
+        // Buscar prompt base
+        let promptBase = null;
+        if (!promptBaseAtual) {
+            try {
+                const response = await fetch(`/api/prompts/${promptId}`);
+                const data = await response.json();
+                if (data.success && data.prompt) {
+                    promptBase = data.prompt;
+                    promptBaseAtual = promptBase;
+                }
+            } catch (error) {
+                console.error('Erro ao buscar prompt base:', error);
+            }
+        } else {
+            promptBase = promptBaseAtual;
+        }
+        
+        if (!promptBase) {
+            throw new Error('Prompt base não encontrado');
+        }
+        
+        // Combinar regras originais + testadas
+        const regrasOriginais = promptBase.regra_negocio || '';
+        const regrasCombinadas = `${regrasOriginais}\n\n=== REGRAS ADICIONAIS TESTADAS ===\n${regrasTestadasAtual}`;
+        
+        // Obter quantidade de testes (do campo da Etapa 4)
+        const quantidadeTestes = parseInt(document.getElementById('quantidadeTestesCombinado').value) || 10;
+        
+        // Executar testes combinados
+        const resultados = [];
+        
+        for (let i = 0; i < quantidadeTestes; i++) {
+            // Atualizar progresso
+            document.getElementById('testeCombinadoContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Executando teste combinado ${i + 1}/${quantidadeTestes}...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Executando teste combinado ${i + 1} de ${quantidadeTestes}...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/api/testar-triagem-customizada', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
+                        regras_negocio: regrasCombinadas,
+                        prompt_base_id: promptId
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultados.push(data.resultado);
+                } else {
+                    resultados.push({
+                        erro: true,
+                        mensagem: data.message,
+                        teste: i + 1
+                    });
+                }
+            } catch (error) {
+                resultados.push({
+                    erro: true,
+                    mensagem: 'Erro de conexão',
+                    teste: i + 1
+                });
+            }
+        }
+        
+        // Armazenar dados do teste combinado
+        window.wizardData.testeCombinado = {
+            resultados: resultados,
+            regrasCombinadas: regrasCombinadas,
+            executado: true
+        };
+        
+        // Mostrar resultado final
+        mostrarResultadoFinalWizard(resultados, regrasCombinadas);
+        
+    } catch (error) {
+        console.error('Erro ao executar teste combinado:', error);
+        document.getElementById('testeCombinadoContent').innerHTML = `
+            <div class="alert alert-danger">
+                <h6><i class="bi bi-exclamation-triangle"></i> Erro no Teste Combinado</h6>
+                <p class="mb-0">Erro ao conectar com a API. Tente novamente.</p>
+            </div>
+        `;
+    }
+}
+
+function mostrarResultadoFinalWizard(resultados, regrasCombinadas) {
+    // Calcular estatísticas
+    const testesComSucesso = resultados.filter(r => !r.erro);
+    const acertos = testesComSucesso.filter(r => r.acertou === true).length;
+    const taxaAcerto = testesComSucesso.length > 0 ? (acertos / testesComSucesso.length * 100).toFixed(1) : 0;
+    
+    // Construir HTML do resultado final
+    let html = `
+        <!-- Seção Regra Testada -->
+        <div class="alert alert-info mb-4">
+            <h6><i class="bi bi-lightbulb"></i> Regra Testada</h6>
+            <p class="mb-2"><strong>Sugestão da IA (já testada):</strong></p>
+            <div class="bg-light p-3 rounded" style="max-height: 150px; overflow-y: auto;">
+                <pre style="white-space: pre-wrap; margin: 0; font-size: 0.9em;">${window.wizardData.regraTestada || 'N/A'}</pre>
+            </div>
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                Esta regra foi testada anteriormente e agora está sendo combinada com as regras originais do prompt.
+            </small>
+            <div class="mt-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarRegraTestada()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Regra
+                </button>
+            </div>
+        </div>
+        
+        <div class="alert alert-success">
+            <h6><i class="bi bi-check-circle"></i> Teste Combinado Concluído!</h6>
+            <p class="mb-0">Teste executado com regras originais + regras testadas.</p>
+        </div>
+        
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-primary">${testesComSucesso.length}</h5>
+                        <p class="card-text">Testes Executados</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-success">${acertos}</h5>
+                        <p class="card-text">Acertos</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-info">${taxaAcerto}%</h5>
+                        <p class="card-text">Taxa de Acerto</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title text-warning">${resultados.length - testesComSucesso.length}</h5>
+                        <p class="card-text">Erros</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Teste</th>
+                        <th>Classificação IA</th>
+                        <th>Classificação Manual</th>
+                        <th>Acertou</th>
+                        <th>Modelo</th>
+                        <th>Resposta Completa</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    resultados.forEach((resultado, index) => {
+        const acertou = resultado.acertou ? 'Sim' : 'Não';
+        const badgeClass = resultado.acertou ? 'bg-success' : 'bg-danger';
+        const respostaCompleta = resultado.resposta_completa || 'N/A';
+        
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${resultado.classificacao_ia || 'N/A'}</td>
+                <td>${resultado.classificacao_manual || 'N/A'}</td>
+                <td><span class="badge ${badgeClass}">${acertou}</span></td>
+                <td><small class="text-muted">${resultado.modelo_utilizado || 'N/A'}</small></td>
+                <td>
+                    <span class="badge bg-info" 
+                          data-bs-toggle="tooltip" 
+                          data-bs-placement="top" 
+                          title="${escaparTextoParaTooltip(respostaCompleta)}">
+                        Ver Resposta
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-outline-secondary" onclick="navigator.clipboard.writeText('${regrasCombinadas.replace(/'/g, "\\'")}')">
+                <i class="bi bi-clipboard"></i>
+                Copiar Regras Combinadas
+            </button>
+            <button type="button" class="btn btn-info" onclick="verPromptCombinado()">
+                <i class="bi bi-eye"></i>
+                Ver Prompt Combinado
+            </button>
+            <button type="button" class="btn btn-success" onclick="wizardAnterior()">
+                <i class="bi bi-arrow-left"></i>
+                Voltar ao Resultado
+            </button>
+        </div>
+    `;
+    
+    document.getElementById('testeCombinadoContent').innerHTML = html;
+    
+    // Inicializar tooltips
+    setTimeout(() => {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }, 100);
+}
 </script>
 {% endblock %}

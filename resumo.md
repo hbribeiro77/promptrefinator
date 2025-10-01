@@ -826,3 +826,26 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Logs de debug**: Adicionados para facilitar investigação de problemas
 - ✅ **Fallback seguro**: Backend mantém busca na API como fallback
 - ✅ **Interface unificada**: Todas as interfaces mostram taxa de acerto idêntica
+
+### **Sistema de Wizard para Análise de Prompts (Janeiro 2025)**
+- ✅ **Refatoração completa**: Modal única com wizard de 5 etapas
+- ✅ **Etapa 1 - Configuração**: Persona, instruções de análise e opções
+- ✅ **Etapa 2 - Análise IA**: Execução e exibição da análise com IA
+- ✅ **Etapa 3 - Teste Triagem**: Configuração de regras e quantidade de testes
+- ✅ **Etapa 4 - Resultado**: Exibição consolidada dos testes com estatísticas
+- ✅ **Etapa 5 - Teste Combinado**: Teste com regras originais + sugeridas
+- ✅ **Navegação híbrida**: Badges superiores para navegação livre entre etapas já visitadas
+- ✅ **Fluxo sequencial**: Botões inferiores para progressão e execução de testes
+- ✅ **Indicadores visuais**: Badges coloridos (verde=concluída, azul=atual, azul claro=disponível, cinza=bloqueada)
+- ✅ **Barra de progresso**: Indicador visual do percentual de conclusão
+- ✅ **Textos contextuais**: Botões com textos que explicam a ação ("Fazer diagnóstico", "Executar Teste", etc.)
+- ✅ **Preservação de dados**: Todos os resultados salvos em `window.wizardData`
+- ✅ **Navegação livre**: Clique nos badges para revisar etapas já concluídas
+- ✅ **Validação inteligente**: Etapas liberadas apenas após conclusão das anteriores
+- ✅ **Regra testada visível**: Seção mostrando a regra em teste nas Etapas 4 e 5
+- ✅ **Botão copiar regra**: Botões para copiar a regra testada nas Etapas 4 e 5
+- ✅ **Configuração de quantidade**: Campo para definir número de testes combinados (1-50, padrão 10)
+- ✅ **Tempo estimado**: Cálculo automático do tempo para teste combinado
+- ✅ **Botão "Executar Novo Teste"**: Substitui botão "Ver Teste Combinado" para re-execução
+- ✅ **Navegação superior**: Usar badges para visualizar resultados existentes
+- ✅ **UX otimizada**: Fluxo claro entre execução (botões) e visualização (badges)
