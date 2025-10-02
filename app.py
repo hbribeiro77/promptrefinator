@@ -3274,6 +3274,22 @@ def obter_taxa_acerto_intimacoes():
             'message': f'Erro ao obter taxas de acerto: {str(e)}'
         }), 500
 
+@app.route('/api/prompts/<prompt_id>/analises-acertos')
+def obter_analises_acertos_prompt(prompt_id: str):
+    """API para obter análises e acertos de um prompt específico por temperatura"""
+    try:
+        analises_acertos = data_service.get_analises_acertos_por_prompt_e_temperatura(prompt_id)
+        return jsonify({
+            'success': True,
+            'analises_acertos': analises_acertos
+        })
+    except Exception as e:
+        print(f"Erro ao obter análises e acertos do prompt: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
 @app.route('/api/filtros/analise')
 def obter_filtros_analise():
     """API para obter dados de filtros para a página de análise"""

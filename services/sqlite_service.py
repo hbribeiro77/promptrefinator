@@ -640,6 +640,50 @@ class SQLiteService:
             ''', (prompt_id,))
             return [dict(row) for row in cursor.fetchall()]
     
+    def get_analises_acertos_por_prompt_e_temperatura(self, prompt_id: str) -> Dict[str, Dict[str, Any]]:
+        """Obter análises e acertos por intimação para um prompt específico, agrupados por temperatura"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.intimacao_id,
+                    a.temperatura,
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto
+                FROM analises a
+                WHERE a.prompt_id = ?
+                GROUP BY a.intimacao_id, a.temperatura
+                ORDER BY a.intimacao_id, a.temperatura
+            ''', (prompt_id,))
+            
+            result = {}
+            for row in cursor.fetchall():
+                intimacao_id = row[0]
+                temperatura = row[1]
+                
+                # Para cada intimação, pegar a temperatura mais comum (maior número de análises)
+                if intimacao_id not in result:
+                    result[intimacao_id] = {
+                        'total_analises': row[2],
+                        'acertos': row[3],
+                        'taxa_acerto': row[4],
+                        'temperatura': temperatura
+                    }
+                else:
+                    # Se já existe, verificar se esta temperatura tem mais análises
+                    if row[2] > result[intimacao_id]['total_analises']:
+                        result[intimacao_id] = {
+                            'total_analises': row[2],
+                            'acertos': row[3],
+                            'taxa_acerto': row[4],
+                            'temperatura': temperatura
+                        }
+            
+            return result
+    
     def get_analises_by_prompt_and_intimacao(self, prompt_id: str, intimacao_id: str) -> List[Dict[str, Any]]:
         """Obter análises de um prompt específico com uma intimação específica"""
         with self.get_connection() as conn:

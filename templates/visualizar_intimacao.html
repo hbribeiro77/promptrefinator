@@ -17,7 +17,7 @@
 
 .wizard-body {
     padding-bottom: 0; /* SEM padding para wizard body */
-    max-height: 80vh; /* Altura máxima maior */
+    max-height: 85vh; /* Altura máxima maior */
     overflow-y: auto; /* Scroll apenas quando necessário */
     overflow-x: hidden; /* Evitar scroll horizontal */
 }
@@ -25,7 +25,7 @@
 /* Garantir que o conteúdo das etapas tenha espaço adequado */
 .wizard-step-content {
     padding-bottom: 0; /* SEM padding para etapas 3, 4 e 5 */
-    max-height: 50vh; /* Altura menor para caber na tela */
+    max-height: 55vh; /* Altura menor para caber na tela */
     overflow-y: auto; /* Scroll igual à etapa 2 */
     overflow-x: hidden; /* Evitar scroll horizontal */
 }
@@ -33,7 +33,7 @@
 /* Garantir que o conteúdo da etapa 2 tenha padding adequado */
 #analiseContent {
     padding-bottom: 0; /* SEM padding para etapa 2 */
-    max-height: 70vh; /* Altura máxima maior */
+    max-height: 75vh; /* Altura máxima maior */
     overflow-y: auto; /* Scroll apenas quando necessário */
     overflow-x: hidden; /* Evitar scroll horizontal */
 }
@@ -70,8 +70,8 @@
 
 /* Modal do wizard com altura controlada */
 #modalWizardAnalise .modal-dialog {
-    max-height: 90vh;
-    margin: 1rem auto;
+    max-height: 95vh;
+    margin: 0.5rem auto;
     width: 95%;
     max-width: 1200px;
 }
@@ -79,17 +79,17 @@
 /* Garantir que o modal não ultrapasse a tela */
 @media (max-height: 600px) {
     #modalWizardAnalise .modal-dialog {
-        max-height: 95vh;
-        margin: 0.5rem auto;
+        max-height: 98vh;
+        margin: 0.25rem auto;
     }
     
     .wizard-body {
-        max-height: 60vh;
+        max-height: 65vh;
     }
 }
 
 #modalWizardAnalise .modal-content {
-    max-height: 90vh;
+    max-height: 95vh;
     display: flex;
     flex-direction: column;
 }
@@ -1634,7 +1634,6 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             
                             <!-- ETAPA 2: ANÁLISE IA -->
                             <div id="etapa2" class="wizard-step d-none">
-                                <h6 class="mb-3"><i class="bi bi-robot"></i> Análise com IA</h6>
                                 <div id="analiseContent" class="wizard-step-content">
                                     <div class="text-center py-4">
                                         <div class="spinner-border text-primary" role="status">
@@ -3605,7 +3604,6 @@ function mostrarResultadoAnaliseWizard(resultado) {
     
     analiseContent.innerHTML = `
         <div class="alert alert-info">
-            <h6><i class="bi bi-robot"></i> Diagnóstico da IA</h6>
             <div class="markdown-content">${html}</div>
         </div>
         <div class="d-flex gap-2 mb-4">
