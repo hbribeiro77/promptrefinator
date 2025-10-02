@@ -14,27 +14,22 @@ git add .
 
 ### 3. Fazer commit com mensagem descritiva
 ```bash
-git commit -m "Implementação completa do Sistema de Wizard para Análise de Prompts
+git commit -m "Sistema de Ordenação e Interface Avançada - Wizard Modal
 
-- ✅ Refatoração completa da análise individual para wizard de 5 etapas
-- ✅ Etapa 1: Configuração (persona, instruções e opções)
-- ✅ Etapa 2: Análise IA (execução e exibição)
-- ✅ Etapa 3: Teste Triagem (regras e quantidade)
-- ✅ Etapa 4: Resultado (estatísticas consolidadas)
-- ✅ Etapa 5: Teste Combinado (regras originais + sugeridas)
-- ✅ Navegação híbrida (badges superiores + botões inferiores)
-- ✅ Indicadores visuais coloridos por estado
-- ✅ Barra de progresso dinâmica
-- ✅ Textos contextuais nos botões
-- ✅ Preservação de dados entre etapas
-- ✅ Navegação livre entre etapas já visitadas
-- ✅ Validação inteligente de disponibilidade
-- ✅ Regra testada visível nas Etapas 4 e 5
-- ✅ Botões de copiar regra
-- ✅ Configuração de quantidade de testes combinados
-- ✅ Tempo estimado calculado automaticamente
-- ✅ Botão 'Executar Novo Teste' para re-execução
-- ✅ UX otimizada com fluxo claro"
+- ✅ Ordenação por Taxa de Acerto na tabela principal
+- ✅ Ícone de ordenação inline para evitar 'pulo' visual
+- ✅ Popover customizado com posicionamento fixo
+- ✅ Botão fixo no rodapé do popover
+- ✅ Borda azul e efeito hover no popover
+- ✅ Padding otimizado para evitar sobreposição
+- ✅ Modal wizard com scroll interno limitado ao cabeçalho
+- ✅ Altura ajustável (80vh) para melhor aproveitamento
+- ✅ Canaleta de scroll (50vh) para etapas 3, 4 e 5
+- ✅ Conteúdo completo da Etapa 4 com scroll funcional
+- ✅ Interface responsiva e adaptável
+- ✅ Sistema de scroll com canaleta e bloco deslizante
+- ✅ Eliminação de espaços vazios desnecessários
+- ✅ UX otimizada para diferentes tamanhos de tela"
 ```
 
 ### 4. Fazer push para o repositório remoto

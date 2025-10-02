@@ -849,3 +849,19 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Botão "Executar Novo Teste"**: Substitui botão "Ver Teste Combinado" para re-execução
 - ✅ **Navegação superior**: Usar badges para visualizar resultados existentes
 - ✅ **UX otimizada**: Fluxo claro entre execução (botões) e visualização (badges)
+
+### **Sistema de Ordenação e Interface Avançada (Janeiro 2025)**
+- ✅ **Ordenação por Taxa de Acerto**: Coluna "Taxa de Acerto" ordenável na tabela principal
+- ✅ **Ícone de ordenação**: Indicador visual de direção da ordenação (ascendente/descendente)
+- ✅ **CSS otimizado**: Ícone inline para evitar "pulo" visual durante carregamento
+- ✅ **Popover customizado**: Taxa de acerto com popover interativo e detalhado
+- ✅ **Posicionamento fixo**: Popover sempre visível na tela com posicionamento inteligente
+- ✅ **Botão fixo**: Botão "Comparar Prompts Selecionados" fixo no rodapé do popover
+- ✅ **Borda azul**: Contorno diferenciado para destacar o popover da página
+- ✅ **Efeito hover**: Sombra e transição suave ao passar o mouse
+- ✅ **Padding otimizado**: Espaçamento adequado para evitar sobreposição do botão
+- ✅ **Scroll interno**: Modal wizard com scroll interno limitado ao cabeçalho
+- ✅ **Altura ajustável**: Modal com altura maior (80vh) para melhor aproveitamento
+- ✅ **Canaleta de scroll**: Sistema de scroll com canaleta de 50vh para etapas 3, 4 e 5
+- ✅ **Conteúdo completo**: Etapa 4 mostra todo conteúdo com scroll funcional
+- ✅ **Interface responsiva**: Adaptação automática a diferentes tamanhos de tela

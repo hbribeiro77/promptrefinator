@@ -244,7 +244,12 @@
                                                 <th class="col-classe" style="width: 10%;">Classe</th>
                                                 <th class="col-classificacao" style="width: 12%;">Classificação Manual</th>
                                                 <th class="col-informacoes" style="width: 15%;">Informações Adicionais</th>
-                                                <th class="col-taxa" style="width: 10%;">Taxa de Acerto</th>
+                                                <th class="col-taxa" style="width: 10%; cursor: pointer;" onclick="ordenarTabelaIntimacoes('taxa_acerto')">
+                                                    <span style="display: flex; align-items: center; white-space: nowrap;">
+                                                        Taxa de Acerto 
+                                                        <i class="bi bi-arrow-down-up" id="sort-icon-taxa_acerto" style="margin-left: 4px; font-size: 12px;"></i>
+                                                    </span>
+                                                </th>
                                                 <th class="col-data" style="width: 10%;">Data de Criação</th>
                                                 <th class="col-acoes" style="width: 8%;">Ações</th>
                                             </tr>
@@ -809,6 +814,7 @@
     </div>
 </div>
 
+
 {% endblock %}
 
 {% block extra_css %}
@@ -941,11 +947,30 @@
     .intimacao-row:hover {
         background-color: #f8f9fa;
     }
+    
+    /* Garantir que ícones de ordenação fiquem inline */
+    .intimacoes-cards-table th i {
+        display: inline !important;
+        vertical-align: middle !important;
+        margin-left: 4px !important;
+        line-height: 1 !important;
+        font-size: 12px !important;
+    }
+    
+    /* Forçar o span do cabeçalho a ficar em uma linha */
+    .intimacoes-cards-table th span {
+        display: flex !important;
+        align-items: center !important;
+        white-space: nowrap !important;
+        line-height: 1.2 !important;
+    }
+    
 
     /* Células da tabela */
     .classificacao-cell {
         text-align: center;
     }
+    
 
     .info-cell {
         max-width: 200px;
@@ -1470,6 +1495,10 @@ try {
 let analiseAtual = null;
 let resultadosAnalise = [];
 let dadosCompletos = {}; // Objeto para armazenar prompt e resposta completos
+
+// Variáveis globais para ordenação
+let ordenacaoIntimacoes = { coluna: null, direcao: 'asc' };
+let dadosIntimacoes = [];
 
 // Configuração de colunas
 let configuracaoColunas = {
@@ -2466,8 +2495,21 @@ function atualizarTaxasAcerto(taxasAcerto) {
                     // Delay de 500ms para mostrar o popover
                     elemento.showTimeout = setTimeout(() => {
                         carregarDetalhesPrompts(intimacaoId, popoverElement);
+                        posicionarPopoverInteligentemente(popoverElement, triggerElement);
                         popoverElement.style.display = 'block';
+                        popoverElement.style.visibility = 'visible';
+                        popoverElement.style.opacity = '1';
                         elemento.isPopoverVisible = true;
+                        
+                        console.log('🔍 Popover criado e exibido:', {
+                            display: popoverElement.style.display,
+                            visibility: popoverElement.style.visibility,
+                            opacity: popoverElement.style.opacity,
+                            position: popoverElement.style.position,
+                            left: popoverElement.style.left,
+                            top: popoverElement.style.top,
+                            zIndex: popoverElement.style.zIndex
+                        });
                     }, 500);
                 }
             });
@@ -2628,7 +2670,7 @@ function carregarDetalhesPrompts(intimacaoId, popoverElement) {
                 
                 // ACRESCENTADO: Botão sempre habilitado com validação no backend
                 content += `
-                    <div class="mt-3 pt-2 border-top">
+                    <div class="popover-footer">
                         <button type="button" 
                                 class="btn btn-primary btn-sm w-100" 
                                 id="btn-compare-prompts"
@@ -2639,10 +2681,27 @@ function carregarDetalhesPrompts(intimacaoId, popoverElement) {
                     </div>
                 `;
                 
-                content += '</div>';
+                // Separar conteúdo do body e footer
+                const bodyContent = content.replace(/<div class="popover-footer">[\s\S]*?<\/div>$/, '');
+                const footerContent = content.match(/<div class="popover-footer">[\s\S]*?<\/div>$/);
                 
-                popoverElement.querySelector('.popover-body').innerHTML = content;
+                // Atualizar body
+                popoverElement.querySelector('.popover-body').innerHTML = bodyContent;
+                
+                // Adicionar footer se não existir
+                let footer = popoverElement.querySelector('.popover-footer');
+                if (!footer) {
+                    footer = document.createElement('div');
+                    footer.className = 'popover-footer';
+                    popoverElement.querySelector('.popover-content').appendChild(footer);
+                }
+                
+                // Atualizar footer
+                if (footerContent) {
+                    footer.innerHTML = footerContent[0].replace(/<div class="popover-footer">|<\/div>$/g, '');
+                }
                 popoverElement.dataset.loaded = 'true';
+                
                 
                 // ACRESCENTADO: Aguardar um ciclo do event loop para garantir que o HTML foi renderizado  
                 setTimeout(() => {
@@ -3349,6 +3408,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carregar taxas de acerto das intimações
     carregarTaxasAcerto();
     
+    // Listener para reposicionar popovers quando a janela for redimensionada
+    window.addEventListener('resize', function() {
+        const popoversVisiveis = document.querySelectorAll('.custom-popover[style*="display: block"]');
+        popoversVisiveis.forEach(popover => {
+            const triggerElement = popover.previousElementSibling;
+            if (triggerElement) {
+                posicionarPopoverInteligentemente(popover, triggerElement);
+            }
+        });
+    });
+    
     // Adicionar event listeners para atalhos de teclado
 document.addEventListener('keydown', function(e) {
     // Ctrl+Enter para executar
@@ -3366,6 +3436,143 @@ document.addEventListener('keydown', function(e) {
 
 });
 });
+
+// Função para posicionar popover inteligentemente
+function posicionarPopoverInteligentemente(popoverElement, triggerElement) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Obter posição do elemento trigger (getBoundingClientRect já considera scroll)
+    const triggerRect = triggerElement.getBoundingClientRect();
+    const triggerTop = triggerRect.top;
+    const triggerLeft = triggerRect.left;
+    const triggerWidth = triggerRect.width;
+    const triggerHeight = triggerRect.height;
+    
+    // Obter dimensões do popover
+    const popoverWidth = 400; // max-width definido no CSS
+    const popoverHeight = Math.min(400, viewportHeight * 0.7); // max-height
+    
+    // Calcular posição horizontal (centralizado no trigger)
+    let left = triggerLeft + (triggerWidth / 2) - (popoverWidth / 2);
+    
+    // Ajustar se sair da tela à direita
+    if (left + popoverWidth > viewportWidth) {
+        left = viewportWidth - popoverWidth - 10;
+    }
+    
+    // Ajustar se sair da tela à esquerda
+    if (left < 10) {
+        left = 10;
+    }
+    
+    // Calcular posição vertical
+    let top = triggerTop + triggerHeight + 10;
+    
+    // Verificar se há espaço abaixo
+    const spaceBelow = viewportHeight - (triggerTop + triggerHeight);
+    const spaceAbove = triggerTop;
+    
+    // Se não há espaço suficiente abaixo, posicionar acima
+    if (spaceBelow < popoverHeight && spaceAbove > popoverHeight) {
+        top = triggerTop - popoverHeight - 10;
+    }
+    
+    // Aplicar posição (position: fixed)
+    popoverElement.style.left = left + 'px';
+    popoverElement.style.top = top + 'px';
+    popoverElement.style.position = 'fixed';
+    popoverElement.style.zIndex = '9999';
+    
+    console.log('🎯 Popover posicionado:', { left, top, viewportWidth, viewportHeight, triggerRect });
+}
+
+// Função para ordenar tabela de intimações
+function ordenarTabelaIntimacoes(coluna) {
+    console.log('=== DEBUG: Ordenando intimações por coluna ===', coluna);
+    
+    // Determinar direção da ordenação
+    if (ordenacaoIntimacoes.coluna === coluna) {
+        ordenacaoIntimacoes.direcao = ordenacaoIntimacoes.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordenacaoIntimacoes.coluna = coluna;
+        ordenacaoIntimacoes.direcao = 'asc';
+    }
+    
+    console.log('=== DEBUG: Nova ordenação ===', ordenacaoIntimacoes);
+    
+    // Coletar dados das linhas da tabela
+    const tbody = document.querySelector('.intimacoes-cards-table tbody');
+    const linhas = Array.from(tbody.querySelectorAll('tr.intimacao-row'));
+    
+    // Armazenar dados para ordenação
+    dadosIntimacoes = linhas.map(linha => {
+        const intimacaoId = linha.dataset.intimacaoId;
+        const taxaAcertoElement = linha.querySelector('.taxa-acerto-cell .badge');
+        let taxaAcerto = 0;
+        
+        if (taxaAcertoElement) {
+            const taxaText = taxaAcertoElement.textContent.replace('%', '');
+            taxaAcerto = parseFloat(taxaText) || 0;
+        }
+        
+        return {
+            elemento: linha,
+            intimacaoId: intimacaoId,
+            taxaAcerto: taxaAcerto
+        };
+    });
+    
+    // Ordenar dados
+    dadosIntimacoes.sort((a, b) => {
+        let valorA, valorB;
+        
+        switch (coluna) {
+            case 'taxa_acerto':
+                valorA = a.taxaAcerto;
+                valorB = b.taxaAcerto;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (ordenacaoIntimacoes.direcao === 'asc') {
+            return valorA - valorB;
+        } else {
+            return valorB - valorA;
+        }
+    });
+    
+    // Reordenar elementos na tabela
+    dadosIntimacoes.forEach(item => {
+        tbody.appendChild(item.elemento);
+    });
+    
+    // Atualizar ícones de ordenação
+    atualizarIconesOrdenacaoIntimacoes(coluna, ordenacaoIntimacoes.direcao);
+    
+    console.log('=== DEBUG: Ordenação concluída ===');
+}
+
+// Função para atualizar ícones de ordenação
+function atualizarIconesOrdenacaoIntimacoes(colunaAtiva, direcao) {
+    // Resetar todos os ícones
+    const icones = document.querySelectorAll('[id^="sort-icon-"]');
+    icones.forEach(icone => {
+        icone.className = 'bi bi-arrow-down-up';
+    });
+    
+    // Atualizar ícone da coluna ativa
+    const iconeAtivo = document.getElementById(`sort-icon-${colunaAtiva}`);
+    if (iconeAtivo) {
+        if (direcao === 'asc') {
+            iconeAtivo.className = 'bi bi-arrow-up';
+        } else {
+            iconeAtivo.className = 'bi bi-arrow-down';
+        }
+    }
+}
+
 
 // Função para visualizar contexto da intimação
 function visualizarContexto(intimacaoId, contexto) {
@@ -4151,6 +4358,7 @@ function editarPrompt() {
                 : 'Comparar Prompts Selecionados';
         }
         
+        
         console.log('🔧 DEBUG: Botão mantido habilitado, validação movida para backend. Selected:', checkedCheckboxes.length);
     }
     
@@ -4230,21 +4438,55 @@ function editarPrompt() {
 
 <style>
 .custom-popover {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1060;
+    position: fixed;
+    z-index: 9999;
     max-width: 400px;
     min-width: 300px;
-    margin-top: 10px;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .popover-content {
     background: white;
-    border: 1px solid #dee2e6;
+    border: 2px solid #0d6efd;
     border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(13, 110, 253, 0.1);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.popover-content:hover {
+    border-color: #0056b3;
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2), 0 0 0 4px rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.popover-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    padding-bottom: 6rem; /* Apenas um pouco mais de espaço */
+    margin-bottom: 1.5rem; /* Margem adicional para garantir visibilidade */
+}
+
+.popover-footer {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-top: 2px solid #0d6efd;
+    padding: 1rem;
+    border-radius: 0 0 0.375rem 0.375rem;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    flex-shrink: 0;
+    box-shadow: 0 -2px 4px rgba(13, 110, 253, 0.1);
+    min-height: 3.5rem; /* Altura mínima para o footer */
 }
 
 .popover-content::before {

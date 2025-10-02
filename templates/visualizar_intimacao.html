@@ -4,6 +4,121 @@
 
 {% block extra_css %}
 <style>
+/* Botões fixos do wizard */
+.wizard-footer {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-top: 2px solid #0d6efd;
+    padding: 1rem;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    box-shadow: 0 -2px 4px rgba(13, 110, 253, 0.1);
+}
+
+.wizard-body {
+    padding-bottom: 0; /* SEM padding para wizard body */
+    max-height: 80vh; /* Altura máxima maior */
+    overflow-y: auto; /* Scroll apenas quando necessário */
+    overflow-x: hidden; /* Evitar scroll horizontal */
+}
+
+/* Garantir que o conteúdo das etapas tenha espaço adequado */
+.wizard-step-content {
+    padding-bottom: 0; /* SEM padding para etapas 3, 4 e 5 */
+    max-height: 50vh; /* Altura menor para caber na tela */
+    overflow-y: auto; /* Scroll igual à etapa 2 */
+    overflow-x: hidden; /* Evitar scroll horizontal */
+}
+
+/* Garantir que o conteúdo da etapa 2 tenha padding adequado */
+#analiseContent {
+    padding-bottom: 0; /* SEM padding para etapa 2 */
+    max-height: 70vh; /* Altura máxima maior */
+    overflow-y: auto; /* Scroll apenas quando necessário */
+    overflow-x: hidden; /* Evitar scroll horizontal */
+}
+
+/* Remover scroll do markdown-content dentro do wizard */
+#analiseContent .markdown-content {
+    max-height: none !important; /* SEM altura máxima */
+    overflow-y: visible !important; /* SEM scroll vertical */
+    overflow-x: hidden !important; /* Evitar scroll horizontal */
+}
+
+/* Scrollbar customizada para todas as etapas */
+.wizard-step-content::-webkit-scrollbar,
+#analiseContent::-webkit-scrollbar {
+    width: 10px;
+}
+
+.wizard-step-content::-webkit-scrollbar-track,
+#analiseContent::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 5px;
+}
+
+.wizard-step-content::-webkit-scrollbar-thumb,
+#analiseContent::-webkit-scrollbar-thumb {
+    background: #0d6efd;
+    border-radius: 5px;
+}
+
+.wizard-step-content::-webkit-scrollbar-thumb:hover,
+#analiseContent::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}
+
+/* Modal do wizard com altura controlada */
+#modalWizardAnalise .modal-dialog {
+    max-height: 90vh;
+    margin: 1rem auto;
+    width: 95%;
+    max-width: 1200px;
+}
+
+/* Garantir que o modal não ultrapasse a tela */
+@media (max-height: 600px) {
+    #modalWizardAnalise .modal-dialog {
+        max-height: 95vh;
+        margin: 0.5rem auto;
+    }
+    
+    .wizard-body {
+        max-height: 60vh;
+    }
+}
+
+#modalWizardAnalise .modal-content {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#modalWizardAnalise .modal-body {
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Scrollbar customizada para o wizard */
+.wizard-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.wizard-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.wizard-body::-webkit-scrollbar-thumb {
+    background: #0d6efd;
+    border-radius: 4px;
+}
+
+.wizard-body::-webkit-scrollbar-thumb:hover {
+    background: #0056b3;
+}
+
+
 .color-indicator {
     width: 20px;
     height: 20px;
@@ -1442,7 +1557,7 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
-                    <div class="modal-body">
+                    <div class="modal-body wizard-body">
                         <!-- Indicador de Progresso -->
                         <div class="progress mb-4" style="height: 8px;">
                             <div class="progress-bar" id="wizardProgress" role="progressbar" style="width: 20%"></div>
@@ -1520,7 +1635,7 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             <!-- ETAPA 2: ANÁLISE IA -->
                             <div id="etapa2" class="wizard-step d-none">
                                 <h6 class="mb-3"><i class="bi bi-robot"></i> Análise com IA</h6>
-                                <div id="analiseContent">
+                                <div id="analiseContent" class="wizard-step-content">
                                     <div class="text-center py-4">
                                         <div class="spinner-border text-primary" role="status">
                                             <span class="visually-hidden">Analisando...</span>
@@ -1533,7 +1648,7 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             <!-- ETAPA 3: TESTE TRIAGEM -->
                             <div id="etapa3" class="wizard-step d-none">
                                 <h6 class="mb-3"><i class="bi bi-play-circle"></i> Teste de Triagem</h6>
-                                <div id="testeContent">
+                                <div id="testeContent" class="wizard-step-content">
                                     <div class="alert alert-info">
                                         <h6><i class="bi bi-lightbulb"></i> Sugestões da IA</h6>
                                         <p class="mb-2">Com base na análise, cole as regras de negócio sugeridas:</p>
@@ -1563,7 +1678,7 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             <!-- ETAPA 4: RESULTADO -->
                             <div id="etapa4" class="wizard-step d-none">
                                 <h6 class="mb-3"><i class="bi bi-graph-up"></i> Resultado Consolidado</h6>
-                                <div id="resultadoContent">
+                                <div id="resultadoContent" class="wizard-step-content">
                                     <!-- Conteúdo será preenchido dinamicamente -->
                                 </div>
                             </div>
@@ -1571,25 +1686,29 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             <!-- ETAPA 5: TESTE COMBINADO -->
                             <div id="etapa5" class="wizard-step d-none">
                                 <h6 class="mb-3"><i class="bi bi-arrow-repeat"></i> Teste com Regras Combinadas</h6>
-                                <div id="testeCombinadoContent">
+                                <div id="testeCombinadoContent" class="wizard-step-content">
                                     <!-- Conteúdo será preenchido dinamicamente -->
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" id="btnAnterior" onclick="wizardAnterior()" disabled>
-                            <i class="bi bi-arrow-left"></i>
-                            Anterior
-                        </button>
-                        <button type="button" class="btn btn-secondary" onclick="resetarConfigAnaliseIndividual()">
-                            <i class="bi bi-arrow-clockwise"></i>
-                            Resetar
-                        </button>
-                                    <button type="button" class="btn btn-primary" id="btnProximo" onclick="wizardProximo()">
-                                        Fazer diagnóstico
-                                        <i class="bi bi-arrow-right"></i>
-                                    </button>
+                    <div class="wizard-footer">
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-outline-secondary" id="wizardAnterior" onclick="wizardAnterior()" style="display: none;">
+                                <i class="bi bi-arrow-left"></i>
+                                Anterior
+                            </button>
+                            <div>
+                                <button type="button" class="btn btn-secondary me-2" onclick="resetarConfigAnaliseIndividual()">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    Resetar
+                                </button>
+                                <button type="button" class="btn btn-primary" id="btnProximo" onclick="wizardProximo()">
+                                    Fazer diagnóstico
+                                    <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3394,11 +3513,15 @@ function atualizarIndicadoresEtapas(etapaAtual) {
 }
 
 function atualizarBotoesWizard(etapaAtual) {
-    const btnAnterior = document.getElementById('btnAnterior');
+    const btnAnterior = document.getElementById('wizardAnterior');
     const btnProximo = document.getElementById('btnProximo');
     
     // Botão Anterior
-    btnAnterior.disabled = etapaAtual === 1;
+    if (etapaAtual === 1) {
+        btnAnterior.style.display = 'none';
+    } else {
+        btnAnterior.style.display = 'inline-block';
+    }
     
     // Botão Próximo
     if (etapaAtual === 5) {
@@ -3485,13 +3608,16 @@ function mostrarResultadoAnaliseWizard(resultado) {
             <h6><i class="bi bi-robot"></i> Diagnóstico da IA</h6>
             <div class="markdown-content">${html}</div>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 mb-4">
             <button type="button" class="btn btn-sm btn-outline-primary" onclick="copiarResultadoAnaliseIndividual()">
                 <i class="bi bi-clipboard"></i>
                 Copiar Resultado
             </button>
         </div>
     `;
+    
+    // Garantir que o padding seja aplicado após inserir o conteúdo
+    analiseContent.style.paddingBottom = '8rem';
 }
 
 async function executarTesteTriagemWizard() {
