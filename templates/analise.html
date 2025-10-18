@@ -4,6 +4,8 @@
 
 {% block extra_head %}
 <!-- Marked.js será carregado no final da página -->
+<!-- Taxa de Acerto CSS -->
+<link href="{{ url_for('static', filename='css/taxa-acerto.css') }}" rel="stylesheet">
 <style>
 </style>
 {% endblock %}
@@ -2458,94 +2460,12 @@ function atualizarTaxasAcerto(taxasAcerto) {
                      style="cursor: pointer;">
                     <span class="badge ${badgeClass} mb-1">${taxa}%</span>
                     <small class="text-muted">${acertos}/${total}</small>
-                    
-                    <!-- Popover customizado -->
-                    <div class="custom-popover" id="popover-${intimacaoId}" style="display: none;">
-                        <div class="popover-content">
-                            <div class="popover-body">
-                                <div class="text-center">
-                                    <i class="bi bi-hourglass-split"></i>
-                                    Carregando detalhes...
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             `;
             
-            // Adicionar eventos para popover customizado
+            // USAR COMPONENTE REUTILIZÁVEL (SEM DUPLICAÇÃO)
             const triggerElement = elemento.querySelector('[data-intimacao-id]');
-            const popoverElement = elemento.querySelector('.custom-popover');
-            
-            // Variáveis para controle do popover
-            elemento.popoverTimeout = null;
-            elemento.showTimeout = null;
-            elemento.isPopoverVisible = false;
-            
-            // Mostrar popover quando entrar no elemento (com delay)
-            triggerElement.addEventListener('mouseenter', function() {
-                clearTimeout(elemento.popoverTimeout);
-                clearTimeout(elemento.showTimeout);
-                
-                // Armazenar ID da intimação atual globalmente
-                window.currentIntimacaoId = intimacaoId;
-                console.log('🔍 Intimação atual definida:', window.currentIntimacaoId);
-                
-                if (!elemento.isPopoverVisible) {
-                    // Delay de 500ms para mostrar o popover
-                    elemento.showTimeout = setTimeout(() => {
-                        carregarDetalhesPrompts(intimacaoId, popoverElement);
-                        posicionarPopoverInteligentemente(popoverElement, triggerElement);
-                        popoverElement.style.display = 'block';
-                        popoverElement.style.visibility = 'visible';
-                        popoverElement.style.opacity = '1';
-                        elemento.isPopoverVisible = true;
-                        
-                        console.log('🔍 Popover criado e exibido:', {
-                            display: popoverElement.style.display,
-                            visibility: popoverElement.style.visibility,
-                            opacity: popoverElement.style.opacity,
-                            position: popoverElement.style.position,
-                            left: popoverElement.style.left,
-                            top: popoverElement.style.top,
-                            zIndex: popoverElement.style.zIndex
-                        });
-                    }, 500);
-                }
-            });
-            
-            // Esconder popover com delay quando sair do elemento
-            triggerElement.addEventListener('mouseleave', function() {
-                // Cancelar o timeout de mostrar se ainda não foi executado
-                clearTimeout(elemento.showTimeout);
-                
-                elemento.popoverTimeout = setTimeout(() => {
-                    if (elemento.isPopoverVisible) {
-                        popoverElement.style.display = 'none';
-                        elemento.isPopoverVisible = false;
-                        
-                        // ACRESCENTADO: Limpar checkboxes quando popover fecha
-                        clearPopoverCheckboxes(popoverElement);
-                    }
-                }, 300);
-            });
-            
-            // Manter popover visível quando mouse estiver sobre ele
-            popoverElement.addEventListener('mouseenter', function() {
-                clearTimeout(elemento.popoverTimeout);
-            });
-            
-            popoverElement.addEventListener('mouseleave', function() {
-                elemento.popoverTimeout = setTimeout(() => {
-                    if (elemento.isPopoverVisible) {
-                        popoverElement.style.display = 'none';
-                        elemento.isPopoverVisible = false;
-                        
-                        // ACRESCENTADO: Limpar checkboxes quando popover fecha
-                        clearPopoverCheckboxes(popoverElement);
-                    }
-                }, 300);
-            });
+            criarPopoverReutilizavel(intimacaoId, triggerElement);
         }
     });
 }
@@ -2567,21 +2487,10 @@ function clearPopoverCheckboxes(targetPopover = null) {
         });
     } else {
         // Clear todos os checkboxes de todos os popovers visíveis (fallback)
-        const allPopovers = document.querySelectorAll('.custom-popover');
-        allPopovers.forEach(popover => {
-            const isVisible = popover.style.display !== 'none' && 
-                             !popover.style.display.includes('none');
-            
-            if (isVisible) {
-                const checkboxes = popover.querySelectorAll('.prompt-checkbox');
-                checkboxes.forEach(checkbox => {
-                    if (checkbox.checked) {
-                        checkbox.checked = false;
-                        clearedCount++;
-                    }
-                });
-            }
-        });
+        // Função movida para o componente reutilizável
+        if (window.limparCheckboxesPopover) {
+            window.limparCheckboxesPopover();
+        }
     }
     
     // ACRESCENTADO: Re-validar o botão após limpar seleção
@@ -2594,138 +2503,7 @@ function clearPopoverCheckboxes(targetPopover = null) {
     }
 }
 
-// Carregar detalhes dos prompts para o popover customizado
-function carregarDetalhesPrompts(intimacaoId, popoverElement) {
-    // Verificar se já foi carregado para evitar requisições desnecessárias
-    if (popoverElement.dataset.loaded === 'true') {
-        return; // Já foi carregado
-    }
-    
-    // Mostrar loading no popover
-    popoverElement.querySelector('.popover-body').innerHTML = `
-        <div class="text-center">
-            <i class="bi bi-hourglass-split"></i>
-            Carregando detalhes...
-        </div>
-    `;
-    
-    fetch(`/api/intimacoes/${intimacaoId}/prompts-acerto`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const prompts = data.prompts_acerto;
-                if (prompts.length === 0) {
-                    const content = '<div class="text-center"><em>Nenhuma análise encontrada</em></div>';
-                    popoverElement.querySelector('.popover-body').innerHTML = content;
-                    popoverElement.dataset.loaded = 'true';
-                    return;
-                }
-                
-                // Construir conteúdo do popover
-                let content = '<div class="text-start">';
-                content += '<div class="fw-bold mb-2">Prompts Testados:</div>';
-                
-                prompts.forEach((prompt, index) => {
-                    const taxa = prompt.taxa_acerto;
-                    let badgeClass = 'bg-secondary';
-                    if (taxa >= 80) {
-                        badgeClass = 'bg-success';
-                    } else if (taxa >= 60) {
-                        badgeClass = 'bg-warning';
-                    } else if (taxa >= 40) {
-                        badgeClass = 'bg-danger';
-                    }
-                    
-                    content += `
-                        <div class="mb-2 p-2 border rounded prompt-card" 
-                             style="transition: all 0.2s ease;">
-                            <div class="d-flex align-items-start">
-                                <div class="me-2 mt-1">
-                                    <input type="checkbox" 
-                                           class="form-check-input prompt-checkbox" 
-                                           data-prompt-id="${prompt.prompt_id}"
-                                           data-prompt-nome="${prompt.prompt_nome}"
-                                           onchange="updateCompareButton()">
-                                </div>
-                                <div class="flex-grow-1" 
-                                     onclick="window.open('/prompts/${prompt.prompt_id}', '_blank')" 
-                                     style="cursor: pointer;">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div class="flex-grow-1">
-                                            <div class="fw-semibold text-primary prompt-name">${prompt.prompt_nome}</div>
-                                            <small class="text-muted">
-                                                ${prompt.modelo} • Temp: ${prompt.temperatura}
-                                            </small>
-                                        </div>
-                                        <span class="badge ${badgeClass} ms-2">${taxa}%</span>
-                                    </div>
-                                    <div class="mt-1">
-                                        <small class="text-muted">${prompt.acertos}/${prompt.total_analises} acertos</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                // ACRESCENTADO: Botão sempre habilitado com validação no backend
-                content += `
-                    <div class="popover-footer">
-                        <button type="button" 
-                                class="btn btn-primary btn-sm w-100" 
-                                id="btn-compare-prompts"
-                                onclick="compareSelectedPrompts()">
-                            <i class="bi bi-arrow-left-right"></i>
-                            Comparar Prompts Selecionados
-                        </button>
-                    </div>
-                `;
-                
-                // Separar conteúdo do body e footer
-                const bodyContent = content.replace(/<div class="popover-footer">[\s\S]*?<\/div>$/, '');
-                const footerContent = content.match(/<div class="popover-footer">[\s\S]*?<\/div>$/);
-                
-                // Atualizar body
-                popoverElement.querySelector('.popover-body').innerHTML = bodyContent;
-                
-                // Adicionar footer se não existir
-                let footer = popoverElement.querySelector('.popover-footer');
-                if (!footer) {
-                    footer = document.createElement('div');
-                    footer.className = 'popover-footer';
-                    popoverElement.querySelector('.popover-content').appendChild(footer);
-                }
-                
-                // Atualizar footer
-                if (footerContent) {
-                    footer.innerHTML = footerContent[0].replace(/<div class="popover-footer">|<\/div>$/g, '');
-                }
-                popoverElement.dataset.loaded = 'true';
-                
-                
-                // ACRESCENTADO: Aguardar um ciclo do event loop para garantir que o HTML foi renderizado  
-                setTimeout(() => {
-                    // ACRESCENTADO: Botão sempre enabled agora não precisa updateCompareButton (only text update)
-                    const dynamicCheckboxes = popoverElement.querySelectorAll('.prompt-checkbox');
-                    dynamicCheckboxes.forEach(checkbox => {
-                        const newCheckbox = checkbox.cloneNode(true);
-                        checkbox.parentNode.replaceChild(newCheckbox, checkbox);
-                        newCheckbox.addEventListener('change', updateCompareButton);
-                    });
-                    
-                    updateCompareButton(); // Current simple version 
-                }, 50);
-            } else {
-                const content = '<div class="text-center"><em>Erro ao carregar detalhes</em></div>';
-                popoverElement.querySelector('.popover-body').innerHTML = content;
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao carregar detalhes dos prompts:', error);
-            const content = '<div class="text-center"><em>Erro ao carregar</em></div>';
-            popoverElement.querySelector('.popover-body').innerHTML = content;
-        });
-}
+// Função removida - agora está em static/js/taxa-acerto.js
 
 // Função para limpar formulário
 function limparFormulario() {
@@ -3409,15 +3187,10 @@ document.addEventListener('DOMContentLoaded', function() {
     carregarTaxasAcerto();
     
     // Listener para reposicionar popovers quando a janela for redimensionada
-    window.addEventListener('resize', function() {
-        const popoversVisiveis = document.querySelectorAll('.custom-popover[style*="display: block"]');
-        popoversVisiveis.forEach(popover => {
-            const triggerElement = popover.previousElementSibling;
-            if (triggerElement) {
-                posicionarPopoverInteligentemente(popover, triggerElement);
-            }
-        });
-    });
+    // Função movida para o componente reutilizável
+    if (window.reposicionarPopovers) {
+        window.addEventListener('resize', window.reposicionarPopovers);
+    }
     
     // Adicionar event listeners para atalhos de teclado
 document.addEventListener('keydown', function(e) {
@@ -3437,55 +3210,7 @@ document.addEventListener('keydown', function(e) {
 });
 });
 
-// Função para posicionar popover inteligentemente
-function posicionarPopoverInteligentemente(popoverElement, triggerElement) {
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    
-    // Obter posição do elemento trigger (getBoundingClientRect já considera scroll)
-    const triggerRect = triggerElement.getBoundingClientRect();
-    const triggerTop = triggerRect.top;
-    const triggerLeft = triggerRect.left;
-    const triggerWidth = triggerRect.width;
-    const triggerHeight = triggerRect.height;
-    
-    // Obter dimensões do popover
-    const popoverWidth = 400; // max-width definido no CSS
-    const popoverHeight = Math.min(400, viewportHeight * 0.7); // max-height
-    
-    // Calcular posição horizontal (centralizado no trigger)
-    let left = triggerLeft + (triggerWidth / 2) - (popoverWidth / 2);
-    
-    // Ajustar se sair da tela à direita
-    if (left + popoverWidth > viewportWidth) {
-        left = viewportWidth - popoverWidth - 10;
-    }
-    
-    // Ajustar se sair da tela à esquerda
-    if (left < 10) {
-        left = 10;
-    }
-    
-    // Calcular posição vertical
-    let top = triggerTop + triggerHeight + 10;
-    
-    // Verificar se há espaço abaixo
-    const spaceBelow = viewportHeight - (triggerTop + triggerHeight);
-    const spaceAbove = triggerTop;
-    
-    // Se não há espaço suficiente abaixo, posicionar acima
-    if (spaceBelow < popoverHeight && spaceAbove > popoverHeight) {
-        top = triggerTop - popoverHeight - 10;
-    }
-    
-    // Aplicar posição (position: fixed)
-    popoverElement.style.left = left + 'px';
-    popoverElement.style.top = top + 'px';
-    popoverElement.style.position = 'fixed';
-    popoverElement.style.zIndex = '9999';
-    
-    console.log('🎯 Popover posicionado:', { left, top, viewportWidth, viewportHeight, triggerRect });
-}
+// Função removida - agora está em static/js/taxa-acerto.js
 
 // Função para ordenar tabela de intimações
 function ordenarTabelaIntimacoes(coluna) {
@@ -4345,181 +4070,13 @@ function editarPrompt() {
         }
     });
     
-    // Função para atualizar estado do botão de comparação - SIMPLIFICADA
-    // ACRESCENTADO: Botão sempre naturalmente enabled, validação no backend
-    function updateCompareButton() {
-        const checkedCheckboxes = document.querySelectorAll('.prompt-checkbox:checked');
-        const compareButton = document.getElementById('btn-compare-prompts');
-        
-        if (compareButton && checkedCheckboxes.length > 0) {
-            // ACRESCENTADO: Apenas atualizar texto com contagem selected, delegar validation to backend
-            compareButton.textContent = checkedCheckboxes.length >= 2 
-                ? `Comparar ${checkedCheckboxes.length} Prompts Selecionados`
-                : 'Comparar Prompts Selecionados';
-        }
-        
-        
-        console.log('🔧 DEBUG: Botão mantido habilitado, validação movida para backend. Selected:', checkedCheckboxes.length);
-    }
-    
-    // Função para comparar prompts selecionados
-    // ACRESCENTADO: Validação no frontend mantém functionality, validação real no backend
-    function compareSelectedPrompts() {
-        const checkboxes = document.querySelectorAll('.prompt-checkbox:checked');
-        
-        // ACRESCENTADO: Botão sempre habilitado, deixar backend fazer toda substituição validation
-        if (checkboxes.length < 2) {
-            showToast('Selecione pelo menos 2 prompts para comparar', 'warning');
-            return; // Keep user-friendly warning and allow backend to validate
-        }
-        
-        // Coletar IDs dos prompts selecionados
-        const promptIds = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptId);
-        const promptNomes = Array.from(checkboxes).map(checkbox => checkbox.dataset.promptNome);
-        
-        // Obter ID da intimação da variável global ou do popover ativo
-        let intimacaoId = window.currentIntimacaoId;
-        
-        // Se não tiver na variável global, tentar capturar do popover ativo
-        if (!intimacaoId) {
-            const popovers = document.querySelectorAll('.custom-popover');
-            for (let popover of popovers) {
-                if (popover.style.display === 'block' || popover.style.display !== 'none') {
-                    const intimacaoIdMatch = popover.id.match(/popover-(\d+)/);
-                    if (intimacaoIdMatch) {
-                        intimacaoId = intimacaoIdMatch[1];
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // Se ainda não tiver, tentar capturar da URL atual ou do contexto da página
-        if (!intimacaoId) {
-            // Tentar capturar da URL atual se estivermos na página de análise
-            const urlParams = new URLSearchParams(window.location.search);
-            intimacaoId = urlParams.get('intimacao_id');
-            
-            // Se não tiver na URL, tentar capturar do primeiro popover visível
-            if (!intimacaoId) {
-                const firstPopover = document.querySelector('.custom-popover');
-                if (firstPopover) {
-                    const intimacaoIdMatch = firstPopover.id.match(/popover-(\d+)/);
-                    if (intimacaoIdMatch) {
-                        intimacaoId = intimacaoIdMatch[1];
-                    }
-                }
-            }
-        }
-        
-        console.log('🔍 Intimação ID capturado:', intimacaoId);
-        console.log('🔍 Window object:', window);
-        console.log('🔍 CurrentIntimacaoId type:', typeof window.currentIntimacaoId);
-        console.log('🔍 CurrentIntimacaoId value:', window.currentIntimacaoId);
-        console.log('🔍 Popovers encontrados:', document.querySelectorAll('.custom-popover').length);
-        console.log('🔍 URL atual:', window.location.href);
-        console.log('🔍 Parâmetros da URL:', new URLSearchParams(window.location.search).toString());
-        
-        // Criar URL com parâmetros
-        const params = new URLSearchParams();
-        promptIds.forEach(id => params.append('prompt_ids', id));
-        if (intimacaoId) {
-            params.append('intimacao_id', intimacaoId);
-        }
-        
-        // Log da URL final
-        const finalUrl = `/comparar-prompts?${params.toString()}`;
-        console.log('🚀 URL final:', finalUrl);
-        
-        // Redirecionar para página de comparação
-        window.open(finalUrl, '_blank');
-    }
+    // Funções removidas - agora estão em static/js/taxa-acerto.js
 </script>
 
-<style>
-.custom-popover {
-    position: fixed;
-    z-index: 9999;
-    max-width: 400px;
-    min-width: 300px;
-    max-height: 70vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
+<!-- Taxa de Acerto JavaScript -->
+<script src="{{ url_for('static', filename='js/taxa-acerto.js') }}"></script>
 
-.popover-content {
-    background: white;
-    border: 2px solid #0d6efd;
-    border-radius: 0.375rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(13, 110, 253, 0.1);
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.popover-content:hover {
-    border-color: #0056b3;
-    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2), 0 0 0 4px rgba(13, 110, 253, 0.15);
-    transform: translateY(-2px);
-}
-
-.popover-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    padding-bottom: 6rem; /* Apenas um pouco mais de espaço */
-    margin-bottom: 1.5rem; /* Margem adicional para garantir visibilidade */
-}
-
-.popover-footer {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-top: 2px solid #0d6efd;
-    padding: 1rem;
-    border-radius: 0 0 0.375rem 0.375rem;
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 10;
-    flex-shrink: 0;
-    box-shadow: 0 -2px 4px rgba(13, 110, 253, 0.1);
-    min-height: 3.5rem; /* Altura mínima para o footer */
-}
-
-.popover-content::before {
-    content: '';
-    position: absolute;
-    top: -8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 8px solid #dee2e6;
-}
-
-.popover-content::after {
-    content: '';
-    position: absolute;
-    top: -7px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 7px solid transparent;
-    border-right: 7px solid transparent;
-    border-bottom: 7px solid white;
-}
-
-.popover-body {
-    padding: 1rem;
-    max-height: 400px;
-    overflow-y: auto;
-}
+<!-- CSS movido para static/css/taxa-acerto.css -->
 
 .prompt-card {
     transition: all 0.2s ease;

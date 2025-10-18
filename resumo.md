@@ -865,3 +865,18 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Canaleta de scroll**: Sistema de scroll com canaleta de 50vh para etapas 3, 4 e 5
 - ✅ **Conteúdo completo**: Etapa 4 mostra todo conteúdo com scroll funcional
 - ✅ **Interface responsiva**: Adaptação automática a diferentes tamanhos de tela
+
+### **Sistema de Taxa de Acerto na Página de Intimações (Janeiro 2025)**
+- ✅ **Coluna Taxa de Acerto**: Implementada na página de intimações com popover interativo
+- ✅ **Componente reutilizável**: JavaScript e CSS centralizados em arquivos separados
+- ✅ **Popover inteligente**: Posicionamento automático e delay de 500ms
+- ✅ **Filtro por prompt específico**: Dropdown para selecionar prompt e filtrar intimações
+- ✅ **API dedicada**: Endpoints para taxa de acerto geral e por prompt específico
+- ✅ **Performance por temperatura**: Exibição de todas as temperaturas usadas pelo prompt
+- ✅ **Nome do prompt**: Exibição do nome real do prompt no popover
+- ✅ **Prompts clicáveis**: Links para visualização detalhada dos prompts
+- ✅ **Sem duplicação de código**: Componente único reutilizado entre páginas
+- ✅ **Event listeners unificados**: Mouse hover e leave funcionando corretamente
+- ✅ **CSS centralizado**: Estilos do popover em arquivo separado
+- ✅ **JavaScript modular**: Funções organizadas e reutilizáveis
+- ✅ **Integração completa**: Funciona com filtros existentes da página

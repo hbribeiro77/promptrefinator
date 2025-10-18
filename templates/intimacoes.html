@@ -2,6 +2,11 @@
 
 {% block title %}Intimações - Sistema Analisador de Prompts{% endblock %}
 
+{% block extra_head %}
+<!-- Taxa de Acerto CSS -->
+<link href="{{ url_for('static', filename='css/taxa-acerto.css') }}" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
@@ -72,6 +77,8 @@
                     <option value="data_desc" {% if request.args.get('ordenacao', 'data_desc') == 'data_desc' %}selected{% endif %}>Data (mais recente)</option>
                     <option value="data_asc" {% if request.args.get('ordenacao') == 'data_asc' %}selected{% endif %}>Data (mais antiga)</option>
                     <option value="classificacao" {% if request.args.get('ordenacao') == 'classificacao' %}selected{% endif %}>Classificação</option>
+                    <option value="taxa_acerto_desc" {% if request.args.get('ordenacao') == 'taxa_acerto_desc' %}selected{% endif %}>Taxa de Acerto (maior)</option>
+                    <option value="taxa_acerto_asc" {% if request.args.get('ordenacao') == 'taxa_acerto_asc' %}selected{% endif %}>Taxa de Acerto (menor)</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -81,6 +88,21 @@
                     <option value="25" {% if request.args.get('itens_por_pagina', '25') == '25' %}selected{% endif %}>25</option>
                     <option value="50" {% if request.args.get('itens_por_pagina', '25') == '50' %}selected{% endif %}>50</option>
                     <option value="100" {% if request.args.get('itens_por_pagina', '25') == '100' %}selected{% endif %}>100</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">
+                    <i class="bi bi-cpu text-success"></i>
+                    <strong>Prompt Específico:</strong>
+                </label>
+                <select class="form-select" id="prompt-especifico" name="prompt_especifico">
+                    <option value="">Todos os prompts</option>
+                    {% for prompt in prompts_disponiveis %}
+                        <option value="{{ prompt.id }}" 
+                                {% if filtros.prompt_especifico == prompt.id|string %}selected{% endif %}>
+                            {{ prompt.nome }}
+                        </option>
+                    {% endfor %}
                 </select>
             </div>
             <div class="col-md-1">
@@ -93,6 +115,37 @@
                 </div>
             </div>
         </form>
+        
+        <!-- Filtros de Taxa de Acerto -->
+        <div class="row g-3 mt-2">
+            <div class="col-md-3">
+                <label class="form-label">
+                    <i class="bi bi-graph-up text-primary"></i>
+                    <strong>Taxa de Acerto:</strong>
+                </label>
+                <div class="row">
+                    <div class="col-md-6">
+                        <input type="number" class="form-control" id="taxa-minima" name="taxa_minima" 
+                               value="{{ request.args.get('taxa_minima', '') }}" 
+                               placeholder="Mínima" min="0" max="100" step="0.1">
+                    </div>
+                    <div class="col-md-6">
+                        <input type="number" class="form-control" id="taxa-maxima" name="taxa_maxima" 
+                               value="{{ request.args.get('taxa_maxima', '') }}" 
+                               placeholder="Máxima" min="0" max="100" step="0.1">
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="button" class="btn btn-outline-secondary" onclick="limparFiltrosTaxaAcerto()">
+                        <i class="bi bi-x-circle"></i>
+                        Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -214,13 +267,19 @@
                                 <th style="width: 3%;">
                                     <input type="checkbox" class="form-check-input" id="checkbox-todas" onchange="toggleTodasIntimacoes(this)">
                                 </th>
-                                <th style="width: 22%;">Card da Intimação</th>
-                                <th style="width: 12%;">Classificação Manual</th>
-                                <th style="width: 12%;">Informações Adicionais</th>
-                                <th style="width: 10%;">Classe</th>
-                                <th style="width: 10%;">Defensor</th>
-                                <th style="width: 8%;">ID Tarefa</th>
-                                <th style="width: 6%;">Cor</th>
+                                <th style="width: 20%;">Card da Intimação</th>
+                                <th style="width: 10%;">Classificação Manual</th>
+                                <th style="width: 10%;">Informações Adicionais</th>
+                                <th style="width: 8%;">Classe</th>
+                                <th style="width: 8%;">Defensor</th>
+                                <th class="col-taxa" style="width: 10%; cursor: pointer;" onclick="ordenarTabelaIntimacoes('taxa_acerto')">
+                                    <span style="display: flex; align-items: center; white-space: nowrap;">
+                                        Taxa de Acerto 
+                                        <i class="bi bi-arrow-down-up" id="sort-icon-taxa_acerto" style="margin-left: 4px; font-size: 12px;"></i>
+                                    </span>
+                                </th>
+                                <th style="width: 6%;">ID Tarefa</th>
+                                <th style="width: 5%;">Cor</th>
                                 <th style="width: 8%;">Data de Criação</th>
                                 <th style="width: 6%;">Ações</th>
                             </tr>
@@ -268,6 +327,12 @@
                                     {% else %}
                                     <span class="text-muted">-</span>
                                     {% endif %}
+                                </td>
+                                <td class="col-taxa taxa-acerto-cell">
+                                    <div id="taxa-acerto-{{ intimacao.id }}" class="taxa-acerto-placeholder">
+                                        <i class="bi bi-hourglass-split text-muted"></i>
+                                        <small class="text-muted">Carregando...</small>
+                                    </div>
                                 </td>
                                 <td class="tarefa-cell">
                                     {% if intimacao.id_tarefa %}
@@ -630,8 +695,45 @@ function copiarContexto() {
     });
 }
 
+// ===== FUNÇÕES DE TAXA DE ACERTO =====
+
+// Limpar filtros de taxa de acerto
+function limparFiltrosTaxaAcerto() {
+    document.getElementById('taxa-minima').value = '';
+    document.getElementById('taxa-maxima').value = '';
+    document.getElementById('prompt-especifico').value = '';
+    showToast('Filtros de taxa de acerto limpos!', 'info');
+}
+
+// Ordenar tabela por taxa de acerto
+function ordenarTabelaIntimacoes(coluna) {
+    console.log('🔄 Ordenando por:', coluna);
+    
+    if (coluna === 'taxa_acerto') {
+        // Implementar ordenação por taxa de acerto
+        // Por enquanto, apenas mostrar toast
+        showToast('Ordenação por taxa de acerto será implementada em breve!', 'info');
+    }
+}
+
+// Inicializar taxa de acerto quando a página carregar
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando página de intimações...');
+    
+    // Inicializar módulo de taxa de acerto
+    if (typeof inicializarTaxaAcerto === 'function') {
+        inicializarTaxaAcerto();
+    } else {
+        console.warn('⚠️ Função inicializarTaxaAcerto não encontrada. Carregando módulo...');
+        // Carregar taxa de acerto diretamente
+        carregarTaxasAcerto();
+    }
+});
 
 </script>
+
+<!-- Taxa de Acerto JavaScript -->
+<script src="{{ url_for('static', filename='js/taxa-acerto.js') }}"></script>
 
 <style>
 /* Estilos para a tabela de cards */

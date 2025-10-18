@@ -258,6 +258,7 @@ def listar_intimacoes():
         defensor = request.args.get('defensor', '')
         ordenacao = request.args.get('ordenacao', 'data_desc')
         itens_por_pagina_usuario = request.args.get('itens_por_pagina', '')
+        prompt_especifico = request.args.get('prompt_especifico', '')
         
         print(f"DEBUG: Parâmetros - Página: {pagina}, Busca: '{busca}', Classificação: '{classificacao}', Ordenação: '{ordenacao}', Itens por página: '{itens_por_pagina_usuario}'")
         
@@ -331,6 +332,9 @@ def listar_intimacoes():
             'pendentes': len([i for i in intimacoes if not i.get('analises')])
         }
         
+        # Buscar prompts disponíveis para o filtro
+        prompts_disponiveis = data_service.get_all_prompts()
+        
         return render_template('intimacoes.html',
                              intimacoes=intimacoes_pagina,
                              pagina_atual=pagina,
@@ -341,7 +345,8 @@ def listar_intimacoes():
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=Config.DEFENSORES,
-                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao})
+                             prompts_disponiveis=prompts_disponiveis,
+                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao, 'prompt_especifico': prompt_especifico})
     except Exception as e:
         flash(f'Erro ao carregar intimações: {str(e)}', 'error')
         return render_template('intimacoes.html',
@@ -354,7 +359,8 @@ def listar_intimacoes():
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=Config.DEFENSORES,
-                             filtros={'busca': '', 'classificacao': '', 'defensor': '', 'ordenacao': 'data_desc'})
+                             prompts_disponiveis=[],
+                             filtros={'busca': '', 'classificacao': '', 'defensor': '', 'ordenacao': 'data_desc', 'prompt_especifico': ''})
 
 @app.route('/intimacoes/nova', methods=['GET', 'POST'])
 def nova_intimacao():
@@ -3272,6 +3278,42 @@ def obter_taxa_acerto_intimacoes():
         return jsonify({
             'success': False,
             'message': f'Erro ao obter taxas de acerto: {str(e)}'
+        }), 500
+
+@app.route('/api/intimacoes/taxa-acerto-prompt/<prompt_id>')
+def obter_taxa_acerto_prompt_especifico(prompt_id):
+    """API para obter taxa de acerto de um prompt específico para todas as intimações"""
+    try:
+        # Buscar taxa de acerto do prompt específico para cada intimação
+        taxas_acerto = data_service.get_taxa_acerto_por_prompt_especifico(prompt_id)
+
+        return jsonify({
+            'success': True,
+            'taxas_acerto': taxas_acerto,
+            'prompt_id': prompt_id
+        })
+    except Exception as e:
+        print(f"Erro ao obter taxa de acerto do prompt específico: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter taxa de acerto do prompt específico: {str(e)}'
+        }), 500
+
+@app.route('/api/intimacoes/performance-prompt-temperatura/<prompt_id>')
+def obter_performance_prompt_temperatura(prompt_id):
+    """API para obter performance de um prompt específico por temperatura"""
+    try:
+        performance = data_service.get_analises_acertos_por_prompt_e_temperatura(prompt_id)
+        return jsonify({
+            'success': True,
+            'performance': performance,
+            'prompt_id': prompt_id
+        })
+    except Exception as e:
+        print(f"Erro ao obter performance do prompt por temperatura: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter performance do prompt por temperatura: {str(e)}'
         }), 500
 
 @app.route('/api/prompts/<prompt_id>/analises-acertos')

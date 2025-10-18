@@ -664,23 +664,33 @@ class SQLiteService:
                 intimacao_id = row[0]
                 temperatura = row[1]
                 
-                # Para cada intimação, pegar a temperatura mais comum (maior número de análises)
+                # Criar estrutura para armazenar todas as temperaturas
                 if intimacao_id not in result:
                     result[intimacao_id] = {
-                        'total_analises': row[2],
-                        'acertos': row[3],
-                        'taxa_acerto': row[4],
-                        'temperatura': temperatura
+                        'temperaturas': [],
+                        'total_analises': 0,
+                        'acertos': 0,
+                        'taxa_acerto': 0
                     }
-                else:
-                    # Se já existe, verificar se esta temperatura tem mais análises
-                    if row[2] > result[intimacao_id]['total_analises']:
-                        result[intimacao_id] = {
-                            'total_analises': row[2],
-                            'acertos': row[3],
-                            'taxa_acerto': row[4],
-                            'temperatura': temperatura
-                        }
+                
+                # Adicionar dados desta temperatura
+                result[intimacao_id]['temperaturas'].append({
+                    'temperatura': temperatura,
+                    'total_analises': row[2],
+                    'acertos': row[3],
+                    'taxa_acerto': row[4]
+                })
+                
+                # Somar totais gerais
+                result[intimacao_id]['total_analises'] += row[2]
+                result[intimacao_id]['acertos'] += row[3]
+            
+            # Calcular taxa de acerto geral para cada intimação
+            for intimacao_id in result:
+                if result[intimacao_id]['total_analises'] > 0:
+                    result[intimacao_id]['taxa_acerto'] = round(
+                        (result[intimacao_id]['acertos'] / result[intimacao_id]['total_analises']) * 100, 1
+                    )
             
             return result
     
@@ -749,6 +759,35 @@ class SQLiteService:
                     'acertos': row[2],
                     'taxa_acerto': row[3]
                 }
+            
+            return result
+    
+    def get_taxa_acerto_por_prompt_especifico(self, prompt_id: str) -> List[Dict[str, Any]]:
+        """Obter taxa de acerto de um prompt específico para todas as intimações"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.intimacao_id,
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto
+                FROM analises a
+                WHERE a.prompt_id = ? AND a.intimacao_id IS NOT NULL
+                GROUP BY a.intimacao_id
+                ORDER BY taxa_acerto DESC
+            ''', (prompt_id,))
+            
+            result = []
+            for row in cursor.fetchall():
+                result.append({
+                    'intimacao_id': row[0],
+                    'total_analises': row[1],
+                    'acertos': row[2],
+                    'taxa_acerto': row[3]
+                })
             
             return result
     

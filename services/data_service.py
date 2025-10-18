@@ -519,3 +519,41 @@ class DataService:
         except Exception as e:
             print(f"AVISO:  Erro ao calcular custo real: {e}")
             return 0.0
+
+    def get_taxa_acerto_por_prompt_especifico(self, prompt_id: str) -> List[Dict[str, Any]]:
+        """Obter taxa de acerto de um prompt específico para todas as intimações"""
+        try:
+            # Buscar todas as análises do prompt específico
+            analises = self.get_analises_by_prompt_id(prompt_id)
+            
+            # Agrupar por intimação
+            intimacoes_stats = {}
+            
+            for analise in analises:
+                intimacao_id = analise.get('intimacao_id')
+                if not intimacao_id:
+                    continue
+                    
+                if intimacao_id not in intimacoes_stats:
+                    intimacoes_stats[intimacao_id] = {
+                        'intimacao_id': intimacao_id,
+                        'total_analises': 0,
+                        'acertos': 0,
+                        'taxa_acerto': 0.0
+                    }
+                
+                intimacoes_stats[intimacao_id]['total_analises'] += 1
+                if analise.get('acertou', False):
+                    intimacoes_stats[intimacao_id]['acertos'] += 1
+            
+            # Calcular taxa de acerto para cada intimação
+            for intimacao_id in intimacoes_stats:
+                stats = intimacoes_stats[intimacao_id]
+                if stats['total_analises'] > 0:
+                    stats['taxa_acerto'] = round((stats['acertos'] / stats['total_analises']) * 100, 1)
+            
+            return list(intimacoes_stats.values())
+            
+        except Exception as e:
+            print(f"Erro ao obter taxa de acerto por prompt específico: {e}")
+            return []

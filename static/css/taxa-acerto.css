@@ -1,0 +1,301 @@
+/**
+ * Estilos para Taxa de Acerto - Sistema Prompt Refinator
+ * Estilos reutilizáveis para exibição de taxa de acerto com popover interativo
+ */
+
+/* Popover customizado */
+.custom-popover {
+    position: fixed;
+    z-index: 9999;
+    max-width: 400px;
+    min-width: 300px;
+    max-height: 70vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.popover-content {
+    background: white;
+    border: 2px solid #0d6efd;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15), 0 0 0 3px rgba(13, 110, 253, 0.1);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.popover-content:hover {
+    border-color: #0056b3;
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.2), 0 0 0 4px rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.popover-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    padding-bottom: 6rem; /* Apenas um pouco mais de espaço */
+    margin-bottom: 1.5rem; /* Margem adicional para garantir visibilidade */
+    max-height: 400px;
+}
+
+.popover-footer {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-top: 2px solid #0d6efd;
+    padding: 1rem;
+    border-radius: 0 0 0.375rem 0.375rem;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    flex-shrink: 0;
+    box-shadow: 0 -2px 4px rgba(13, 110, 253, 0.1);
+    min-height: 3.5rem; /* Altura mínima para o footer */
+}
+
+.popover-content::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #dee2e6;
+}
+
+.popover-content::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid white;
+}
+
+/* Cards de prompts no popover */
+.prompt-card {
+    transition: all 0.2s ease;
+    border: 1px solid #dee2e6;
+}
+
+.prompt-card:hover {
+    border-color: #0d6efd;
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Célula de taxa de acerto */
+.taxa-acerto-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.taxa-acerto-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    color: #6c757d;
+}
+
+/* Badges de taxa de acerto */
+.taxa-acerto-cell .badge {
+    font-size: 0.8em;
+    padding: 0.4em 0.6em;
+    border-radius: 0.375rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.taxa-acerto-cell .badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Cores específicas para badges de taxa */
+.taxa-acerto-cell .badge.bg-success {
+    background-color: #198754 !important;
+    color: white;
+}
+
+.taxa-acerto-cell .badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000;
+}
+
+.taxa-acerto-cell .badge.bg-danger {
+    background-color: #dc3545 !important;
+    color: white;
+}
+
+.taxa-acerto-cell .badge.bg-secondary {
+    background-color: #6c757d !important;
+    color: white;
+}
+
+/* Botão de comparação no popover */
+#btn-compare-prompts {
+    transition: all 0.2s ease;
+    font-weight: 600;
+}
+
+#btn-compare-prompts:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.3);
+}
+
+#btn-compare-prompts:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Checkboxes de prompts */
+.prompt-checkbox {
+    transform: scale(1.1);
+    cursor: pointer;
+}
+
+.prompt-checkbox:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* Links de prompts clicáveis */
+.prompt-card .fw-bold.text-primary {
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.prompt-card .fw-bold.text-primary:hover {
+    color: #0a58ca !important;
+    text-decoration: underline;
+    transform: translateX(2px);
+}
+
+.prompt-card:hover .prompt-name {
+    text-decoration: underline;
+}
+
+/* Scrollbar customizada para popover */
+.popover-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.popover-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.popover-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.popover-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.custom-popover {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .custom-popover {
+        max-width: 90vw;
+        min-width: 280px;
+    }
+    
+    .popover-body {
+        padding: 0.75rem;
+    }
+    
+    .prompt-card {
+        padding: 0.75rem;
+    }
+}
+
+/* Estados de loading */
+.taxa-acerto-placeholder .bi-hourglass-split {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Melhorias de acessibilidade */
+.taxa-acerto-cell [data-intimacao-id] {
+    outline: none;
+}
+
+.taxa-acerto-cell [data-intimacao-id]:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+}
+
+/* Tooltip para taxa de acerto */
+.taxa-acerto-cell .badge[title] {
+    position: relative;
+}
+
+/* Estilos para ordenação */
+.col-taxa {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.col-taxa:hover {
+    background-color: #f8f9fa;
+}
+
+.col-taxa .bi-arrow-down-up {
+    transition: transform 0.2s ease;
+}
+
+.col-taxa:hover .bi-arrow-down-up {
+    transform: scale(1.1);
+}
+
+/* Indicador de ordenação ativa */
+.col-taxa.active {
+    background-color: #e3f2fd;
+    color: #0d6efd;
+}
+
+.col-taxa.active .bi-arrow-down-up {
+    color: #0d6efd;
+    font-weight: bold;
+}
