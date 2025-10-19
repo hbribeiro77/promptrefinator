@@ -278,6 +278,14 @@
                                         <i class="bi bi-x-circle"></i>
                                     Limpar
                                     </button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="destacarIntimacoesLote()" id="btn-destacar-lote">
+                                        <i class="bi bi-star"></i>
+                                    Destacar
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="removerDestaqueIntimacoesLote()" id="btn-remover-destaque-lote">
+                                        <i class="bi bi-star-fill"></i>
+                                    Remover Destaque
+                                    </button>
                                     <button type="button" class="btn btn-outline-info btn-sm" onclick="filtrarPorClassificacao()">
                                         <i class="bi bi-funnel"></i>
                                         Filtrar
@@ -406,7 +414,18 @@
                                                            title="Página Completa">
                                                             <i class="bi bi-file-text"></i>
                                                         </a>
+                                                        {% set intimacao_para_botao = {
+                                                            'id': intimacao.id,
+                                                            'destacada': intimacao.destacada or false
+                                                        } %}
+                                                        <!-- DEBUG: intimacao_para_botao = {{ intimacao_para_botao }} -->
+                                                        <!-- Campo invisível para o filtro -->
+                                                        <input type="hidden" 
+                                                               class="intimacao-destacada-value" 
+                                                               value="{{ '1' if intimacao.destacada else '0' }}">
+                                                        {% with intimacao=intimacao_para_botao %}
                                                         {% include 'partials/botao_destacar_intimacao.html' %}
+                                                        {% endwith %}
                                                         <button type="button" 
                                                                 class="btn btn-outline-danger btn-sm" 
                                                                 data-intimacao-id="{{ intimacao.id }}"
@@ -2459,11 +2478,22 @@ function aplicarFiltro() {
         let mostrarClasse = todasClasses || classesSelecionadas.includes(classe);
         let mostrarTaxa = taxaAcerto >= taxaMinima && taxaAcerto <= taxaMaxima;
         
-        // Filtro de destacadas
+        // Filtro de destacadas - GAMBIARRA: usando campo invisível
         let mostrarDestacada = true;
         if (apenasDestacadas) {
-            const isDestacada = row.classList.contains('intimacao-destacada');
-            mostrarDestacada = isDestacada;
+            const campoDestacada = row.querySelector('.intimacao-destacada-value');
+            if (campoDestacada) {
+                const destacada = campoDestacada.value === '1';
+                mostrarDestacada = destacada;
+                console.log('DEBUG FILTRO GAMBIARRA:', {
+                    intimacaoId: row.dataset.intimacaoId,
+                    valorCampo: campoDestacada.value,
+                    destacada: destacada,
+                    apenasDestacadas: apenasDestacadas
+                });
+            } else {
+                mostrarDestacada = false;
+            }
         }
         
         if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarDestacada) {
@@ -4262,29 +4292,159 @@ function editarPrompt() {
 
 <!-- CSS movido para static/css/taxa-acerto.css -->
 
-.prompt-card {
-    transition: all 0.2s ease;
-}
-
-.prompt-card:hover {
-    background-color: #f8f9fa;
-    border-color: #007bff;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.1);
-}
-
-.prompt-name {
-    text-decoration: none;
-}
-
-.prompt-card:hover .prompt-name {
-    text-decoration: underline;
-}
-
-</style>
-
 
 <script>
+// Função para destacar intimações em lote
+function destacarIntimacoesLote() {
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        showNotification('Selecione pelo menos uma intimação!', 'warning');
+        return;
+    }
+    
+    const intimacaoIds = Array.from(checkboxes).map(checkbox => checkbox.value);
+    
+    // Confirmar ação
+    if (!confirm(`Deseja destacar ${intimacaoIds.length} intimação(ões)?`)) {
+        return;
+    }
+    
+    // Desabilitar botão
+    const btnDestacar = document.getElementById('btn-destacar-lote');
+    btnDestacar.disabled = true;
+    btnDestacar.innerHTML = '<i class="bi bi-hourglass-split"></i> Destacando...';
+    
+    // Fazer requisições em paralelo
+    const promises = intimacaoIds.map(intimacaoId => {
+        return fetch(`/api/intimacoes/${intimacaoId}/destacar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                destacada: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar linha da tabela
+                updateTableRow(intimacaoId, true);
+                return { success: true, id: intimacaoId };
+            } else {
+                return { success: false, id: intimacaoId, error: data.message };
+            }
+        })
+        .catch(error => {
+            return { success: false, id: intimacaoId, error: error.message };
+        });
+    });
+    
+    // Aguardar todas as requisições
+    Promise.all(promises)
+    .then(results => {
+        const sucessos = results.filter(r => r.success).length;
+        const falhas = results.filter(r => !r.success);
+        
+        if (sucessos > 0) {
+            showNotification(`${sucessos} intimação(ões) destacada(s) com sucesso!`, 'success');
+        }
+        
+        if (falhas.length > 0) {
+            console.error('Falhas ao destacar:', falhas);
+            showNotification(`${falhas.length} intimação(ões) falharam ao destacar`, 'error');
+        }
+        
+        // Limpar seleção
+        limparSelecaoIntimacoes();
+    })
+    .catch(error => {
+        console.error('Erro ao destacar em lote:', error);
+        showNotification('Erro ao destacar intimações', 'error');
+    })
+    .finally(() => {
+        // Reabilitar botão
+        btnDestacar.disabled = false;
+        btnDestacar.innerHTML = '<i class="bi bi-star"></i> Destacar';
+    });
+}
+
+// Função para remover destaque de intimações em lote
+function removerDestaqueIntimacoesLote() {
+    const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        showNotification('Selecione pelo menos uma intimação!', 'warning');
+        return;
+    }
+    
+    const intimacaoIds = Array.from(checkboxes).map(checkbox => checkbox.value);
+    
+    // Confirmar ação
+    if (!confirm(`Deseja remover o destaque de ${intimacaoIds.length} intimação(ões)?`)) {
+        return;
+    }
+    
+    // Desabilitar botão
+    const btnRemover = document.getElementById('btn-remover-destaque-lote');
+    btnRemover.disabled = true;
+    btnRemover.innerHTML = '<i class="bi bi-hourglass-split"></i> Removendo...';
+    
+    // Fazer requisições em paralelo
+    const promises = intimacaoIds.map(intimacaoId => {
+        return fetch(`/api/intimacoes/${intimacaoId}/destacar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                destacada: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar linha da tabela
+                updateTableRow(intimacaoId, false);
+                return { success: true, id: intimacaoId };
+            } else {
+                return { success: false, id: intimacaoId, error: data.message };
+            }
+        })
+        .catch(error => {
+            return { success: false, id: intimacaoId, error: error.message };
+        });
+    });
+    
+    // Aguardar todas as requisições
+    Promise.all(promises)
+    .then(results => {
+        const sucessos = results.filter(r => r.success).length;
+        const falhas = results.filter(r => !r.success);
+        
+        if (sucessos > 0) {
+            showNotification(`${sucessos} intimação(ões) teve(ram) o destaque removido!`, 'success');
+        }
+        
+        if (falhas.length > 0) {
+            console.error('Falhas ao remover destaque:', falhas);
+            showNotification(`${falhas.length} intimação(ões) falharam ao remover destaque`, 'error');
+        }
+        
+        // Limpar seleção
+        limparSelecaoIntimacoes();
+    })
+    .catch(error => {
+        console.error('Erro ao remover destaque em lote:', error);
+        showNotification('Erro ao remover destaque das intimações', 'error');
+    })
+    .finally(() => {
+        // Reabilitar botão
+        btnRemover.disabled = false;
+        btnRemover.innerHTML = '<i class="bi bi-star-fill"></i> Remover Destaque';
+    });
+}
 </script>
 
 {% endblock %}

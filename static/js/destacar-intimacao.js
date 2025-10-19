@@ -3,6 +3,8 @@
  * Componente reutilizável para destacar/remover destaque de intimações
  */
 
+console.log('DEBUG: Script destacar-intimacao.js carregado!');
+
 // Função principal para alternar destaque
 function toggleDestacarIntimacao(button) {
     const intimacaoId = button.dataset.intimacaoId;
@@ -88,6 +90,13 @@ function updateTableRow(intimacaoId, destacada) {
             } else {
                 card.classList.remove('intimacao-destacada');
             }
+        }
+        
+        // GAMBIARRA: Atualizar campo invisível para o filtro
+        const campoDestacada = row.querySelector('.intimacao-destacada-value');
+        if (campoDestacada) {
+            campoDestacada.value = destacada ? '1' : '0';
+            console.log('DEBUG GAMBIARRA: Campo atualizado para', campoDestacada.value);
         }
     }
 }
@@ -187,10 +196,10 @@ if (!window.destacarIntimacaoInicializado) {
 
 // Função para aplicar destaque baseado no estado do banco
 function aplicarDestacarBaseadoNoBanco() {
-    // O componente Jinja já aplica a classe no card baseado no banco
-    // O JavaScript só precisa atualizar as linhas da tabela para consistência visual
+    console.log('DEBUG: Aplicando destaque baseado no banco...');
     
     const linhasIntimacao = document.querySelectorAll('tr[data-intimacao-id]');
+    console.log('DEBUG: Linhas encontradas:', linhasIntimacao.length);
     
     linhasIntimacao.forEach(linha => {
         const intimacaoId = linha.dataset.intimacaoId;
@@ -199,14 +208,18 @@ function aplicarDestacarBaseadoNoBanco() {
         const botaoDestacar = linha.querySelector('button[data-intimacao-id]');
         
         if (botaoDestacar) {
-            const destacada = botaoDestacar.dataset.destacada === 'true';
+            const destacada = botaoDestacar.dataset.destacada === 'true' || botaoDestacar.dataset.destacada === '1';
+            console.log('DEBUG: Intimação', intimacaoId, 'destacada:', destacada, 'data:', botaoDestacar.dataset.destacada);
             
             // Aplicar classe na linha para consistência visual
             if (destacada) {
                 linha.classList.add('intimacao-destacada');
+                console.log('DEBUG: Classe intimacao-destacada aplicada para', intimacaoId);
             } else {
                 linha.classList.remove('intimacao-destacada');
             }
+        } else {
+            console.log('DEBUG: Botão não encontrado para intimação', intimacaoId);
         }
     });
 }

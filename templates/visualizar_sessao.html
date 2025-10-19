@@ -255,6 +255,14 @@
                         <i class="bi bi-download"></i>
                         Exportar
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" onclick="destacarAnalisesLote()" id="btn-destacar-lote-historico">
+                        <i class="bi bi-star"></i>
+                        Destacar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="removerDestaqueAnalisesLote()" id="btn-remover-destaque-lote-historico">
+                        <i class="bi bi-star-fill"></i>
+                        Remover Destaque
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-info" onclick="compararSelecionadas()">
                         <i class="bi bi-bar-chart"></i>
                         Comparar
@@ -970,6 +978,170 @@ function excluirSelecionadas() {
 function getAnalisesSelecionadas() {
     const checkboxes = document.querySelectorAll('.checkbox-analise:checked');
     return Array.from(checkboxes).map(checkbox => checkbox.value);
+}
+
+// Função para destacar análises em lote
+function destacarAnalisesLote() {
+    const analisesSelecionadas = getAnalisesSelecionadas();
+    
+    if (analisesSelecionadas.length === 0) {
+        showNotification('Selecione pelo menos uma análise!', 'warning');
+        return;
+    }
+    
+    // Confirmar ação
+    if (!confirm(`Deseja destacar ${analisesSelecionadas.length} análise(ões)?`)) {
+        return;
+    }
+    
+    // Desabilitar botão
+    const btnDestacar = document.getElementById('btn-destacar-lote-historico');
+    btnDestacar.disabled = true;
+    btnDestacar.innerHTML = '<i class="bi bi-hourglass-split"></i> Destacando...';
+    
+    // Fazer requisições em paralelo
+    const promises = analisesSelecionadas.map(analiseId => {
+        // Buscar o ID da intimação através da análise
+        const linha = document.querySelector(`tr[data-analise-id="${analiseId}"]`);
+        const intimacaoId = linha ? linha.dataset.intimacaoId : null;
+        
+        if (!intimacaoId) {
+            return Promise.resolve({ success: false, id: analiseId, error: 'ID da intimação não encontrado' });
+        }
+        
+        return fetch(`/api/intimacoes/${intimacaoId}/destacar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                destacada: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar linha da tabela
+                updateTableRow(intimacaoId, true);
+                return { success: true, id: analiseId, intimacaoId: intimacaoId };
+            } else {
+                return { success: false, id: analiseId, error: data.message };
+            }
+        })
+        .catch(error => {
+            return { success: false, id: analiseId, error: error.message };
+        });
+    });
+    
+    // Aguardar todas as requisições
+    Promise.all(promises)
+    .then(results => {
+        const sucessos = results.filter(r => r.success).length;
+        const falhas = results.filter(r => !r.success);
+        
+        if (sucessos > 0) {
+            showNotification(`${sucessos} análise(ões) destacada(s) com sucesso!`, 'success');
+        }
+        
+        if (falhas.length > 0) {
+            console.error('Falhas ao destacar:', falhas);
+            showNotification(`${falhas.length} análise(ões) falharam ao destacar`, 'error');
+        }
+        
+        // Limpar seleção
+        limparSelecoes();
+    })
+    .catch(error => {
+        console.error('Erro ao destacar em lote:', error);
+        showNotification('Erro ao destacar análises', 'error');
+    })
+    .finally(() => {
+        // Reabilitar botão
+        btnDestacar.disabled = false;
+        btnDestacar.innerHTML = '<i class="bi bi-star"></i> Destacar';
+    });
+}
+
+// Função para remover destaque de análises em lote
+function removerDestaqueAnalisesLote() {
+    const analisesSelecionadas = getAnalisesSelecionadas();
+    
+    if (analisesSelecionadas.length === 0) {
+        showNotification('Selecione pelo menos uma análise!', 'warning');
+        return;
+    }
+    
+    // Confirmar ação
+    if (!confirm(`Deseja remover o destaque de ${analisesSelecionadas.length} análise(ões)?`)) {
+        return;
+    }
+    
+    // Desabilitar botão
+    const btnRemover = document.getElementById('btn-remover-destaque-lote-historico');
+    btnRemover.disabled = true;
+    btnRemover.innerHTML = '<i class="bi bi-hourglass-split"></i> Removendo...';
+    
+    // Fazer requisições em paralelo
+    const promises = analisesSelecionadas.map(analiseId => {
+        // Buscar o ID da intimação através da análise
+        const linha = document.querySelector(`tr[data-analise-id="${analiseId}"]`);
+        const intimacaoId = linha ? linha.dataset.intimacaoId : null;
+        
+        if (!intimacaoId) {
+            return Promise.resolve({ success: false, id: analiseId, error: 'ID da intimação não encontrado' });
+        }
+        
+        return fetch(`/api/intimacoes/${intimacaoId}/destacar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                destacada: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Atualizar linha da tabela
+                updateTableRow(intimacaoId, false);
+                return { success: true, id: analiseId, intimacaoId: intimacaoId };
+            } else {
+                return { success: false, id: analiseId, error: data.message };
+            }
+        })
+        .catch(error => {
+            return { success: false, id: analiseId, error: error.message };
+        });
+    });
+    
+    // Aguardar todas as requisições
+    Promise.all(promises)
+    .then(results => {
+        const sucessos = results.filter(r => r.success).length;
+        const falhas = results.filter(r => !r.success);
+        
+        if (sucessos > 0) {
+            showNotification(`${sucessos} análise(ões) teve(ram) o destaque removido!`, 'success');
+        }
+        
+        if (falhas.length > 0) {
+            console.error('Falhas ao remover destaque:', falhas);
+            showNotification(`${falhas.length} análise(ões) falharam ao remover destaque`, 'error');
+        }
+        
+        // Limpar seleção
+        limparSelecoes();
+    })
+    .catch(error => {
+        console.error('Erro ao remover destaque em lote:', error);
+        showNotification('Erro ao remover destaque das análises', 'error');
+    })
+    .finally(() => {
+        // Reabilitar botão
+        btnRemover.disabled = false;
+        btnRemover.innerHTML = '<i class="bi bi-star-fill"></i> Remover Destaque';
+    });
 }
 
 function carregarConfiguracaoColunas() {

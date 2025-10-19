@@ -961,3 +961,15 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **JavaScript defensivo**: Prevenção de múltiplas inicializações
 - ✅ **Correção de tipos**: JavaScript reconhece tanto `"true"` quanto `"1"`
 - ✅ **Integração completa**: Sistema funciona em todas as interfaces do sistema
+- ✅ **Ações em lote**: Destacar/remover destaque de múltiplas intimações simultaneamente
+- ✅ **Página de análise**: Botões "Destacar" e "Remover Destaque" na interface de análise
+- ✅ **Histórico de sessão**: Botões de ação em lote na barra de ações do histórico
+- ✅ **Processamento paralelo**: Múltiplas intimações processadas simultaneamente
+- ✅ **Validação**: Só funciona se pelo menos uma intimação estiver selecionada
+- ✅ **Confirmação**: Popup confirma antes de executar ação em lote
+- ✅ **Feedback visual**: Botões ficam desabilitados durante o processo
+- ✅ **Notificações**: Mostra quantas foram processadas com sucesso/erro
+- ✅ **Limpeza automática**: Seleção é limpa após o processo
+- ✅ **Atualização em tempo real**: Cards mudam de cor imediatamente
+- ✅ **Gambiarra de filtro**: Campo invisível para filtro funcionar corretamente
+- ✅ **Mapeamento automático**: Busca ID da intimação através da análise no histórico
