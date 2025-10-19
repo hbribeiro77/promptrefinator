@@ -936,3 +936,15 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Performance**: Remoção de logs excessivos que causavam lentidão
 - ✅ **Configuração de cores**: Correção de problema de salvamento de `cores_ativadas`
 - ✅ **Backend robusto**: Tratamento de valores `true`/`false` e `'on'` para checkboxes
+
+### **Sistema de Debug de Prompts (Janeiro 2025)**
+- ✅ **Botão Debug**: Adicionado no passo 2 do wizard de análise individual
+- ✅ **Modal de debug**: Exibição completa do prompt enviado para a IA
+- ✅ **Prompt completo**: Backend retorna o prompt exato usado na análise
+- ✅ **Cópia de prompt**: Funcionalidade para copiar o prompt para área de transferência
+- ✅ **API atualizada**: Endpoint `/api/analisar-prompt-individual` retorna `prompt_completo`
+- ✅ **Armazenamento**: Prompt completo salvo em `window.wizardData.promptCompleto`
+- ✅ **Visibilidade condicional**: Botão aparece apenas após execução da análise
+- ✅ **Formatação**: Prompt exibido com formatação monospace para melhor legibilidade
+- ✅ **Scroll interno**: Modal com scroll para prompts longos
+- ✅ **Integração completa**: Funciona com dados da análise original da intimação

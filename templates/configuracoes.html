@@ -66,6 +66,10 @@
                         </span>
                     </div>
                 </div>
+                
+                <form id="form-provider" style="display: none;">
+                    <input type="hidden" id="ai-provider-hidden" name="ai_provider" value="{{ provedor_atual or 'openai' }}">
+                </form>
             </div>
         </div>
         
@@ -1402,6 +1406,9 @@ function salvarConfiguracoes() {
         }
     }
     
+    // Provider de IA
+    dados.ai_provider = getValue('ai-provider-hidden');
+    
     // OpenAI (chave vem da variável de ambiente)
     dados.modelo_padrao = getValue('modelo-padrao');
     dados.temperatura_padrao = getValue('temperatura-padrao', 'float');
@@ -1898,6 +1905,12 @@ function alterarProvedor() {
     const provedor = select.value;
     const status = document.getElementById('provider-status');
     const providerApiStatus = document.getElementById('provider-api-status');
+    const hiddenInput = document.getElementById('ai-provider-hidden');
+    
+    // Atualizar campo hidden para o formulário
+    if (hiddenInput) {
+        hiddenInput.value = provedor;
+    }
     
     // Atualizar status visual
     status.textContent = select.options[select.selectedIndex].text.split(' (')[0];
@@ -1929,28 +1942,8 @@ function alterarProvedor() {
         status.className = 'badge bg-warning';
     }
     
-    // Salvar configuração do provedor
-    fetch('/api/configuracoes/provedor', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            provider: provedor
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showToast('Provedor alterado com sucesso!', 'success');
-        } else {
-            showToast('Erro ao alterar provedor: ' + data.message, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Erro:', error);
-        showToast('Erro ao alterar provedor', 'error');
-    });
+    // Nota: O provider será salvo apenas quando clicar em "Salvar Configurações"
+    // Removida a chamada automática para evitar conflitos
 }
 
 // Função para alternar visibilidade da senha

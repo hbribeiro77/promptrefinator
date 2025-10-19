@@ -1514,7 +1514,7 @@ function carregarConfiguracoesAnalise() {
 }
 
 // Função para analisar prompt individual
-function analisarPromptIndividual(promptId, promptNome, acertos, total) {
+async function analisarPromptIndividual(promptId, promptNome, acertos, total) {
     console.log('Analisando prompt individual:', { promptId, promptNome, acertos, total });
     
     // Carregar configurações
@@ -1534,6 +1534,27 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
         promptNome
     });
     
+            // Buscar dados da análise original para este prompt via API
+            let dadosAnaliseOriginal = null;
+            try {
+                const response = await fetch(`/api/intimacoes/${window.intimacaoData.id}/analise-dados/${promptId}`);
+                const data = await response.json();
+                
+                if (data.success && data.dados_analise) {
+                    dadosAnaliseOriginal = {
+                        resultado_ia: data.dados_analise.resultado_ia || 'N/A',
+                        resposta_completa: data.dados_analise.resposta_completa || 'N/A',
+                        informacao_adicional: data.dados_analise.informacao_adicional || 'N/A',
+                        sugestao: data.dados_analise.sugestao || 'N/A'
+                    };
+                    console.log('📋 Dados da análise original encontrados via API:', dadosAnaliseOriginal);
+                } else {
+                    console.log('⚠️ Dados da análise original não encontrados via API');
+                }
+            } catch (error) {
+                console.error('❌ Erro ao buscar dados da análise original:', error);
+            }
+    
     // Armazenar dados para o wizard
     window.wizardData = {
         promptId: promptId,
@@ -1541,6 +1562,7 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
         acertos: acertos,
         total: total,
         taxaAcerto: taxaAcerto,
+        dadosAnaliseOriginal: dadosAnaliseOriginal,
         etapaAtual: 1
     };
     
@@ -1634,6 +1656,13 @@ function analisarPromptIndividual(promptId, promptNome, acertos, total) {
                             
                             <!-- ETAPA 2: ANÁLISE IA -->
                             <div id="etapa2" class="wizard-step d-none">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0"><i class="bi bi-robot"></i> Análise da IA</h6>
+                                    <button type="button" class="btn btn-sm btn-outline-info" onclick="mostrarDebugPrompt()" id="btnDebugPrompt" style="display: none;">
+                                        <i class="bi bi-bug"></i>
+                                        Debug Prompt
+                                    </button>
+                                </div>
                                 <div id="analiseContent" class="wizard-step-content">
                                     <div class="text-center py-4">
                                         <div class="spinner-border text-primary" role="status">
@@ -3565,18 +3594,23 @@ async function executarAnaliseWizard() {
                 config_personalizada: configPromptIndividual,
                 taxa_acerto: window.wizardData.taxaAcerto,
                 acertos: acertos,
-                total_analises: total
+                total_analises: total,
+                dados_analise_original: window.wizardData.dadosAnaliseOriginal
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            // Armazenar resultado
+            // Armazenar resultado e prompt completo
             window.wizardData.resultadoAnalise = data.resultado;
+            window.wizardData.promptCompleto = data.prompt_completo || 'Prompt não disponível';
             
             // Mostrar resultado na etapa 2
             mostrarResultadoAnaliseWizard(data.resultado);
+            
+            // Mostrar botão de debug
+            document.getElementById('btnDebugPrompt').style.display = 'inline-block';
         } else {
             throw new Error(data.message);
         }
@@ -4152,6 +4186,61 @@ function mostrarResultadoFinalWizard(resultados, regrasCombinadas) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     }, 100);
+}
+
+// Função para mostrar debug do prompt
+function mostrarDebugPrompt() {
+    if (window.wizardData && window.wizardData.promptCompleto) {
+        document.getElementById('modal-debug-prompt-content').textContent = window.wizardData.promptCompleto;
+        const modal = new bootstrap.Modal(document.getElementById('modalDebugPrompt'));
+        modal.show();
+    } else {
+        showToast('Prompt completo não disponível', 'warning');
+    }
+}
+</script>
+
+<!-- Modal para Debug do Prompt -->
+<div class="modal fade" id="modalDebugPrompt" tabindex="-1" aria-labelledby="modalDebugPromptLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDebugPromptLabel">
+                    <i class="bi bi-bug"></i>
+                    Debug: Prompt Enviado para IA
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-info-circle"></i> Prompt Completo</h6>
+                    <p class="mb-2">Este é o prompt exato que foi enviado para a IA:</p>
+                </div>
+                <div class="bg-light p-3 rounded" style="max-height: 60vh; overflow-y: auto;">
+                    <pre id="modal-debug-prompt-content" style="white-space: pre-wrap; margin: 0; font-size: 0.9em; font-family: 'Courier New', monospace;"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="copiarPromptDebug()">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar Prompt
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para copiar prompt de debug
+function copiarPromptDebug() {
+    const promptContent = document.getElementById('modal-debug-prompt-content').textContent;
+    navigator.clipboard.writeText(promptContent).then(() => {
+        showToast('Prompt copiado para a área de transferência!', 'success');
+    }).catch(err => {
+        console.error('Erro ao copiar:', err);
+        showToast('Erro ao copiar prompt', 'error');
+    });
 }
 </script>
 {% endblock %}

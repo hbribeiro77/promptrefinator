@@ -979,6 +979,30 @@ class SQLiteService:
             
             return result
     
+    def get_dados_analise_intimacao_prompt(self, intimacao_id: str, prompt_id: str) -> Dict[str, Any]:
+        """Obter dados completos de uma análise específica (intimação + prompt)"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.*,
+                    i.processo,
+                    i.orgao_julgador,
+                    i.classificacao_manual,
+                    i.informacao_adicional,
+                    i.intimado,
+                    i.status as status_intimacao
+                FROM analises a
+                LEFT JOIN intimacoes i ON a.intimacao_id = i.id
+                WHERE a.intimacao_id = ? AND a.prompt_id = ?
+                ORDER BY a.data_analise DESC
+                LIMIT 1
+            ''', (intimacao_id, prompt_id))
+            
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+    
     def get_total_sessoes_analise(self, data_inicio: str = None, data_fim: str = None,
                                  prompt_id: str = None, status: str = None,
                                  acuracia_min: str = None) -> int:

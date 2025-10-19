@@ -600,3 +600,11 @@ class DataService:
         except Exception as e:
             print(f"Erro ao obter taxa de acerto por prompt e temperatura: {e}")
             return []
+
+    def get_prompts_acerto_por_intimacao(self, intimacao_id: str) -> List[Dict[str, Any]]:
+        """Obter prompts e taxas de acerto de uma intimação específica"""
+        return sqlite_service.get_prompts_acerto_por_intimacao(intimacao_id)
+
+    def get_dados_analise_intimacao_prompt(self, intimacao_id: str, prompt_id: str) -> Dict[str, Any]:
+        """Obter dados completos de uma análise específica (intimação + prompt)"""
+        return sqlite_service.get_dados_analise_intimacao_prompt(intimacao_id, prompt_id)

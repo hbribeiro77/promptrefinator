@@ -2274,6 +2274,7 @@ def configuracoes():
             # Processar dados do formulário
             config_data = {
                 # Chave da API vem da variável de ambiente (.env)
+                'ai_provider': request.form.get('ai_provider', 'openai'),
                 'modelo_padrao': request.form.get('modelo_padrao', 'gpt-4'),
                 'temperatura_padrao': float(request.form.get('temperatura_padrao', 0.7)),
                 'max_tokens_padrao': int(request.form.get('max_tokens_padrao', 500)),
@@ -2308,6 +2309,11 @@ def configuracoes():
             }
             
             data_service.save_config(config_data)
+            
+            # Atualizar o provider na instância global do ai_manager_service
+            novo_provider = config_data.get('ai_provider', 'openai')
+            ai_manager_service.set_provider(novo_provider)
+            
             flash('Configurações salvas com sucesso!', 'success')
             
         except Exception as e:
@@ -3419,6 +3425,30 @@ def obter_prompts_acerto_intimacao(intimacao_id):
             'message': f'Erro ao obter prompts e acertos: {str(e)}'
         }), 500
 
+@app.route('/api/intimacoes/<intimacao_id>/analise-dados/<prompt_id>')
+def obter_dados_analise_intimacao_prompt(intimacao_id, prompt_id):
+    """API para obter dados completos de uma análise específica (intimação + prompt)"""
+    try:
+        # Buscar dados completos da análise
+        dados_analise = data_service.get_dados_analise_intimacao_prompt(intimacao_id, prompt_id)
+        
+        if not dados_analise:
+            return jsonify({
+                'success': False,
+                'message': 'Análise não encontrada'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'dados_analise': dados_analise
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter dados da análise: {str(e)}'
+        }), 500
+
 @app.route('/api/intimacoes/taxa-acerto')
 def obter_taxa_acerto_intimacoes():
     """API para obter taxa de acerto de todas as intimações"""
@@ -3905,6 +3935,7 @@ def analisar_prompt_individual():
         taxa_acerto_frontend = data.get('taxa_acerto')
         acertos = data.get('acertos')
         total_analises = data.get('total_analises')
+        dados_analise_original = data.get('dados_analise_original')
         
         if not prompt_id:
             return jsonify({
@@ -3975,6 +4006,24 @@ INFORMAÇÕES ADICIONAIS:
                 except Exception as e:
                     print(f"Erro ao buscar taxa de acerto: {e}")
             
+            # Construir seção com dados da análise original
+            dados_analise_original_texto = ''
+            if dados_analise_original:
+                dados_analise_original_texto = f"""
+=== RESPOSTA DA IA NA ANÁLISE ORIGINAL ===
+CLASSIFICAÇÃO FEITA PELA IA: {dados_analise_original.get('resultado_ia', 'N/A')}
+
+RESPOSTA COMPLETA DA IA:
+{dados_analise_original.get('resposta_completa', 'N/A')}
+
+INFORMAÇÃO ADICIONAL FORNECIDA PELA IA:
+{dados_analise_original.get('informacao_adicional', 'N/A')}
+
+SUGESTÃO DA IA:
+{dados_analise_original.get('sugestao', 'N/A')}
+
+"""
+            
             # Construir prompt de análise
             # Usar regras de negócio em vez do conteúdo completo
             regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
@@ -3984,6 +4033,8 @@ INFORMAÇÕES ADICIONAIS:
 {contexto_intimacao}
 
 {informacao_adicional}
+
+{dados_analise_original_texto}
 
 === PROMPT A ANALISAR ===
 PROMPT: {prompt_nome}{taxa_acerto}
@@ -4027,6 +4078,24 @@ INFORMAÇÕES ADICIONAIS:
             except Exception as e:
                 print(f"Erro ao buscar taxa de acerto: {e}")
             
+            # Construir seção com dados da análise original (prompt padrão)
+            dados_analise_original_texto = ''
+            if dados_analise_original:
+                dados_analise_original_texto = f"""
+=== RESPOSTA DA IA NA ANÁLISE ORIGINAL ===
+CLASSIFICAÇÃO FEITA PELA IA: {dados_analise_original.get('resultado_ia', 'N/A')}
+
+RESPOSTA COMPLETA DA IA:
+{dados_analise_original.get('resposta_completa', 'N/A')}
+
+INFORMAÇÃO ADICIONAL FORNECIDA PELA IA:
+{dados_analise_original.get('informacao_adicional', 'N/A')}
+
+SUGESTÃO DA IA:
+{dados_analise_original.get('sugestao', 'N/A')}
+
+"""
+            
             # Usar regras de negócio em vez do conteúdo completo
             regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
             
@@ -4036,6 +4105,8 @@ Você é um especialista em análise de prompts de IA para classificação jurí
 {contexto_intimacao}
 
 {informacao_adicional}
+
+{dados_analise_original_texto}
 
 Analise a eficácia deste prompt específico para classificar a intimação fornecida:
 
@@ -4117,7 +4188,8 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
         
         return jsonify({
             'success': True,
-            'resultado': resposta_texto
+            'resultado': resposta_texto,
+            'prompt_completo': prompt_analise
         })
         
     except Exception as e:

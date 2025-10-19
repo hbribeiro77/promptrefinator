@@ -1,4 +1,5 @@
 {
+  "ai_provider": "azure",
   "modelo_padrao": "gpt-4",
   "temperatura_padrao": 1.0,
   "max_tokens_padrao": 0,
@@ -29,5 +30,14 @@
   "session_timeout": 60,
   "debug_mode": false,
   "log_requests": false,
-  "cache_enabled": false
+  "cache_enabled": false,
+  "azure_api_key": "***CONFIGURADO VIA .ENV***",
+  "azure_endpoint": "***CONFIGURADO VIA .ENV***",
+  "azure_api_version": "2024-02-15-preview",
+  "azure_deployment": "chatgpt-4o-latest",
+  "azure_temperatura": 0.7,
+  "azure_max_tokens": 1600,
+  "azure_timeout": 30,
+  "azure_analise_paralela": 5,
+  "azure_delay_entre_lotes": 0.5
 }
