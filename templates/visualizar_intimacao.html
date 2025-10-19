@@ -129,6 +129,7 @@
 .color-indicator[data-color="#ffe500"] { background-color: #ffe500; }
 .color-indicator[data-color="#80ff00"] { background-color: #80ff00; }
 .color-indicator[data-color="#00ffff"] { background-color: #00ffff; }
+
 </style>
 {% endblock %}
 
@@ -148,6 +149,7 @@
                 <i class="bi bi-cpu"></i>
                 Analisar com IA
             </a>
+            {% include 'partials/botao_destacar_intimacao.html' %}
         </div>
         <div class="btn-group">
             <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmarExclusao()">
@@ -4243,4 +4245,7 @@ function copiarPromptDebug() {
     });
 }
 </script>
+
+<!-- Sistema de Destaque de Intimações -->
+{% include 'partials/sistema_destacar_intimacao.html' %}
 {% endblock %}

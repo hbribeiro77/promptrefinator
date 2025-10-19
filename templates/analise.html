@@ -406,6 +406,7 @@
                                                            title="Página Completa">
                                                             <i class="bi bi-file-text"></i>
                                                         </a>
+                                                        {% include 'partials/botao_destacar_intimacao.html' %}
                                                         <button type="button" 
                                                                 class="btn btn-outline-danger btn-sm" 
                                                                 data-intimacao-id="{{ intimacao.id }}"
@@ -695,6 +696,27 @@
                             <i class="bi bi-hourglass-split"></i>
                             Carregando classes...
                         </div>
+                    </div>
+                </div>
+                
+                <!-- Filtro por Destaque -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-star text-warning"></i>
+                        <strong>Destaque:</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todas-intimacoes" checked>
+                        <label class="form-check-label" for="filtro-todas-intimacoes">
+                            <strong>Todas as intimações</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-apenas-destacadas">
+                        <label class="form-check-label" for="filtro-apenas-destacadas">
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <strong>Apenas destacadas</strong>
+                        </label>
                     </div>
                 </div>
                 
@@ -2410,6 +2432,10 @@ function aplicarFiltro() {
     const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
     const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
     
+    // Obter filtro de destacadas
+    const todasIntimacoes = document.getElementById('filtro-todas-intimacoes').checked;
+    const apenasDestacadas = document.getElementById('filtro-apenas-destacadas').checked;
+    
     // Aplicar filtros nos checkboxes de intimações
     const checkboxes = document.querySelectorAll('.intimacao-checkbox');
     checkboxes.forEach(checkbox => {
@@ -2433,7 +2459,14 @@ function aplicarFiltro() {
         let mostrarClasse = todasClasses || classesSelecionadas.includes(classe);
         let mostrarTaxa = taxaAcerto >= taxaMinima && taxaAcerto <= taxaMaxima;
         
-        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa) {
+        // Filtro de destacadas
+        let mostrarDestacada = true;
+        if (apenasDestacadas) {
+            const isDestacada = row.classList.contains('intimacao-destacada');
+            mostrarDestacada = isDestacada;
+        }
+        
+        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarDestacada) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
@@ -4224,6 +4257,8 @@ function editarPrompt() {
 <script src="{{ url_for('static', filename='js/taxa-acerto.js') }}"></script>
 <!-- Popover de Acurácia JavaScript -->
 <script src="{{ url_for('static', filename='js/popover-acuracia.js') }}"></script>
+<!-- Sistema de Destaque de Intimações -->
+{% include 'partials/sistema_destacar_intimacao.html' %}
 
 <!-- CSS movido para static/css/taxa-acerto.css -->
 
@@ -4245,6 +4280,7 @@ function editarPrompt() {
 .prompt-card:hover .prompt-name {
     text-decoration: underline;
 }
+
 </style>
 
 

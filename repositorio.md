@@ -14,22 +14,20 @@ git add .
 
 ### 3. Fazer commit com mensagem descritiva
 ```bash
-git commit -m "Sistema de Ordenação e Interface Avançada - Wizard Modal
+git commit -m "Sistema de Destaque de Intimações - Funcionalidade Completa
 
-- ✅ Ordenação por Taxa de Acerto na tabela principal
-- ✅ Ícone de ordenação inline para evitar 'pulo' visual
-- ✅ Popover customizado com posicionamento fixo
-- ✅ Botão fixo no rodapé do popover
-- ✅ Borda azul e efeito hover no popover
-- ✅ Padding otimizado para evitar sobreposição
-- ✅ Modal wizard com scroll interno limitado ao cabeçalho
-- ✅ Altura ajustável (80vh) para melhor aproveitamento
-- ✅ Canaleta de scroll (50vh) para etapas 3, 4 e 5
-- ✅ Conteúdo completo da Etapa 4 com scroll funcional
-- ✅ Interface responsiva e adaptável
-- ✅ Sistema de scroll com canaleta e bloco deslizante
-- ✅ Eliminação de espaços vazios desnecessários
-- ✅ UX otimizada para diferentes tamanhos de tela"
+- ✅ Sistema completo para destacar/remover destaque de intimações
+- ✅ Componente reutilizável com botão e CSS centralizados
+- ✅ Persistência no banco SQLite com campo destacada
+- ✅ Visual: Cards ficam amarelos quando destacados
+- ✅ Funcionalidade: Botão alterna corretamente (destacar/remover)
+- ✅ Filtros: 'Apenas destacadas' em todas as páginas
+- ✅ Compatibilidade: Funciona em todas as páginas (intimações, análise, histórico)
+- ✅ API endpoint: /api/intimacoes/<id>/destacar para atualizar estado
+- ✅ JavaScript defensivo: Prevenção de múltiplas inicializações
+- ✅ Correção de tipos: JavaScript reconhece tanto 'true' quanto '1'
+- ✅ Integração completa: Sistema funciona em todas as interfaces
+- ✅ Resumo.md atualizado com nova funcionalidade"
 ```
 
 ### 4. Fazer push para o repositório remoto

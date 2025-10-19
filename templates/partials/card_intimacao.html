@@ -1,5 +1,5 @@
 <!-- Componente Card de Intimação -->
-<div class="card-intimacao" data-intimacao-id="{{ intimacao.id }}">
+<div class="card-intimacao {{ 'intimacao-destacada' if intimacao.destacada else '' }}" data-intimacao-id="{{ intimacao.id }}">
     <!-- Header do Card -->
     <div class="card-intimacao-header">
         <div class="card-intimacao-processo">

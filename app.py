@@ -358,6 +358,12 @@ def listar_intimacoes():
             intimacoes = [i for i in intimacoes if i.get('defensor') == defensor]
             print(f"DEBUG: Após filtro de defensor: {len(intimacoes)}")
         
+        # Filtro de intimações destacadas
+        destacadas = request.args.get('destacadas', '')
+        if destacadas == 'true':
+            intimacoes = [i for i in intimacoes if i.get('destacada', False)]
+            print(f"DEBUG: Após filtro de destacadas: {len(intimacoes)}")
+        
         # Aplicar ordenação
         if ordenacao == 'data_desc':
             intimacoes.sort(key=lambda x: x.get('data_criacao', ''), reverse=True)
@@ -2503,6 +2509,37 @@ def excluir_intimacao(id):
             return jsonify({'success': False, 'message': 'Erro ao excluir intimação'}), 500
     except Exception as e:
         print(f"DEBUG: Exceção ao excluir intimação: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/intimacoes/<id>/destacar', methods=['POST'])
+def destacar_intimacao(id):
+    """API para destacar/remover destaque de uma intimação"""
+    try:
+        data = request.get_json()
+        destacada = data.get('destacada', False)
+        
+        # Verificar se a intimação existe
+        intimacao = data_service.get_intimacao_by_id(id)
+        if not intimacao:
+            return jsonify({'success': False, 'message': 'Intimação não encontrada'}), 404
+        
+        # Atualizar campo destacada
+        with data_service.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                'UPDATE intimacoes SET destacada = ? WHERE id = ?',
+                (destacada, id)
+            )
+            conn.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Destaque atualizado com sucesso',
+            'destacada': destacada
+        })
+        
+    except Exception as e:
+        print(f"Erro ao destacar intimação: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/api/analises/excluir', methods=['DELETE'])

@@ -394,7 +394,8 @@
                         <tr class="linha-analise" 
                             data-status="{% if analise.acertou %}acertou{% else %}errou{% endif %}"
                             data-taxa-acerto="{{ analise.taxa_acerto_intimacao }}"
-                            data-analise-id="{{ analise.id }}">
+                            data-analise-id="{{ analise.id }}"
+                            data-intimacao-id="{{ analise.intimacao_id }}">
                             <td class="col-selecao" style="text-align: center;">
                                 <input type="checkbox" class="checkbox-analise" value="{{ analise.id }}" onchange="atualizarSelecoes()">
                             </td>
@@ -406,7 +407,8 @@
                                     'status': analise.status or 'Pendente',
                                     'prazo': analise.prazo or 'N/A',
                                     'intimado': analise.intimado or 'N/A',
-                                    'disponibilizacao': analise.disponibilizacao or analise.data_analise_formatada or 'N/A'
+                                    'disponibilizacao': analise.disponibilizacao or analise.data_analise_formatada or 'N/A',
+                                    'destacada': analise.destacada or false
                                 } %}
                                 {% include 'partials/card_intimacao_compact.html' %}
                             </td>
@@ -476,6 +478,11 @@
                                             title="Ver contexto">
                                         <i class="bi bi-file-text"></i>
                                     </button>
+                                    {% set intimacao = {
+                                        'id': analise.intimacao_id,
+                                        'destacada': analise.destacada or false
+                                    } %}
+                                    {% include 'partials/botao_destacar_intimacao.html' %}
                                 </div>
                             </td>
                         </tr>
@@ -1189,5 +1196,9 @@ function salvarConfiguracaoColunas() {
 .markdown-content li {
     margin-bottom: 0.25rem;
 }
+
 </style>
+
+<!-- Sistema de Destaque de Intimações -->
+{% include 'partials/sistema_destacar_intimacao.html' %}
 {% endblock %}

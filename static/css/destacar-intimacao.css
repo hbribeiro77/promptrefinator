@@ -1,0 +1,62 @@
+/* Sistema de Destaque de Intimações - CSS Simplificado */
+
+/* Card destacado - aplicado diretamente no componente */
+.intimacao-card-compact.intimacao-destacada {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3) !important;
+}
+
+.intimacao-card-compact.intimacao-destacada:hover {
+    background-color: #ffeaa7 !important;
+    border-color: #ffb300 !important;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+}
+
+/* Header do card destacado */
+.intimacao-card-compact.intimacao-destacada .card-intimacao-header-compact {
+    background-color: #ffeaa7 !important;
+}
+
+/* Conteúdo do card destacado */
+.intimacao-card-compact.intimacao-destacada .card-intimacao-content-compact {
+    background-color: #fff3cd !important;
+}
+
+/* Barra lateral do card destacado */
+.intimacao-card-compact.intimacao-destacada::before {
+    background: linear-gradient(135deg, #ffc107, #ffb300) !important;
+    width: 5px !important;
+}
+
+/* Card normal destacado */
+.card-intimacao.intimacao-destacada {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    box-shadow: 0 0 10px rgba(255, 193, 7, 0.3) !important;
+}
+
+.card-intimacao.intimacao-destacada:hover {
+    background-color: #ffeaa7 !important;
+    border-color: #ffb300 !important;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+}
+
+/* Linha da tabela destacada */
+tr.intimacao-destacada {
+    background-color: #fff3cd !important;
+    border-left: 4px solid #ffc107 !important;
+}
+
+tr.intimacao-destacada:hover {
+    background-color: #ffeaa7 !important;
+}
+
+/* Botão de destacar */
+.btn-destacar {
+    transition: all 0.2s ease;
+}
+
+.btn-destacar:hover {
+    transform: scale(1.05);
+}

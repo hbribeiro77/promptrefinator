@@ -1,6 +1,6 @@
 <!-- Componente Card Compacto de Intimação para Tabela -->
 <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" class="card-link-wrapper" style="text-decoration: none; color: inherit;">
-<div class="intimacao-card-compact">
+<div class="intimacao-card-compact {{ 'intimacao-destacada' if intimacao.destacada else '' }}">
     <div class="card-intimacao-header-compact">
         <div class="card-intimacao-processo-compact">
             <i class="bi bi-hourglass"></i>

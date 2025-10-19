@@ -84,6 +84,13 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <label for="destacadas" class="form-label">Filtrar</label>
+                <select class="form-select" id="destacadas" name="destacadas">
+                    <option value="">Todas as intimações</option>
+                    <option value="true" {% if request.args.get('destacadas') == 'true' %}selected{% endif %}>Apenas destacadas</option>
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label for="itens_por_pagina" class="form-label">Itens por página</label>
                 <select class="form-select" id="itens_por_pagina" name="itens_por_pagina" onchange="alterarItensPorPagina(this.value)">
                     <option value="10" {% if request.args.get('itens_por_pagina', '25') == '10' %}selected{% endif %}>10</option>
@@ -401,6 +408,7 @@
                                            title="Visualizar">
                                             <i class="bi bi-eye"></i>
                                         </a>
+                                        {% include 'partials/botao_destacar_intimacao.html' %}
                                         <button type="button" 
                                                 class="btn btn-outline-danger btn-sm" 
                                                 data-intimacao-id="{{ intimacao.id }}"
@@ -1069,6 +1077,10 @@ function inicializarEstadoOrdenacao() {
     line-height: 1.5;
     white-space: pre-wrap;
 }
+
 </style>
+
+<!-- Sistema de Destaque de Intimações -->
+{% include 'partials/sistema_destacar_intimacao.html' %}
 
 {% endblock %}

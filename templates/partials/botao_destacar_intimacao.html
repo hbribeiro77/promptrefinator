@@ -1,0 +1,9 @@
+<!-- Componente reutilizável para botão de destacar intimação -->
+<button type="button" 
+        class="btn btn-sm {{ 'btn-warning' if intimacao.destacada else 'btn-outline-warning' }}" 
+        data-intimacao-id="{{ intimacao.id }}"
+        data-destacada="{{ intimacao.destacada|default(false)|lower }}"
+        onclick="toggleDestacarIntimacao(this)"
+        title="{{ 'Remover destaque' if intimacao.destacada else 'Destacar intimação' }}">
+    <i class="bi {{ 'bi-star-fill' if intimacao.destacada else 'bi-star' }}"></i>
+</button>

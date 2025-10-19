@@ -948,3 +948,16 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Formatação**: Prompt exibido com formatação monospace para melhor legibilidade
 - ✅ **Scroll interno**: Modal com scroll para prompts longos
 - ✅ **Integração completa**: Funciona com dados da análise original da intimação
+
+### **Sistema de Destaque de Intimações (Janeiro 2025)**
+- ✅ **Sistema completo**: Funcionalidade para destacar/remover destaque de intimações
+- ✅ **Componente reutilizável**: Botão e CSS centralizados em arquivos separados
+- ✅ **Persistência**: Estado salvo no banco SQLite com campo `destacada`
+- ✅ **Visual**: Cards ficam amarelos quando destacados
+- ✅ **Funcionalidade**: Botão alterna corretamente (destacar/remover)
+- ✅ **Filtros**: "Apenas destacadas" em todas as páginas
+- ✅ **Compatibilidade**: Funciona em todas as páginas (intimações, análise, histórico)
+- ✅ **API endpoint**: `/api/intimacoes/<id>/destacar` para atualizar estado
+- ✅ **JavaScript defensivo**: Prevenção de múltiplas inicializações
+- ✅ **Correção de tipos**: JavaScript reconhece tanto `"true"` quanto `"1"`
+- ✅ **Integração completa**: Sistema funciona em todas as interfaces do sistema

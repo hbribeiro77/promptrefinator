@@ -244,6 +244,9 @@ class SQLiteService:
             intimacoes = []
             for row in cursor.fetchall():
                 intimacao = dict(row)
+                # Converter destacada de int para boolean
+                if 'destacada' in intimacao:
+                    intimacao['destacada'] = bool(intimacao['destacada'])
                 # Buscar análises desta intimação
                 intimacao['analises'] = self.get_analises_by_intimacao(intimacao['id'])
                 intimacoes.append(intimacao)
@@ -256,6 +259,9 @@ class SQLiteService:
             row = cursor.fetchone()
             if row:
                 intimacao = dict(row)
+                # Converter destacada de int para boolean
+                if 'destacada' in intimacao:
+                    intimacao['destacada'] = bool(intimacao['destacada'])
                 # Buscar análises desta intimação
                 intimacao['analises'] = self.get_analises_by_intimacao(intimacao_id)
                 return intimacao
@@ -1140,6 +1146,7 @@ class SQLiteService:
                     i.informacao_adicional,
                     i.intimado,
                     i.status as status_intimacao,
+                    i.destacada,
                     -- Estatísticas do prompt para esta intimação específica
                     (SELECT COUNT(*) FROM analises a2 WHERE a2.prompt_id = a.prompt_id AND a2.intimacao_id = a.intimacao_id) as total_testes_intimacao,
                     (SELECT COUNT(*) FROM analises a3 WHERE a3.prompt_id = a.prompt_id AND a3.intimacao_id = a.intimacao_id AND a3.acertou = 1) as acertos_intimacao,

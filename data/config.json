@@ -34,7 +34,7 @@
   "azure_api_key": "***CONFIGURADO VIA .ENV***",
   "azure_endpoint": "***CONFIGURADO VIA .ENV***",
   "azure_api_version": "2024-02-15-preview",
-  "azure_deployment": "chatgpt-4o-latest",
+  "azure_deployment": "gpt-4o-mini",
   "azure_temperatura": 0.7,
   "azure_max_tokens": 1600,
   "azure_timeout": 30,
