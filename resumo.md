@@ -880,3 +880,59 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **CSS centralizado**: Estilos do popover em arquivo separado
 - ✅ **JavaScript modular**: Funções organizadas e reutilizáveis
 - ✅ **Integração completa**: Funciona com filtros existentes da página
+
+### **Sistema de Filtros Avançados e Ordenação (Janeiro 2025)**
+- ✅ **Filtro por temperatura**: Dropdown para filtrar por temperatura específica
+- ✅ **Filtros combinados**: Prompt específico + temperatura funcionando em conjunto
+- ✅ **Ordenação backend**: Taxa de acerto ordenada considerando filtros aplicados
+- ✅ **Preservação de filtros**: Filtros mantidos durante paginação
+- ✅ **API endpoints**: `/api/intimacoes/taxa-acerto-prompt-temperatura/<prompt_id>/<temperatura>`
+- ✅ **Backend sorting**: Função `calcular_taxa_acerto_intimacao_filtrada` para ordenação correta
+- ✅ **Tolerância de float**: Comparação de temperatura com tolerância para evitar problemas de precisão
+- ✅ **URLs de paginação**: Parâmetros de filtro incluídos em todos os links de paginação
+
+### **Sistema de Histórico de Acurácia por Condições (Janeiro 2025)**
+- ✅ **Tabela de histórico**: Exibição de acurácia por número de intimações e temperatura
+- ✅ **Agrupamento inteligente**: Médias calculadas para mesmas condições (intimações + temperatura)
+- ✅ **Colunas abreviadas**: Títulos compactos para melhor visualização
+- ✅ **Formato de data**: DD/MM/YYYY para melhor legibilidade
+- ✅ **Posicionamento**: Seção movida para sidebar direita, abaixo de "Estatísticas de Performance"
+- ✅ **API endpoints**: `/api/prompts/<id>/historico-acuracia` e `/api/prompts/<id>/acuracia-condicoes/<int>/<float>`
+- ✅ **Banco de dados**: Tabela `historico_acuracia` para armazenar dados históricos
+- ✅ **Salvamento automático**: Histórico salvo automaticamente após cada análise
+
+### **Sistema de Acurácia na Listagem de Prompts (Janeiro 2025)**
+- ✅ **Coluna Acurácia**: Nova coluna na página `/prompts` mostrando acurácia mais recente
+- ✅ **Popover de histórico**: Hover na coluna mostra todas as acurácias históricas
+- ✅ **Critério de seleção**: Ordenação por `numero_intimacoes DESC, temperatura ASC, ultima_analise DESC`
+- ✅ **Componente reutilizável**: Popover reutilizado da página de intimações
+- ✅ **API integrada**: Endpoint `/api/prompts/<id>/historico-acuracia` para dados históricos
+- ✅ **Carregamento dinâmico**: Dados carregados via AJAX para melhor performance
+
+### **Sistema de Cores Configuráveis (Janeiro 2025)**
+- ✅ **Escala de cores personalizável**: Configuração de thresholds para cada cor na página de configurações
+- ✅ **Preview em tempo real**: Visualização das cores conforme configuração
+- ✅ **Configuração persistente**: Valores salvos no banco de dados
+- ✅ **API de configuração**: Endpoint `/api/config/cores` para carregar configurações
+- ✅ **JavaScript modular**: Classe `ConfigCoresManager` para gerenciar configurações
+- ✅ **Integração completa**: Cores aplicadas em todas as interfaces (badges, popovers, etc.)
+- ✅ **Fallback seguro**: Cores padrão quando configuração não disponível
+
+### **Sistema de Select Customizado com Badges (Janeiro 2025)**
+- ✅ **Componente customizado**: Select HTML/CSS/JS personalizado para superar limitações do browser
+- ✅ **Badges coloridos**: Acurácia exibida com badges coloridos dentro das opções
+- ✅ **Configuração de cores**: Badges seguem escala configurável (verde/amarelo/vermelho/cinza)
+- ✅ **API de dados**: Carregamento de acurácia histórica para cada prompt
+- ✅ **Sincronização**: Select customizado sincronizado com select original para formulários
+- ✅ **Eventos**: Disparo correto de eventos `change` e `input` no select original
+- ✅ **Performance**: Carregamento assíncrono de dados de acurácia
+- ✅ **Fallback**: Badge cinza quando dados não disponíveis
+
+### **Correções de Bugs Críticos (Janeiro 2025)**
+- ✅ **Erro `NoneType`**: Corrigido problema de `int()` com valores `None` no backend
+- ✅ **Fallbacks robustos**: Valores padrão para `max_tokens`, `temperatura` e `timeout`
+- ✅ **Sincronização de select**: Função `syncValue()` para garantir valores corretos
+- ✅ **Debug logs**: Sistema de logs detalhado para troubleshooting
+- ✅ **Performance**: Remoção de logs excessivos que causavam lentidão
+- ✅ **Configuração de cores**: Correção de problema de salvamento de `cores_ativadas`
+- ✅ **Backend robusto**: Tratamento de valores `true`/`false` e `'on'` para checkboxes

@@ -5,6 +5,8 @@
 {% block extra_head %}
 <!-- Taxa de Acerto CSS -->
 <link href="{{ url_for('static', filename='css/taxa-acerto.css') }}" rel="stylesheet">
+<!-- Configurações de Cores JS -->
+<script src="{{ url_for('static', filename='js/config-cores.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -103,6 +105,26 @@
                             {{ prompt.nome }}
                         </option>
                     {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">
+                    <i class="bi bi-thermometer text-warning"></i>
+                    <strong>Temperatura:</strong>
+                </label>
+                <select class="form-select" id="temperatura-especifica" name="temperatura_especifica">
+                    <option value="">Todas as temperaturas</option>
+                    <option value="0.0" {% if filtros.temperatura_especifica == '0.0' %}selected{% endif %}>0.0</option>
+                    <option value="0.1" {% if filtros.temperatura_especifica == '0.1' %}selected{% endif %}>0.1</option>
+                    <option value="0.2" {% if filtros.temperatura_especifica == '0.2' %}selected{% endif %}>0.2</option>
+                    <option value="0.3" {% if filtros.temperatura_especifica == '0.3' %}selected{% endif %}>0.3</option>
+                    <option value="0.4" {% if filtros.temperatura_especifica == '0.4' %}selected{% endif %}>0.4</option>
+                    <option value="0.5" {% if filtros.temperatura_especifica == '0.5' %}selected{% endif %}>0.5</option>
+                    <option value="0.6" {% if filtros.temperatura_especifica == '0.6' %}selected{% endif %}>0.6</option>
+                    <option value="0.7" {% if filtros.temperatura_especifica == '0.7' %}selected{% endif %}>0.7</option>
+                    <option value="0.8" {% if filtros.temperatura_especifica == '0.8' %}selected{% endif %}>0.8</option>
+                    <option value="0.9" {% if filtros.temperatura_especifica == '0.9' %}selected{% endif %}>0.9</option>
+                    <option value="1.0" {% if filtros.temperatura_especifica == '1.0' %}selected{% endif %}>1.0</option>
                 </select>
             </div>
             <div class="col-md-1">
@@ -411,7 +433,7 @@
                         <ul class="pagination pagination-sm mb-0">
                             <!-- Primeira página -->
                             <li class="page-item {% if pagina_atual == 1 %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}" {% if pagina_atual == 1 %}aria-disabled="true"{% endif %}>
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25'), prompt_especifico=request.args.get('prompt_especifico', ''), temperatura_especifica=request.args.get('temperatura_especifica', '')) }}" {% if pagina_atual == 1 %}aria-disabled="true"{% endif %}>
                                     <i class="bi bi-chevron-double-left"></i>
                                 </a>
                             </li>
@@ -419,7 +441,7 @@
                             <!-- Página anterior -->
                             {% if pagina_atual > 1 %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual-1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual-1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25'), prompt_especifico=request.args.get('prompt_especifico', ''), temperatura_especifica=request.args.get('temperatura_especifica', '')) }}">
                                     <i class="bi bi-chevron-left"></i>
                                 </a>
                             </li>
@@ -430,14 +452,14 @@
                             {% set fim_paginas = [total_paginas+1, pagina_atual+3] | min %}
                             {% for p in range(inicio_paginas, fim_paginas) %}
                             <li class="page-item {% if p == pagina_atual %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=p, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">{{ p }}</a>
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=p, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25'), prompt_especifico=request.args.get('prompt_especifico', ''), temperatura_especifica=request.args.get('temperatura_especifica', '')) }}">{{ p }}</a>
                             </li>
                             {% endfor %}
                             
                             <!-- Próxima página -->
                             {% if pagina_atual < total_paginas %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual+1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}">
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=pagina_atual+1, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25'), prompt_especifico=request.args.get('prompt_especifico', ''), temperatura_especifica=request.args.get('temperatura_especifica', '')) }}">
                                     <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>
@@ -445,7 +467,7 @@
                             
                             <!-- Última página -->
                             <li class="page-item {% if pagina_atual == total_paginas %}disabled{% endif %}">
-                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=total_paginas, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25')) }}" {% if pagina_atual == total_paginas %}aria-disabled="true"{% endif %}>
+                                <a class="page-link" href="{{ url_for('listar_intimacoes', pagina=total_paginas, busca=request.args.get('busca', ''), classificacao=request.args.get('classificacao', ''), defensor=request.args.get('defensor', ''), ordenacao=request.args.get('ordenacao', 'data_desc'), itens_por_pagina=request.args.get('itens_por_pagina', '25'), prompt_especifico=request.args.get('prompt_especifico', ''), temperatura_especifica=request.args.get('temperatura_especifica', '')) }}" {% if pagina_atual == total_paginas %}aria-disabled="true"{% endif %}>
                                     <i class="bi bi-chevron-double-right"></i>
                                 </a>
                             </li>
@@ -702,23 +724,72 @@ function limparFiltrosTaxaAcerto() {
     document.getElementById('taxa-minima').value = '';
     document.getElementById('taxa-maxima').value = '';
     document.getElementById('prompt-especifico').value = '';
+    document.getElementById('temperatura-especifica').value = '';
     showToast('Filtros de taxa de acerto limpos!', 'info');
 }
 
 // Ordenar tabela por taxa de acerto
+// Variáveis de controle para ordenação
+let ordenacaoIntimacoes = {
+    coluna: null,
+    direcao: 'asc'
+};
+
+let dadosIntimacoes = [];
+
 function ordenarTabelaIntimacoes(coluna) {
     console.log('🔄 Ordenando por:', coluna);
     
     if (coluna === 'taxa_acerto') {
-        // Implementar ordenação por taxa de acerto
-        // Por enquanto, apenas mostrar toast
-        showToast('Ordenação por taxa de acerto será implementada em breve!', 'info');
+        // Determinar direção da ordenação
+        if (ordenacaoIntimacoes.coluna === coluna) {
+            ordenacaoIntimacoes.direcao = ordenacaoIntimacoes.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            ordenacaoIntimacoes.coluna = coluna;
+            ordenacaoIntimacoes.direcao = 'asc';
+        }
+        
+        console.log('🔄 Nova ordenação:', ordenacaoIntimacoes);
+        
+        // Construir parâmetro de ordenação para o backend
+        const ordenacaoParam = ordenacaoIntimacoes.direcao === 'asc' ? 'taxa_acerto_asc' : 'taxa_acerto_desc';
+        
+        // Obter parâmetros atuais da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('ordenacao', ordenacaoParam);
+        
+        // Redirecionar para a mesma página com nova ordenação
+        const novaUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        console.log('🔄 Redirecionando para:', novaUrl);
+        window.location.href = novaUrl;
+    }
+}
+
+// Função para atualizar ícones de ordenação
+function atualizarIconesOrdenacaoIntimacoes(colunaAtiva, direcao) {
+    // Resetar todos os ícones
+    const icones = document.querySelectorAll('[id^="sort-icon-"]');
+    icones.forEach(icone => {
+        icone.className = 'bi bi-arrow-down-up';
+    });
+    
+    // Atualizar ícone da coluna ativa
+    const iconeAtivo = document.getElementById(`sort-icon-${colunaAtiva}`);
+    if (iconeAtivo) {
+        if (direcao === 'asc') {
+            iconeAtivo.className = 'bi bi-arrow-up';
+        } else {
+            iconeAtivo.className = 'bi bi-arrow-down';
+        }
     }
 }
 
 // Inicializar taxa de acerto quando a página carregar
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Inicializando página de intimações...');
+    
+    // Inicializar estado da ordenação baseado na URL
+    inicializarEstadoOrdenacao();
     
     // Inicializar módulo de taxa de acerto
     if (typeof inicializarTaxaAcerto === 'function') {
@@ -729,6 +800,22 @@ document.addEventListener('DOMContentLoaded', function() {
         carregarTaxasAcerto();
     }
 });
+
+// Função para inicializar estado da ordenação baseado na URL
+function inicializarEstadoOrdenacao() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ordenacao = urlParams.get('ordenacao');
+    
+    if (ordenacao === 'taxa_acerto_asc') {
+        ordenacaoIntimacoes.coluna = 'taxa_acerto';
+        ordenacaoIntimacoes.direcao = 'asc';
+        atualizarIconesOrdenacaoIntimacoes('taxa_acerto', 'asc');
+    } else if (ordenacao === 'taxa_acerto_desc') {
+        ordenacaoIntimacoes.coluna = 'taxa_acerto';
+        ordenacaoIntimacoes.direcao = 'desc';
+        atualizarIconesOrdenacaoIntimacoes('taxa_acerto', 'desc');
+    }
+}
 
 </script>
 

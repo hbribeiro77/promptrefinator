@@ -363,7 +363,9 @@ class DataService:
     # Métodos para Configurações
     def get_config(self) -> Dict[str, Any]:
         """Obter configurações do sistema"""
+        print(f"=== DEBUG: get_config chamada ===")
         config = self._load_json(self.config.CONFIG_FILE)
+        print(f"=== DEBUG: config carregado: {config} ===")
         
         # Substituir variáveis de ambiente
         if config and 'openai_api_key' in config:
@@ -556,4 +558,45 @@ class DataService:
             
         except Exception as e:
             print(f"Erro ao obter taxa de acerto por prompt específico: {e}")
+            return []
+    
+    def get_taxa_acerto_por_prompt_e_temperatura(self, prompt_id: str, temperatura: float) -> List[Dict[str, Any]]:
+        """Obter taxa de acerto de um prompt específico com temperatura específica"""
+        try:
+            # Buscar todas as análises do prompt específico com temperatura específica
+            analises = self.get_analises_by_prompt_id(prompt_id)
+            
+            # Filtrar apenas análises com a temperatura específica
+            analises_filtradas = [a for a in analises if a.get('temperatura') == temperatura]
+            
+            # Agrupar por intimação
+            intimacoes_stats = {}
+            
+            for analise in analises_filtradas:
+                intimacao_id = analise.get('intimacao_id')
+                if not intimacao_id:
+                    continue
+                
+                if intimacao_id not in intimacoes_stats:
+                    intimacoes_stats[intimacao_id] = {
+                        'intimacao_id': intimacao_id,
+                        'total_analises': 0,
+                        'acertos': 0,
+                        'taxa_acerto': 0
+                    }
+                
+                intimacoes_stats[intimacao_id]['total_analises'] += 1
+                if analise.get('acertou'):
+                    intimacoes_stats[intimacao_id]['acertos'] += 1
+            
+            # Calcular taxa de acerto
+            for intimacao_id in intimacoes_stats:
+                stats = intimacoes_stats[intimacao_id]
+                if stats['total_analises'] > 0:
+                    stats['taxa_acerto'] = round((stats['acertos'] / stats['total_analises']) * 100, 1)
+            
+            return list(intimacoes_stats.values())
+            
+        except Exception as e:
+            print(f"Erro ao obter taxa de acerto por prompt e temperatura: {e}")
             return []

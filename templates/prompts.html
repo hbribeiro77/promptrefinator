@@ -156,6 +156,7 @@
                         <th>Nome</th>
                         <th>Descrição</th>
                         <th width="100">Status</th>
+                        <th width="100">Acurácia</th>
                         <th width="120">Tamanho</th>
                         <th width="100">Uso</th>
                         <th width="150">Data de Criação</th>
@@ -205,6 +206,17 @@
                                         title="{% if prompt.ativo %}Desativar{% else %}Ativar{% endif %} prompt">
                                     <i class="bi bi-{% if prompt.ativo %}pause{% else %}play{% endif %}"></i>
                                 </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div id="acuracia-{{ prompt.id }}" class="text-center" 
+                                 style="cursor: pointer;" 
+                                 title="Clique para ver histórico completo"
+                                 onmouseenter="mostrarPopoverAcuracia('{{ prompt.id }}')"
+                                 onmouseleave="esconderPopoverAcuracia('{{ prompt.id }}')">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
                             </div>
                         </td>
                         <td>
@@ -351,7 +363,13 @@
 
 {% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/popover-acuracia.css') }}">
+{% endblock %}
+
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/config-cores.js') }}"></script>
+<script src="{{ url_for('static', filename='js/popover-acuracia.js') }}"></script>
 <script>
 let promptParaExcluir = null;
 let promptParaTestar = null;
@@ -595,6 +613,49 @@ function formatarData(dateString) {
     }
 }
 
+// Função para carregar acurácia de um prompt
+function carregarAcuraciaPrompt(promptId) {
+    const container = document.getElementById(`acuracia-${promptId}`);
+    if (!container) return;
+    
+    fetch(`/api/prompts/${promptId}/historico-acuracia`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.historico && data.historico.length > 0) {
+                // Pegar a acurácia mais recente (primeira do array, que já vem ordenado)
+                const acuraciaMaisRecente = data.historico[0];
+                const acuracia = acuraciaMaisRecente.acuracia_media;
+                
+                // Determinar cor do badge baseado na acurácia
+                let badgeClass = 'bg-secondary';
+                if (acuracia >= 80) {
+                    badgeClass = 'bg-success';
+                } else if (acuracia >= 60) {
+                    badgeClass = 'bg-warning';
+                } else if (acuracia > 0) {
+                    badgeClass = 'bg-danger';
+                }
+                
+                container.innerHTML = `
+                    <span class="badge ${badgeClass}">${acuracia}%</span>
+                    <br><small class="text-muted">${acuraciaMaisRecente.numero_intimacoes} int.</small>
+                `;
+            } else {
+                container.innerHTML = `
+                    <span class="badge bg-secondary">N/A</span>
+                    <br><small class="text-muted">Sem dados</small>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error(`Erro ao carregar acurácia do prompt ${promptId}:`, error);
+            container.innerHTML = `
+                <span class="badge bg-secondary">N/A</span>
+                <br><small class="text-muted">Erro</small>
+            `;
+        });
+}
+
 // Aplicar formatação de data após carregamento da página
 document.addEventListener('DOMContentLoaded', function() {
     try {
@@ -616,8 +677,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+        
+        // Carregar acurácia de todos os prompts
+        const promptIds = document.querySelectorAll('[id^="acuracia-"]');
+        promptIds.forEach(container => {
+            const promptId = container.id.replace('acuracia-', '');
+            carregarAcuraciaPrompt(promptId);
+        });
     } catch (e) {
         console.log('Erro geral no DOMContentLoaded:', e);
+    }
+});
+
+// Limpar popovers quando a página for fechada
+window.addEventListener('beforeunload', function() {
+    if (window.popoverAcuracia) {
+        window.popoverAcuracia.destruirTodos();
     }
 });
 

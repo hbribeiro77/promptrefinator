@@ -417,30 +417,30 @@
                     
                     // Carregar análises e acertos das intimações
                     function carregarAnalisesAcertos() {
-                        console.log('🔄 Carregando análises e acertos...');
+                        console.log(' Carregando análises e acertos...');
                         const promptId = '{{ prompt.id }}';
                         fetch(`/api/prompts/${promptId}/analises-acertos`)
                             .then(response => {
-                                console.log('📡 Resposta da API:', response.status);
+                                console.log(' Resposta da API:', response.status);
                                 return response.json();
                             })
                             .then(data => {
-                                console.log('📊 Dados recebidos:', data);
+                                console.log(' Dados recebidos:', data);
                                 if (data.success) {
-                                    console.log('✅ Análises e acertos carregados:', data.analises_acertos);
+                                    console.log(' Análises e acertos carregados:', data.analises_acertos);
                                     atualizarAnalisesAcertos(data.analises_acertos);
                                 } else {
-                                    console.error('❌ Erro ao carregar análises e acertos:', data.message);
+                                    console.error(' Erro ao carregar análises e acertos:', data.message);
                                 }
                             })
                             .catch(error => {
-                                console.error('❌ Erro na requisição de análises e acertos:', error);
+                                console.error(' Erro na requisição de análises e acertos:', error);
                             });
                     }
                     
                     // Atualizar análises e acertos na interface
                     function atualizarAnalisesAcertos(analisesAcertos) {
-                        console.log('🎯 Atualizando análises e acertos na interface:', analisesAcertos);
+                        console.log(' Atualizando análises e acertos na interface:', analisesAcertos);
                         
                         // Salvar dados para ordenação
                         dadosOrdenacao = analisesAcertos;
@@ -479,9 +479,9 @@
                                 elementoTaxaAcerto.innerHTML = `${taxa}%<br><small>${acertos}/${total}</small>`;
                                 elementoTaxaAcerto.title = `${acertos} acertos de ${total} análises (${taxa}%)`;
                                 
-                                console.log(`✅ Análises, acertos e taxa atualizados para intimação ${intimacaoId}: ${acertos}/${total} (${taxa}%)`);
+                                console.log(` Análises, acertos e taxa atualizados para intimação ${intimacaoId}: ${acertos}/${total} (${taxa}%)`);
                             } else {
-                                console.warn(`⚠️ Elementos não encontrados para intimação ${intimacaoId}`);
+                                console.warn(` Elementos não encontrados para intimação ${intimacaoId}`);
                             }
                         });
                     }
@@ -492,7 +492,7 @@
                     
                     // Função para ordenar por taxa de acerto
                     function ordenarPorTaxaAcerto() {
-                        console.log('🔄 Ordenando por taxa de acerto...');
+                        console.log(' Ordenando por taxa de acerto...');
                         
                         // Alternar direção da ordenação
                         ordenacaoTaxaAcerto = ordenacaoTaxaAcerto === 'desc' ? 'asc' : 'desc';
@@ -517,7 +517,7 @@
                     
                     // Função para carregar dados para ordenação
                     function carregarDadosParaOrdenacao() {
-                        console.log('📊 Carregando dados para ordenação...');
+                        console.log(' Carregando dados para ordenação...');
                         const promptId = '{{ prompt.id }}';
                         fetch(`/api/prompts/${promptId}/analises-acertos`)
                             .then(response => response.json())
@@ -528,7 +528,7 @@
                                 }
                             })
                             .catch(error => {
-                                console.error('❌ Erro ao carregar dados para ordenação:', error);
+                                console.error(' Erro ao carregar dados para ordenação:', error);
                             });
                     }
                     
@@ -538,15 +538,15 @@
                         
                         const tbody = document.querySelector('.intimacoes-cards-table tbody');
                         if (!tbody) {
-                            console.error('❌ tbody não encontrado');
+                            console.error(' tbody não encontrado');
                             return;
                         }
                         
                         const rows = Array.from(tbody.querySelectorAll('tr.intimacao-row'));
-                        console.log(`📊 Encontradas ${rows.length} linhas para ordenar`);
+                        console.log(` Encontradas ${rows.length} linhas para ordenar`);
                         
                         if (rows.length === 0) {
-                            console.warn('⚠️ Nenhuma linha encontrada para ordenar');
+                            console.warn(' Nenhuma linha encontrada para ordenar');
                             return;
                         }
                         
@@ -563,7 +563,7 @@
                             const taxaA = dadosA ? dadosA.taxa_acerto : 0;
                             const taxaB = dadosB ? dadosB.taxa_acerto : 0;
                             
-                            console.log(`🔄 Comparando: ${intimacaoIdA} (${taxaA}%) vs ${intimacaoIdB} (${taxaB}%)`);
+                            console.log(` Comparando: ${intimacaoIdA} (${taxaA}%) vs ${intimacaoIdB} (${taxaB}%)`);
                             
                             if (ordenacaoTaxaAcerto === 'asc') {
                                 return taxaA - taxaB;
@@ -575,13 +575,243 @@
                         // Reordenar as linhas na tabela
                         rows.forEach(row => tbody.appendChild(row));
                         
-                        console.log(`✅ Tabela ordenada por taxa de acerto (${ordenacaoTaxaAcerto})`);
+                        console.log(` Tabela ordenada por taxa de acerto (${ordenacaoTaxaAcerto})`);
+                    }
+                    
+// Função para formatar data usando JavaScript nativo (definida PRIMEIRO)
+function formatarData(dateString, format = 'DD/MM/YYYY HH:mm') {
+    console.log('DEBUG formatarData: dateString =', dateString, 'format =', format);
+    if (!dateString) return 'N/A';
+    
+    try {
+        const date = new Date(dateString);
+        console.log('DEBUG formatarData: date object =', date);
+        if (isNaN(date.getTime())) return 'Data inválida';
+        
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        
+        console.log('DEBUG formatarData: day =', day, 'month =', month, 'year =', year);
+        
+        if (format === 'DD/MM/YYYY HH:mm:ss') {
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        } else if (format === 'DD/MM/YYYY HH:mm') {
+            return `${day}/${month}/${year} ${hours}:${minutes}`;
+        } else if (format === 'DD/MM/YYYY') {
+            const result = `${day}/${month}/${year}`;
+            console.log('DEBUG formatarData: resultado DD/MM/YYYY =', result);
+            return result;
+        }
+        
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) {
+        console.error('DEBUG formatarData: erro =', e);
+        return 'Data inválida';
+    }
+}
+
+// Função para carregar histórico de acurácia (definida ANTES do DOMContentLoaded)
+function carregarHistoricoAcuracia() {
+                        console.log('Iniciando carregamento do historico de acuracia...');
+                        
+                        const container = document.getElementById('historico-acuracia-container');
+                        const promptId = '{{ prompt.id }}';
+                        
+                        console.log('Container:', container);
+                        console.log('Prompt ID:', promptId);
+                        
+                        if (!container) {
+                            console.error('Container nao encontrado!');
+                            return;
+                        }
+                        
+                        // Mostrar loading
+                        container.innerHTML = `
+                            <div class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
+                                <p class="text-muted mt-2">Carregando histórico de acurácia...</p>
+                            </div>
+                        `;
+                        
+                        console.log('Fazendo requisicao para:', `/api/prompts/${promptId}/historico-acuracia`);
+                        
+                        fetch(`/api/prompts/${promptId}/historico-acuracia`)
+                            .then(response => {
+                                console.log('Resposta recebida:', response.status, response.statusText);
+                                return response.json();
+                            })
+                            .then(data => {
+                                console.log('Dados recebidos:', data);
+                                if (data.success) {
+                                    console.log('Sucesso! Exibindo historico...');
+                                    exibirHistoricoAcuracia(data.historico);
+                                } else {
+                                    container.innerHTML = `
+                                        <div class="text-center py-4">
+                                            <i class="bi bi-exclamation-triangle fa-2x text-warning mb-3"></i>
+                                            <h6 class="text-warning">Erro ao carregar historico</h6>
+                                            <p class="text-muted">${data.message || 'Erro desconhecido'}</p>
+                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="carregarHistoricoAcuracia()">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                                Tentar Novamente
+                                            </button>
+                                        </div>
+                                    `;
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Erro na requisicao de historico de acuracia:', error);
+                                container.innerHTML = `
+                                    <div class="text-center py-4">
+                                        <i class="bi bi-exclamation-triangle fa-2x text-danger mb-3"></i>
+                                        <h6 class="text-danger">Erro de conexao</h6>
+                                        <p class="text-muted">Nao foi possivel carregar o historico de acuracia.</p>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="carregarHistoricoAcuracia()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                            Tentar Novamente
+                                        </button>
+                                    </div>
+                                `;
+                            });
+                    }
+                    
+                    // Função para exibir histórico de acurácia
+                    function exibirHistoricoAcuracia(historico) {
+                        console.log('Exibindo historico de acuracia:', historico);
+                        
+                        const container = document.getElementById('historico-acuracia-container');
+                        
+                        console.log('Container para exibicao:', container);
+                        
+                        if (!container) {
+                            console.error('Container nao encontrado para exibicao!');
+                            return;
+                        }
+                        
+                        if (!historico || historico.length === 0) {
+                            console.log('Nenhum historico encontrado');
+                            container.innerHTML = `
+                                <div class="text-center py-4">
+                                    <i class="bi bi-graph-up fa-2x text-muted mb-3"></i>
+                                    <h6 class="text-muted">Nenhum historico encontrado</h6>
+                                    <p class="text-muted">Este prompt ainda nao possui historico de acuracia por condicoes.</p>
+                                    <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-primary">
+                                        <i class="bi bi-play-circle"></i>
+                                        Fazer Primeira Analise
+                                    </a>
+                                </div>
+                            `;
+                            return;
+                        }
+                        
+                        let html = `
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Int.</th>
+                                            <th>Temp.</th>
+                                            <th>Qtd.</th>
+                                            <th>Acuracia</th>
+                                            <th>Min/Max</th>
+                                            <th>Ultima</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+                        
+                        console.log('Processando historico:', historico.length, 'itens');
+                        
+                        historico.forEach((item, index) => {
+                            console.log(`Processando item ${index + 1}:`, item);
+                            const badgeClass = item.acuracia_media >= 80 ? 'bg-success' : 
+                                              item.acuracia_media >= 60 ? 'bg-warning' : 'bg-danger';
+                            
+                            let dataUltima = 'N/A';
+                            try {
+                                if (item.ultima_analise) {
+                                    console.log('DEBUG: Data original:', item.ultima_analise);
+                                    dataUltima = formatarData(item.ultima_analise, 'DD/MM/YYYY');
+                                    console.log('DEBUG: Data formatada:', dataUltima);
+                                }
+                            } catch (e) {
+                                console.error('Erro ao formatar data:', e);
+                                dataUltima = item.ultima_analise || 'N/A';
+                            }
+                        
+                            html += `
+                                <tr>
+                                    <td>
+                                        <span class="badge bg-info">${item.numero_intimacoes}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">${item.temperatura}</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">${item.total_analises} analises</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge ${badgeClass}">${item.acuracia_media}%</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            ${item.acuracia_minima}% - ${item.acuracia_maxima}%
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">${dataUltima}</small>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i>
+                                    O historico mostra a acuracia media agrupada por numero de intimacoes e temperatura.
+                                    Cada linha representa um conjunto de condicoes especificas.
+                                </small>
+                            </div>
+                        `;
+                        
+                        console.log('HTML gerado e inserido no container');
+                        container.innerHTML = html;
+                        console.log('Historico de acuracia exibido com sucesso!');
                     }
                     
                     // Carregar análises e acertos quando a página carregar
                     document.addEventListener('DOMContentLoaded', function() {
                         carregarAnalisesAcertos();
                         carregarConfigColunasHistorico();
+                        
+                        // Formatar datas nas tabelas
+                        const dateCells = document.querySelectorAll('td small.text-muted');
+                        dateCells.forEach(cell => {
+                            const dateText = cell.textContent.trim();
+                            if (dateText && dateText !== 'N/A' && dateText.includes('-')) {
+                                try {
+                                    const formatted = formatarData(dateText, 'DD/MM/YYYY HH:mm');
+                                    cell.textContent = formatted;
+                                } catch (e) {
+                                    // Manter texto original se não conseguir formatar
+                                }
+                            }
+                        });
+                        
+                        // Carregar histórico de acurácia quando a página carregar
+                        console.log('DOMContentLoaded - Iniciando carregamento do historico...');
+                        carregarHistoricoAcuracia();
                     });
                     
                     // Funções para os botões de controle da tabela
@@ -1243,6 +1473,7 @@
                 {% endif %}
             </div>
         </div>
+
     </div>
 
     <div class="col-lg-4">
@@ -1327,6 +1558,29 @@
             </div>
         </div>
 
+        <!-- Histórico de Acurácia por Condições -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    Histórico de Acurácia por Condições
+                </h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="carregarHistoricoAcuracia()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Atualizar
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="historico-acuracia-container">
+                    <div class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Carregando histórico de acurácia...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Ações Rápidas -->
         <div class="card mb-4">
@@ -1685,32 +1939,6 @@ document.getElementById('btn-confirmar-exclusao').addEventListener('click', func
     });
 });
 
-// Função para formatar data usando JavaScript nativo
-function formatarData(dateString, format = 'DD/MM/YYYY HH:mm') {
-    if (!dateString) return 'N/A';
-    
-    try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return 'Data inválida';
-        
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
-        
-        if (format === 'DD/MM/YYYY HH:mm:ss') {
-            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
-        } else if (format === 'DD/MM/YYYY HH:mm') {
-            return `${day}/${month}/${year} ${hours}:${minutes}`;
-        }
-        
-        return `${day}/${month}/${year} ${hours}:${minutes}`;
-    } catch (e) {
-        return 'Data inválida';
-    }
-}
 
 // Atalhos de teclado
 document.addEventListener('keydown', function(e) {
@@ -1747,21 +1975,188 @@ document.addEventListener('keydown', function(e) {
 
 
 // Aplicar formatação de data após carregamento da página
-document.addEventListener('DOMContentLoaded', function() {
-    // Formatar datas nas tabelas
-    const dateCells = document.querySelectorAll('td small.text-muted');
-    dateCells.forEach(cell => {
-        const dateText = cell.textContent.trim();
-        if (dateText && dateText !== 'N/A' && dateText.includes('-')) {
-            try {
-                const formatted = formatarData(dateText, 'DD/MM/YYYY HH:mm');
-                cell.textContent = formatted;
-            } catch (e) {
-                // Manter texto original se não conseguir formatar
+// (Movido para o DOMContentLoaded principal acima)
+
+// Função duplicada removida - agora está definida antes do DOMContentLoaded
+function carregarHistoricoAcuracia_DUPLICADA_REMOVIDA() {
+    console.log('Iniciando carregamento do historico de acuracia...');
+    alert('TESTE: Funcao carregarHistoricoAcuracia foi chamada!');
+    
+    const container = document.getElementById('historico-acuracia-container');
+    const promptId = '{{ prompt.id }}';
+    
+    console.log('Container:', container);
+    console.log('Prompt ID:', promptId);
+    
+    if (!container) {
+        console.error('Container nao encontrado!');
+        alert('ERRO: Container nao encontrado!');
+        return;
+    }
+    
+    // Teste simples - apenas mostrar uma mensagem
+    container.innerHTML = '<div class="text-center py-3"><p>TESTE: Funcao executada com sucesso!</p></div>';
+    
+    // Mostrar loading
+    container.innerHTML = `
+        <div class="text-center py-3">
+            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+            <p class="text-muted mt-2">Carregando histórico de acurácia...</p>
+        </div>
+    `;
+    
+        console.log('Fazendo requisicao para:', `/api/prompts/${promptId}/historico-acuracia`);
+    
+    fetch(`/api/prompts/${promptId}/historico-acuracia`)
+        .then(response => {
+            console.log(' Resposta recebida:', response.status, response.statusText);
+            return response.json();
+        })
+        .then(data => {
+            console.log(' Dados recebidos:', data);
+            if (data.success) {
+                console.log(' Sucesso! Exibindo histórico...');
+                exibirHistoricoAcuracia(data.historico);
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="bi bi-exclamation-triangle fa-2x text-warning mb-3"></i>
+                        <h6 class="text-warning">Erro ao carregar histórico</h6>
+                        <p class="text-muted">${data.message || 'Erro desconhecido'}</p>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="carregarHistoricoAcuracia()">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Tentar Novamente
+                        </button>
+                    </div>
+                `;
             }
-        }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar histórico de acurácia:', error);
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="bi bi-exclamation-triangle fa-2x text-danger mb-3"></i>
+                    <h6 class="text-danger">Erro de conexão</h6>
+                    <p class="text-muted">Não foi possível carregar o histórico de acurácia.</p>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="carregarHistoricoAcuracia()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                        Tentar Novamente
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// Função para exibir histórico de acurácia (definida globalmente)
+function exibirHistoricoAcuracia(historico) {
+    console.log(' Exibindo histórico de acurácia:', historico);
+    alert('TESTE: Funcao exibirHistoricoAcuracia foi chamada!');
+    
+    const container = document.getElementById('historico-acuracia-container');
+    
+    console.log(' Container para exibição:', container);
+    
+    if (!container) {
+        console.error(' Container não encontrado para exibição!');
+        alert('ERRO: Container não encontrado para exibição!');
+        return;
+    }
+    
+    if (!historico || historico.length === 0) {
+        console.log(' Nenhum histórico encontrado');
+        container.innerHTML = `
+            <div class="text-center py-4">
+                <i class="bi bi-graph-up fa-2x text-muted mb-3"></i>
+                <h6 class="text-muted">Nenhum histórico encontrado</h6>
+                <p class="text-muted">Este prompt ainda não possui histórico de acurácia por condições.</p>
+                <a href="{{ url_for('analise') }}?prompt_ids={{ prompt.id }}" class="btn btn-primary">
+                    <i class="bi bi-play-circle"></i>
+                    Fazer Primeira Análise
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Intimações</th>
+                        <th>Temperatura</th>
+                        <th>Análises</th>
+                        <th>Acurácia Média</th>
+                        <th>Mín/Máx</th>
+                        <th>Última Análise</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    console.log(' Processando histórico:', historico.length, 'itens');
+    
+    historico.forEach((item, index) => {
+        console.log(` Processando item ${index + 1}:`, item);
+        const badgeClass = item.acuracia_media >= 80 ? 'bg-success' : 
+                          item.acuracia_media >= 60 ? 'bg-warning' : 'bg-danger';
+        
+            let dataUltima = 'N/A';
+            try {
+                if (item.ultima_analise) {
+                    dataUltima = formatarData(item.ultima_analise, 'DD/MM/YYYY');
+                }
+            } catch (e) {
+                console.error(' Erro ao formatar data:', e);
+                dataUltima = item.ultima_analise || 'N/A';
+            }
+        
+        html += `
+            <tr>
+                <td>
+                    <span class="badge bg-info">${item.numero_intimacoes}</span>
+                </td>
+                <td>
+                    <span class="badge bg-secondary">${item.temperatura}</span>
+                </td>
+                <td>
+                    <small class="text-muted">${item.total_analises} análises</small>
+                </td>
+                <td>
+                    <span class="badge ${badgeClass}">${item.acuracia_media}%</span>
+                </td>
+                <td>
+                    <small class="text-muted">
+                        ${item.acuracia_minima}% - ${item.acuracia_maxima}%
+                    </small>
+                </td>
+                <td>
+                    <small class="text-muted">${dataUltima}</small>
+                </td>
+            </tr>
+        `;
     });
-});
+    
+    html += `
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i>
+                O histórico mostra a acurácia média agrupada por número de intimações e temperatura.
+                Cada linha representa um conjunto de condições específicas.
+            </small>
+        </div>
+    `;
+    
+    console.log(' HTML gerado e inserido no container');
+    container.innerHTML = html;
+    console.log(' Histórico de acurácia exibido com sucesso!');
+}
 
 </script>
 

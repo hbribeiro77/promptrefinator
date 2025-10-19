@@ -1,0 +1,187 @@
+/**
+ * Estilos para o componente Popover de Acurácia
+ * Componente reutilizável para exibir histórico de acurácia de prompts
+ */
+
+/* Popover de acurácia */
+.popover-acuracia {
+    position: absolute;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 12px;
+    z-index: 1000;
+    max-width: 400px;
+    font-size: 0.875rem;
+    display: none;
+    animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Seta do popover */
+.popover-acuracia::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #dee2e6;
+}
+
+.popover-acuracia::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-bottom: 7px solid white;
+}
+
+/* Cabeçalho do popover */
+.popover-acuracia .popover-header {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.popover-acuracia .popover-header i {
+    color: #007bff;
+}
+
+/* Corpo do popover */
+.popover-acuracia .popover-body {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Item do histórico */
+.popover-acuracia .popover-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #f8f9fa;
+    transition: background-color 0.2s ease;
+}
+
+.popover-acuracia .popover-item:hover {
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+    margin: 0 -6px;
+}
+
+.popover-acuracia .popover-item:last-child {
+    border-bottom: none;
+}
+
+/* Badge de acurácia */
+.popover-acuracia .popover-item .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Informações adicionais */
+.popover-acuracia .popover-item .info {
+    font-size: 0.8rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Rodapé do popover */
+.popover-acuracia .popover-footer {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+/* Estados de loading e erro */
+.popover-acuracia .text-center {
+    text-align: center;
+}
+
+.popover-acuracia .text-center i {
+    display: block;
+    margin: 0 auto 8px;
+}
+
+.popover-acuracia .text-muted {
+    color: #6c757d !important;
+}
+
+.popover-acuracia .text-danger {
+    color: #dc3545 !important;
+}
+
+.popover-acuracia .text-primary {
+    color: #007bff !important;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .popover-acuracia {
+        max-width: 300px;
+        font-size: 0.8rem;
+    }
+    
+    .popover-acuracia .popover-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .popover-acuracia .popover-item .info {
+        font-size: 0.75rem;
+    }
+}
+
+/* Scrollbar customizada */
+.popover-acuracia .popover-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.popover-acuracia .popover-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 2px;
+}
+
+.popover-acuracia .popover-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 2px;
+}
+
+.popover-acuracia .popover-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}

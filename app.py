@@ -46,6 +46,10 @@ def criar_session_id():
 
 def registrar_analise(session_id, total_intimacoes):
     """Registra uma nova análise em andamento"""
+    print(f"=== DEBUG: registrar_analise chamada ===")
+    print(f"=== DEBUG: session_id: {session_id} (tipo: {type(session_id)}) ===")
+    print(f"=== DEBUG: total_intimacoes: {total_intimacoes} (tipo: {type(total_intimacoes)}) ===")
+    
     analises_em_andamento[session_id] = {
         'cancelado': False,
         'total': total_intimacoes,
@@ -243,6 +247,56 @@ def dashboard():
                              status_analises={'Pendente': 0, 'Concluída': 0, 'Erro': 0},
                              tipos_acao=Config.TIPOS_ACAO)
 
+def calcular_taxa_acerto_intimacao(intimacao):
+    """Calcular taxa de acerto de uma intimação"""
+    try:
+        analises = intimacao.get('analises', [])
+        if not analises:
+            return 0.0
+        
+        acertos = sum(1 for analise in analises if analise.get('acertou', False))
+        total = len(analises)
+        
+        if total == 0:
+            return 0.0
+        
+        return (acertos / total) * 100
+    except Exception as e:
+        print(f"Erro ao calcular taxa de acerto da intimação: {e}")
+        return 0.0
+
+def calcular_taxa_acerto_intimacao_filtrada(intimacao, prompt_especifico=None, temperatura_especifica=None):
+    """Calcular taxa de acerto de uma intimação considerando filtros"""
+    try:
+        analises = intimacao.get('analises', [])
+        if not analises:
+            return 0.0
+        
+        # Aplicar filtros
+        analises_filtradas = analises
+        
+        if prompt_especifico:
+            analises_filtradas = [a for a in analises_filtradas if a.get('prompt_id') == prompt_especifico]
+        
+        if temperatura_especifica:
+            temperatura_float = float(temperatura_especifica)
+            # Usar comparação com tolerância para evitar problemas de precisão de float
+            analises_filtradas = [a for a in analises_filtradas if abs(a.get('temperatura', 0) - temperatura_float) < 0.001]
+        
+        if not analises_filtradas:
+            return 0.0
+        
+        acertos = sum(1 for analise in analises_filtradas if analise.get('acertou', False))
+        total = len(analises_filtradas)
+        
+        if total == 0:
+            return 0.0
+        
+        return (acertos / total) * 100
+    except Exception as e:
+        print(f"Erro ao calcular taxa de acerto filtrada da intimação: {e}")
+        return 0.0
+
 @app.route('/intimacoes')
 def listar_intimacoes():
     """Página de listagem de intimações"""
@@ -259,6 +313,7 @@ def listar_intimacoes():
         ordenacao = request.args.get('ordenacao', 'data_desc')
         itens_por_pagina_usuario = request.args.get('itens_por_pagina', '')
         prompt_especifico = request.args.get('prompt_especifico', '')
+        temperatura_especifica = request.args.get('temperatura_especifica', '')
         
         print(f"DEBUG: Parâmetros - Página: {pagina}, Busca: '{busca}', Classificação: '{classificacao}', Ordenação: '{ordenacao}', Itens por página: '{itens_por_pagina_usuario}'")
         
@@ -310,6 +365,12 @@ def listar_intimacoes():
             intimacoes.sort(key=lambda x: x.get('data_criacao', ''))
         elif ordenacao == 'classificacao':
             intimacoes.sort(key=lambda x: x.get('classificacao_manual', ''))
+        elif ordenacao == 'taxa_acerto_desc':
+            # Ordenar por taxa de acerto (descendente - maior para menor)
+            intimacoes.sort(key=lambda x: calcular_taxa_acerto_intimacao_filtrada(x, prompt_especifico, temperatura_especifica), reverse=True)
+        elif ordenacao == 'taxa_acerto_asc':
+            # Ordenar por taxa de acerto (ascendente - menor para maior)
+            intimacoes.sort(key=lambda x: calcular_taxa_acerto_intimacao_filtrada(x, prompt_especifico, temperatura_especifica))
         
         # Paginação
         total_itens = len(intimacoes)
@@ -346,7 +407,7 @@ def listar_intimacoes():
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=Config.DEFENSORES,
                              prompts_disponiveis=prompts_disponiveis,
-                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao, 'prompt_especifico': prompt_especifico})
+                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao, 'prompt_especifico': prompt_especifico, 'temperatura_especifica': temperatura_especifica})
     except Exception as e:
         flash(f'Erro ao carregar intimações: {str(e)}', 'error')
         return render_template('intimacoes.html',
@@ -1224,15 +1285,36 @@ Contexto da Intimação:
 @app.route('/executar-analise', methods=['POST'])
 def executar_analise():
     """Executar análise de intimações com prompts selecionados"""
+    print("=== DEBUG: ROTA /executar-analise CHAMADA ===")
+    print("=== DEBUG: Método HTTP:", request.method)
+    print("=== DEBUG: Content-Type:", request.content_type)
+    print("=== DEBUG: Headers:", dict(request.headers))
+    
     try:
         print("=== DEBUG: executar_analise iniciada ===")
+        print("=== DEBUG: Tentando obter JSON... ===")
         data = request.get_json()
         print(f"=== DEBUG: Dados recebidos: {data} ===")
         
+        if data is None:
+            print("=== DEBUG: ERRO: data é None! ===")
+            return jsonify({'error': 'Dados JSON inválidos'}), 400
+        
+        print("=== DEBUG: Extraindo prompt_id... ===")
         prompt_id = data.get('prompt_id')
+        print(f"=== DEBUG: prompt_id extraído: {prompt_id} (tipo: {type(prompt_id)}) ===")
+        
+        print("=== DEBUG: Extraindo intimacao_ids... ===")
         intimacao_ids = data.get('intimacao_ids', [])
+        print(f"=== DEBUG: intimacao_ids extraído: {len(intimacao_ids)} itens ===")
+        
+        print("=== DEBUG: Extraindo configuracoes... ===")
         configuracoes = data.get('configuracoes', {})
+        print(f"=== DEBUG: configuracoes extraído: {configuracoes} ===")
+        
+        print("=== DEBUG: Extraindo session_id... ===")
         session_id = data.get('session_id')  # ID da sessão para cancelamento
+        print(f"=== DEBUG: session_id extraído: {session_id} (tipo: {type(session_id)}) ===")
         
         if not prompt_id or not intimacao_ids:
             return jsonify({'error': 'Prompt e intimações são obrigatórios'}), 400
@@ -1257,16 +1339,44 @@ def executar_analise():
             return jsonify({'error': 'Prompt não encontrado'}), 404
         
         # Preparar configurações para a sessão
+        print(f"=== DEBUG: Configurações recebidas: {configuracoes} ===")
+        print(f"=== DEBUG: Config padrão: {config} ===")
+        
+        max_tokens_value = configuracoes.get('max_tokens')
+        print(f"=== DEBUG: max_tokens_value: {max_tokens_value} (tipo: {type(max_tokens_value)}) ===")
+        
+        if max_tokens_value is None:
+            max_tokens_value = config.get('max_tokens_padrao', 500)
+            print(f"=== DEBUG: max_tokens_value após fallback: {max_tokens_value} ===")
+        
+        print(f"=== DEBUG: Tentando converter temperatura... ===")
+        temperatura_value = configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7))
+        print(f"=== DEBUG: temperatura_value: {temperatura_value} (tipo: {type(temperatura_value)}) ===")
+        temperatura_float = float(temperatura_value)
+        print(f"=== DEBUG: temperatura_float: {temperatura_float} ===")
+        
+        print(f"=== DEBUG: Tentando converter timeout... ===")
+        timeout_value = configuracoes.get('timeout', config.get('timeout_padrao', 30))
+        print(f"=== DEBUG: timeout_value: {timeout_value} (tipo: {type(timeout_value)}) ===")
+        timeout_int = int(timeout_value)
+        print(f"=== DEBUG: timeout_int: {timeout_int} ===")
+        
+        print(f"=== DEBUG: Tentando converter max_tokens... ===")
+        max_tokens_int = int(max_tokens_value) if max_tokens_value is not None else None
+        print(f"=== DEBUG: max_tokens_int: {max_tokens_int} ===")
+        
         config_sessao = {
             'modelo': configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4')),
-            'temperatura': float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7))),
-            'max_tokens': int(configuracoes.get('max_tokens', config.get('max_tokens_padrao', 500))),
-            'timeout': int(configuracoes.get('timeout', config.get('timeout_padrao', 30))),
+            'temperatura': temperatura_float,
+            'max_tokens': max_tokens_int,
+            'timeout': timeout_int,
             'salvar_resultados': configuracoes.get('salvar_resultados', True),
             'calcular_acuracia': configuracoes.get('calcular_acuracia', True),
             'modo_paralelo': configuracoes.get('modo_paralelo', False),
             'regra_negocio': prompt.get('regra_negocio', '')
         }
+        
+        print(f"=== DEBUG: config_sessao final: {config_sessao} ===")
         
         # Criar sessão no banco
         data_service.criar_sessao_analise(
@@ -1275,7 +1385,7 @@ def executar_analise():
             prompt_nome=prompt['nome'],
             modelo=configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4')),
             temperatura=float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7))),
-            max_tokens=int(configuracoes.get('max_tokens', config.get('max_tokens_padrao', 500))),
+            max_tokens=int(configuracoes.get('max_tokens') or config.get('max_tokens_padrao') or 500),
             timeout=int(configuracoes.get('timeout', config.get('timeout_padrao', 30))),
             total_intimacoes=len(intimacao_ids),
             configuracoes=config_sessao
@@ -1284,7 +1394,7 @@ def executar_analise():
         # Configurações da OpenAI (usar configurações da página se fornecidas, senão usar padrões)
         modelo = configuracoes.get('modelo', config.get('modelo_padrao', 'gpt-4'))
         temperatura = float(configuracoes.get('temperatura', config.get('temperatura_padrao', 0.7)))
-        max_tokens = int(configuracoes.get('max_tokens', config.get('max_tokens_padrao', 500)))
+        max_tokens = int(configuracoes.get('max_tokens') or config.get('max_tokens_padrao') or 500)
         salvar_resultados = configuracoes.get('salvar_resultados', True)
         calcular_acuracia = configuracoes.get('calcular_acuracia', True)
         
@@ -1463,6 +1573,19 @@ Contexto da Intimação:
             'custo_medio': round(custo_total / total_analises, 4) if total_analises > 0 else 0
         }
         
+        # Salvar histórico de acurácia por condições
+        if total_analises > 0:
+            acuracia = estatisticas['taxa_acuracia']
+            numero_intimacoes = len(intimacao_ids)
+            data_service.salvar_historico_acuracia(
+                prompt_id=prompt_id,
+                numero_intimacoes=numero_intimacoes,
+                temperatura=temperatura,
+                acuracia=acuracia,
+                session_id=session_id
+            )
+            print(f"=== DEBUG: Histórico de acurácia salvo - Prompt: {prompt_id}, Intimações: {numero_intimacoes}, Temp: {temperatura}, Acurácia: {acuracia}% ===")
+        
         # Finalizar sessão no banco
         estatisticas_sessao = {
             'total_processadas': total_analises,
@@ -1481,6 +1604,13 @@ Contexto da Intimação:
         })
         
     except Exception as e:
+        print(f"=== DEBUG: EXCEÇÃO CAPTURADA em executar_analise ===")
+        print(f"=== DEBUG: Tipo da exceção: {type(e)} ===")
+        print(f"=== DEBUG: Mensagem da exceção: {str(e)} ===")
+        print(f"=== DEBUG: Traceback completo:")
+        import traceback
+        traceback.print_exc()
+        
         # Garantir que a análise seja finalizada mesmo em caso de erro
         session_id = data.get('session_id') if 'data' in locals() else None
         if session_id:
@@ -2159,6 +2289,11 @@ def configuracoes():
                 'animacoes': request.form.get('animacoes') == 'on',
                 'sons_notificacao': request.form.get('sons_notificacao') == 'on',
                 'auto_save': request.form.get('auto_save') == 'on',
+                'cor_verde_min': int(request.form.get('cor_verde_min', 80)),
+                'cor_amarelo_min': int(request.form.get('cor_amarelo_min', 60)),
+                'cor_vermelho_min': int(request.form.get('cor_vermelho_min', 1)),
+                'cor_cinza_max': int(request.form.get('cor_cinza_max', 0)),
+                'cores_ativadas': request.form.get('cores_ativadas') == 'on' or request.form.get('cores_ativadas') == 'true',
                 'backup_automatico': request.form.get('backup_automatico', 'weekly'),
                 'max_backups': int(request.form.get('max_backups', 10)),
                 'diretorio_backup': request.form.get('diretorio_backup', './backups'),
@@ -2503,6 +2638,28 @@ def api_config():
             'temperatura_padrao': 0.0,
             'max_tokens_padrao': 100000
         })
+
+@app.route('/api/config/cores', methods=['GET'])
+def get_config_cores():
+    """API para obter configurações de cores"""
+    try:
+        config = data_service.get_config()
+        cores_config = {
+            'cor_verde_min': config.get('cor_verde_min', 80),
+            'cor_amarelo_min': config.get('cor_amarelo_min', 60),
+            'cor_vermelho_min': config.get('cor_vermelho_min', 1),
+            'cor_cinza_max': config.get('cor_cinza_max', 0),
+            'cores_ativadas': config.get('cores_ativadas', True)
+        }
+        return jsonify({
+            'success': True,
+            'cores': cores_config
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter configurações de cores: {str(e)}'
+        }), 500
 
 @app.route('/api/configuracoes/testar-conexao', methods=['POST'])
 def testar_conexao_ai():
@@ -3316,6 +3473,24 @@ def obter_performance_prompt_temperatura(prompt_id):
             'message': f'Erro ao obter performance do prompt por temperatura: {str(e)}'
         }), 500
 
+@app.route('/api/intimacoes/taxa-acerto-prompt-temperatura/<prompt_id>/<temperatura>')
+def obter_taxa_acerto_prompt_temperatura(prompt_id, temperatura):
+    """API para obter taxa de acerto de um prompt específico com temperatura específica"""
+    try:
+        taxas_acerto = data_service.get_taxa_acerto_por_prompt_e_temperatura(prompt_id, float(temperatura))
+        return jsonify({
+            'success': True,
+            'taxas_acerto': taxas_acerto,
+            'prompt_id': prompt_id,
+            'temperatura': temperatura
+        })
+    except Exception as e:
+        print(f"Erro ao obter taxa de acerto do prompt por temperatura: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter taxa de acerto do prompt por temperatura: {str(e)}'
+        }), 500
+
 @app.route('/api/prompts/<prompt_id>/analises-acertos')
 def obter_analises_acertos_prompt(prompt_id: str):
     """API para obter análises e acertos de um prompt específico por temperatura"""
@@ -3327,6 +3502,38 @@ def obter_analises_acertos_prompt(prompt_id: str):
         })
     except Exception as e:
         print(f"Erro ao obter análises e acertos do prompt: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
+@app.route('/api/prompts/<prompt_id>/historico-acuracia')
+def obter_historico_acuracia_prompt(prompt_id: str):
+    """API para obter histórico de acurácia de um prompt"""
+    try:
+        historico = data_service.get_historico_acuracia_prompt(prompt_id)
+        return jsonify({
+            'success': True,
+            'historico': historico
+        })
+    except Exception as e:
+        print(f"Erro ao obter histórico de acurácia do prompt: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
+@app.route('/api/prompts/<prompt_id>/acuracia-condicoes/<int:numero_intimacoes>/<float:temperatura>')
+def obter_acuracia_por_condicoes(prompt_id: str, numero_intimacoes: int, temperatura: float):
+    """API para obter acurácia média para condições específicas"""
+    try:
+        acuracia = data_service.get_acuracia_por_condicoes(prompt_id, numero_intimacoes, temperatura)
+        return jsonify({
+            'success': True,
+            'acuracia': acuracia
+        })
+    except Exception as e:
+        print(f"Erro ao obter acurácia por condições: {e}")
         return jsonify({
             'success': False,
             'message': f'Erro interno: {str(e)}'

@@ -94,9 +94,25 @@ class SQLiteService:
                 )
             ''')
             
+            # Criar tabela de histórico de acurácia
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS historico_acuracia (
+                    id TEXT PRIMARY KEY,
+                    prompt_id TEXT NOT NULL,
+                    numero_intimacoes INTEGER NOT NULL,
+                    temperatura REAL NOT NULL,
+                    acuracia REAL NOT NULL,
+                    data_analise TEXT NOT NULL,
+                    session_id TEXT,
+                    FOREIGN KEY (prompt_id) REFERENCES prompts (id)
+                )
+            ''')
+            
             # Criar índices para performance
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_intimacao ON analises(intimacao_id)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_prompt ON analises(prompt_id)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_prompt ON historico_acuracia(prompt_id)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_condicoes ON historico_acuracia(prompt_id, numero_intimacoes, temperatura)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_data ON analises(data_analise)')
             
             conn.commit()
@@ -791,6 +807,141 @@ class SQLiteService:
             
             return result
     
+    def get_taxa_acerto_por_prompt_e_temperatura(self, prompt_id: str, temperatura: float) -> List[Dict[str, Any]]:
+        """Obter taxa de acerto de um prompt específico com temperatura específica"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('''
+                SELECT 
+                    a.intimacao_id,
+                    COUNT(*) as total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) as acertos,
+                    ROUND(
+                        (SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 
+                        1
+                    ) as taxa_acerto
+                FROM analises a
+                WHERE a.prompt_id = ? AND a.temperatura = ? AND a.intimacao_id IS NOT NULL
+                GROUP BY a.intimacao_id
+                ORDER BY taxa_acerto DESC
+            ''', (prompt_id, temperatura))
+            
+            result = []
+            for row in cursor.fetchall():
+                result.append({
+                    'intimacao_id': row[0],
+                    'total_analises': row[1],
+                    'acertos': row[2],
+                    'taxa_acerto': row[3]
+                })
+            
+            return result
+    
+    def salvar_historico_acuracia(self, prompt_id: str, numero_intimacoes: int, temperatura: float, 
+                                 acuracia: float, session_id: str = None) -> bool:
+        """Salvar histórico de acurácia de um prompt"""
+        try:
+            with self.get_connection() as conn:
+                historico_id = str(uuid.uuid4())
+                data_analise = datetime.now().isoformat()
+                
+                conn.execute('''
+                    INSERT INTO historico_acuracia 
+                    (id, prompt_id, numero_intimacoes, temperatura, acuracia, data_analise, session_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (historico_id, prompt_id, numero_intimacoes, temperatura, acuracia, data_analise, session_id))
+                
+                conn.commit()
+                return True
+        except Exception as e:
+            print(f"Erro ao salvar histórico de acurácia: {e}")
+            return False
+    
+    def get_historico_acuracia_prompt(self, prompt_id: str) -> List[Dict[str, Any]]:
+        """Obter histórico de acurácia de um prompt agrupado por condições"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute('''
+                    SELECT 
+                        prompt_id,
+                        numero_intimacoes,
+                        temperatura,
+                        COUNT(*) as total_analises,
+                        AVG(acuracia) as acuracia_media,
+                        MIN(acuracia) as acuracia_minima,
+                        MAX(acuracia) as acuracia_maxima,
+                        MIN(data_analise) as primeira_analise,
+                        MAX(data_analise) as ultima_analise
+                    FROM historico_acuracia 
+                    WHERE prompt_id = ?
+                    GROUP BY prompt_id, numero_intimacoes, temperatura
+                    ORDER BY numero_intimacoes DESC, temperatura ASC, ultima_analise DESC
+                ''', (prompt_id,))
+                
+                result = []
+                for row in cursor.fetchall():
+                    result.append({
+                        'prompt_id': row[0],
+                        'numero_intimacoes': row[1],
+                        'temperatura': row[2],
+                        'total_analises': row[3],
+                        'acuracia_media': round(row[4], 2),
+                        'acuracia_minima': round(row[5], 2),
+                        'acuracia_maxima': round(row[6], 2),
+                        'primeira_analise': row[7],
+                        'ultima_analise': row[8]
+                    })
+                
+                return result
+        except Exception as e:
+            print(f"Erro ao obter histórico de acurácia: {e}")
+            return []
+    
+    def get_acuracia_por_condicoes(self, prompt_id: str, numero_intimacoes: int, temperatura: float) -> Dict[str, Any]:
+        """Obter acurácia média para condições específicas"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute('''
+                    SELECT 
+                        COUNT(*) as total_analises,
+                        AVG(acuracia) as acuracia_media,
+                        MIN(acuracia) as acuracia_minima,
+                        MAX(acuracia) as acuracia_maxima,
+                        MIN(data_analise) as primeira_analise,
+                        MAX(data_analise) as ultima_analise
+                    FROM historico_acuracia 
+                    WHERE prompt_id = ? AND numero_intimacoes = ? AND temperatura = ?
+                ''', (prompt_id, numero_intimacoes, temperatura))
+                
+                row = cursor.fetchone()
+                if row and row[0] > 0:
+                    return {
+                        'total_analises': row[0],
+                        'acuracia_media': round(row[1], 2),
+                        'acuracia_minima': round(row[2], 2),
+                        'acuracia_maxima': round(row[3], 2),
+                        'primeira_analise': row[4],
+                        'ultima_analise': row[5]
+                    }
+                else:
+                    return {
+                        'total_analises': 0,
+                        'acuracia_media': 0.0,
+                        'acuracia_minima': 0.0,
+                        'acuracia_maxima': 0.0,
+                        'primeira_analise': None,
+                        'ultima_analise': None
+                    }
+        except Exception as e:
+            print(f"Erro ao obter acurácia por condições: {e}")
+            return {
+                'total_analises': 0,
+                'acuracia_media': 0.0,
+                'acuracia_minima': 0.0,
+                'acuracia_maxima': 0.0,
+                'primeira_analise': None,
+                'ultima_analise': None
+            }
+    
     def get_prompts_acerto_por_intimacao(self, intimacao_id: str) -> List[Dict[str, Any]]:
         """Obter prompts e taxas de acerto de uma intimação específica"""
         with self.get_connection() as conn:
@@ -1005,6 +1156,17 @@ class SQLiteService:
                            timeout: int, total_intimacoes: int, configuracoes: Dict[str, Any] = None) -> bool:
         """Criar uma nova sessão de análise"""
         try:
+            print(f"=== DEBUG: criar_sessao_analise chamada ===")
+            print(f"=== DEBUG: session_id: {session_id} (tipo: {type(session_id)}) ===")
+            print(f"=== DEBUG: prompt_id: {prompt_id} (tipo: {type(prompt_id)}) ===")
+            print(f"=== DEBUG: prompt_nome: {prompt_nome} (tipo: {type(prompt_nome)}) ===")
+            print(f"=== DEBUG: modelo: {modelo} (tipo: {type(modelo)}) ===")
+            print(f"=== DEBUG: temperatura: {temperatura} (tipo: {type(temperatura)}) ===")
+            print(f"=== DEBUG: max_tokens: {max_tokens} (tipo: {type(max_tokens)}) ===")
+            print(f"=== DEBUG: timeout: {timeout} (tipo: {type(timeout)}) ===")
+            print(f"=== DEBUG: total_intimacoes: {total_intimacoes} (tipo: {type(total_intimacoes)}) ===")
+            print(f"=== DEBUG: configuracoes: {configuracoes} (tipo: {type(configuracoes)}) ===")
+            
             with self.get_connection() as conn:
                 conn.execute('''
                     INSERT INTO sessoes_analise (

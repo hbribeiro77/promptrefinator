@@ -736,6 +736,155 @@
             </div>
         </div>
 
+        <!-- Configurações de Escala de Cores -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-palette"></i>
+                    Escala de Cores para Acurácia
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="form-cores">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Configuração da Escala de Cores</strong>
+                        <br>
+                        Defina os valores mínimos para cada cor na exibição da acurácia dos prompts.
+                        <br>
+                        <small class="text-muted">
+                            As cores são aplicadas automaticamente nos selects de prompts e tabelas de acurácia.
+                        </small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-check-circle"></i>
+                                        Verde (Excelente)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <label for="cor-verde-min" class="form-label">Valor Mínimo (%)</label>
+                                    <input type="number" class="form-control" id="cor-verde-min" name="cor_verde_min" 
+                                           min="0" max="100" step="1" 
+                                           value="{{ config.cor_verde_min if config.cor_verde_min is not none else 80 }}">
+                                    <div class="form-text">
+                                        <small>Acurácia ≥ este valor será exibida em verde</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Amarelo (Bom)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <label for="cor-amarelo-min" class="form-label">Valor Mínimo (%)</label>
+                                    <input type="number" class="form-control" id="cor-amarelo-min" name="cor_amarelo_min" 
+                                           min="0" max="100" step="1" 
+                                           value="{{ config.cor_amarelo_min if config.cor_amarelo_min is not none else 60 }}">
+                                    <div class="form-text">
+                                        <small>Acurácia ≥ este valor será exibida em amarelo</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="card border-danger">
+                                <div class="card-header bg-danger text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-x-circle"></i>
+                                        Vermelho (Ruim)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <label for="cor-vermelho-min" class="form-label">Valor Mínimo (%)</label>
+                                    <input type="number" class="form-control" id="cor-vermelho-min" name="cor_vermelho_min" 
+                                           min="0" max="100" step="1" 
+                                           value="{{ config.cor_vermelho_min if config.cor_vermelho_min is not none else 1 }}">
+                                    <div class="form-text">
+                                        <small>Acurácia ≥ este valor será exibida em vermelho</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <div class="card border-secondary">
+                                <div class="card-header bg-secondary text-white">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-dash-circle"></i>
+                                        Cinza (N/A)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <label for="cor-cinza-max" class="form-label">Valor Máximo (%)</label>
+                                    <input type="number" class="form-control" id="cor-cinza-max" name="cor_cinza_max" 
+                                           min="0" max="100" step="1" 
+                                           value="{{ config.cor_cinza_max if config.cor_cinza_max is not none else 0 }}">
+                                    <div class="form-text">
+                                        <small>Acurácia ≤ este valor será exibida em cinza</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <h6>Preview da Escala</h6>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-success me-2" id="preview-badge-verde">85%</span>
+                                    <span>Verde: ≥ <span id="preview-verde">{{ config.cor_verde_min if config.cor_verde_min is not none else 80 }}%</span></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-warning me-2" id="preview-badge-amarelo">75%</span>
+                                    <span>Amarelo: ≥ <span id="preview-amarelo">{{ config.cor_amarelo_min if config.cor_amarelo_min is not none else 60 }}%</span></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-danger me-2" id="preview-badge-vermelho">50%</span>
+                                    <span>Vermelho: ≥ <span id="preview-vermelho">{{ config.cor_vermelho_min if config.cor_vermelho_min is not none else 1 }}%</span></span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-secondary me-2" id="preview-badge-cinza">N/A</span>
+                                    <span>Cinza: ≤ <span id="preview-cinza">{{ config.cor_cinza_max if config.cor_cinza_max is not none else 0 }}%</span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="cores-ativadas" name="cores_ativadas" 
+                                   {% if config.cores_ativadas is not defined or config.cores_ativadas %}checked{% endif %}>
+                            <label class="form-check-label" for="cores-ativadas">
+                                Ativar escala de cores na interface
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            <small>Quando desativado, todas as acurácias serão exibidas em cinza</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Configurações de Backup -->
         <div class="card mb-4">
             <div class="card-header">
@@ -1273,6 +1422,13 @@ function salvarConfiguracoes() {
     dados.animacoes = getValue('animacoes', 'checked');
     dados.sons_notificacao = getValue('sons-notificacao', 'checked');
     dados.auto_save = getValue('auto-save', 'checked');
+    
+    // Configurações de Cores
+    dados.cor_verde_min = getValue('cor-verde-min', 'int');
+    dados.cor_amarelo_min = getValue('cor-amarelo-min', 'int');
+    dados.cor_vermelho_min = getValue('cor-vermelho-min', 'int');
+    dados.cor_cinza_max = getValue('cor-cinza-max', 'int');
+    dados.cores_ativadas = getValue('cores-ativadas', 'checked');
     
     // Backup
     dados.backup_automatico = getValue('backup-automatico');
@@ -2146,5 +2302,29 @@ function restaurarBackup() {
         btnRestaurar.disabled = false;
     });
 }
+
+// Atualizar preview das cores em tempo real
+document.addEventListener('DOMContentLoaded', function() {
+    // Atualizar preview das cores em tempo real
+    document.getElementById('cor-verde-min').addEventListener('input', function() {
+        document.getElementById('preview-verde').textContent = this.value;
+        document.getElementById('preview-badge-verde').textContent = this.value + '%';
+    });
+    
+    document.getElementById('cor-amarelo-min').addEventListener('input', function() {
+        document.getElementById('preview-amarelo').textContent = this.value;
+        document.getElementById('preview-badge-amarelo').textContent = this.value + '%';
+    });
+    
+    document.getElementById('cor-vermelho-min').addEventListener('input', function() {
+        document.getElementById('preview-vermelho').textContent = this.value;
+        document.getElementById('preview-badge-vermelho').textContent = this.value + '%';
+    });
+    
+    document.getElementById('cor-cinza-max').addEventListener('input', function() {
+        document.getElementById('preview-cinza').textContent = this.value;
+        document.getElementById('preview-badge-cinza').textContent = this.value + '%';
+    });
+});
 </script>
 {% endblock %}

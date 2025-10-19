@@ -9,9 +9,14 @@ function carregarTaxasAcerto() {
     
     // Verificar se há um prompt específico selecionado
     const promptEspecifico = document.getElementById('prompt-especifico');
+    const temperaturaEspecifica = document.getElementById('temperatura-especifica');
     const promptId = promptEspecifico ? promptEspecifico.value : null;
+    const temperatura = temperaturaEspecifica ? temperaturaEspecifica.value : null;
     
-    if (promptId && promptId !== '') {
+    if (promptId && promptId !== '' && temperatura && temperatura !== '') {
+        console.log('🎯 Carregando taxa de acerto do prompt específico com temperatura:', promptId, temperatura);
+        carregarTaxasAcertoPromptTemperatura(promptId, temperatura);
+    } else if (promptId && promptId !== '') {
         console.log('🎯 Carregando taxa de acerto do prompt específico:', promptId);
         carregarTaxasAcertoPromptEspecifico(promptId);
     } else {
@@ -59,6 +64,27 @@ function carregarTaxasAcertoPromptEspecifico(promptId) {
         })
         .catch(error => {
             console.error('❌ Erro na requisição de taxas de acerto do prompt específico:', error);
+        });
+}
+
+// Função para carregar taxa de acerto do prompt específico com temperatura específica
+function carregarTaxasAcertoPromptTemperatura(promptId, temperatura) {
+    fetch(`/api/intimacoes/taxa-acerto-prompt-temperatura/${promptId}/${temperatura}`)
+        .then(response => {
+            console.log('📡 Resposta da API prompt + temperatura:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('📊 Dados prompt + temperatura recebidos:', data);
+            if (data.success) {
+                console.log('✅ Taxas de acerto do prompt + temperatura carregadas:', data.taxas_acerto);
+                atualizarTaxasAcertoArray(data.taxas_acerto);
+            } else {
+                console.error('❌ Erro ao carregar taxas de acerto do prompt + temperatura:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Erro na requisição de taxas de acerto do prompt + temperatura:', error);
         });
 }
 
@@ -631,6 +657,15 @@ function inicializarTaxaAcerto() {
     if (promptEspecifico) {
         promptEspecifico.addEventListener('change', function() {
             console.log('🔄 Prompt específico alterado:', this.value);
+            carregarTaxasAcerto();
+        });
+    }
+    
+    // Listener para mudanças no dropdown de temperatura específica
+    const temperaturaEspecifica = document.getElementById('temperatura-especifica');
+    if (temperaturaEspecifica) {
+        temperaturaEspecifica.addEventListener('change', function() {
+            console.log('🔄 Temperatura específica alterada:', this.value);
             carregarTaxasAcerto();
         });
     }
