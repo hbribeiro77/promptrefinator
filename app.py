@@ -3842,10 +3842,11 @@ def restaurar_backup_banco():
         
         # Criar diretório de backup se não existir
         os.makedirs(backup_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
         # Fazer backup do banco atual antes de restaurar
         if os.path.exists(db_path):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_path = os.path.join(backup_dir, f'backup_antes_restauracao_{timestamp}.db')
             
             import shutil

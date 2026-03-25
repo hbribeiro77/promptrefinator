@@ -1579,12 +1579,6 @@ function criarBackupManual() {
     }, 2000);
 }
 
-// Função para restaurar backup
-function restaurarBackup() {
-    // Em uma aplicação real, isso abriria um seletor de arquivo
-    showToast('Funcionalidade de restauração será implementada em breve!', 'info');
-}
-
 // Função para listar backups
 function listarBackups() {
     showToast('Listando backups disponíveis...', 'info');
@@ -2293,7 +2287,26 @@ function restaurarBackup() {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(async response => {
+        const text = await response.text();
+        let data = null;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch (parseErr) {
+            if (response.status === 502 || response.status === 504) {
+                throw new Error(
+                    'Gateway/proxy encerrou a conexão (502/504). Uploads grandes podem exceder tempo ou tamanho no Easypanel/nginx — aumente timeouts e client_max_body_size.'
+                );
+            }
+            throw new Error(
+                'Resposta do servidor não é JSON (status ' + response.status + '). Verifique logs do container e do proxy.'
+            );
+        }
+        if (!response.ok) {
+            throw new Error(data.message || ('Erro HTTP ' + response.status));
+        }
+        return data;
+    })
     .then(data => {
         if (data.success) {
             showToast('Backup restaurado com sucesso! A página será recarregada.', 'success');
