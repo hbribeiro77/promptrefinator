@@ -30,10 +30,45 @@ class Config:
     AZURE_OPENAI_API_KEY = os.environ.get('AZURE_OPENAI_API_KEY')
     AZURE_OPENAI_ENDPOINT = os.environ.get('AZURE_OPENAI_ENDPOINT')
     AZURE_OPENAI_API_VERSION = os.environ.get('AZURE_OPENAI_API_VERSION', '2024-02-15-preview')
-    AZURE_OPENAI_DEFAULT_DEPLOYMENT = os.environ.get('AZURE_OPENAI_DEFAULT_DEPLOYMENT', 'gpt-4')
+    # Deployments permitidos na UI (por enquanto só gpt-4o)
+    AZURE_OPENAI_MODELS = ('gpt-4o',)
+    _azure_dep_env = (os.environ.get('AZURE_OPENAI_DEFAULT_DEPLOYMENT') or 'gpt-4o').strip()
+    AZURE_OPENAI_DEFAULT_DEPLOYMENT = (
+        _azure_dep_env if _azure_dep_env in AZURE_OPENAI_MODELS else AZURE_OPENAI_MODELS[0]
+    )
     AZURE_OPENAI_DEFAULT_TEMPERATURE = 0.7
     AZURE_OPENAI_DEFAULT_MAX_TOKENS = 500
     AZURE_OPENAI_DEFAULT_TOP_P = 1.0
+    
+    # LiteLLM (proxy com API compatível com OpenAI)
+    LITELLM_API_KEY = os.environ.get('LITELLM_API_KEY')
+    LITELLM_ENDPOINT = os.environ.get('LITELLM_ENDPOINT')
+    # Modelos expostos pelo proxy institucional (UI + validação)
+    LITELLM_UI_MODELS = (
+        'azure_ai/claude-sonnet-4-6',
+        'azure_ai/claude-opus-4-6',
+        'azure_ai/claude-haiku-4-5',
+        'gemini/gemini-3.1-pro-preview',
+        'gemini/gemini-3.1-flash-lite-preview',
+        'gemini/gemini-3-flash-preview',
+        'gemini/gemini-3-pro-preview',
+    )
+    _litellm_def_env = (os.environ.get('LITELLM_DEFAULT_MODEL') or '').strip()
+    LITELLM_DEFAULT_MODEL = (
+        _litellm_def_env if _litellm_def_env in LITELLM_UI_MODELS else LITELLM_UI_MODELS[0]
+    )
+    LITELLM_TEST_MODEL = os.environ.get('LITELLM_TEST_MODEL')
+    # Proxy corporativo (usuário/senha na URL: http://user:pass@host:porta)
+    LITELLM_PROXY = (os.environ.get('LITELLM_PROXY') or '').strip() or None
+    LITELLM_HTTP_PROXY = (os.environ.get('LITELLM_HTTP_PROXY') or '').strip() or None
+    LITELLM_HTTPS_PROXY = (os.environ.get('LITELLM_HTTPS_PROXY') or '').strip() or None
+    LITELLM_CA_BUNDLE_PATH = (os.environ.get('LITELLM_CA_BUNDLE_PATH') or '').strip() or None
+    LITELLM_PROXY_TRUST_ENV = os.environ.get('LITELLM_PROXY_TRUST_ENV', 'true').lower() in (
+        '1', 'true', 'yes', 'on',
+    )
+    LITELLM_SSL_VERIFY = os.environ.get('LITELLM_SSL_VERIFY', 'true').lower() in (
+        '1', 'true', 'yes', 'on',
+    )
     
     # Configurações de backup
     MAX_BACKUPS = 10
@@ -147,39 +182,31 @@ class Config:
         'data_atualizacao': '2025-01-23'
     }
     
-    # Modelos Azure OpenAI disponíveis (deployments) - 2025
-    AZURE_OPENAI_MODELS = [
-        # GPT-5 Series (Limited access required)
-        'gpt-5',
-        'gpt-5-mini',
-        'gpt-5-nano',
-        'gpt-5-chat',
-        
-        # GPT-4.1 Series
-        'gpt-4.1',
-        'gpt-4.1-mini',
-        'gpt-4.1-nano',
-        
-        # GPT-4o Series
-        'gpt-4o',
-        'gpt-4o-mini',
-        
-        # o-Series (Reasoning)
-        'o3-mini',
-        'o4-mini',
-        
-        # Open Source Reasoning Models
-        'gpt-oss-120b',
-        'gpt-oss-20b',
-        
-        # GPT-4 Series (Stable)
-        'gpt-4',
-        'gpt-4-turbo',
-        
-        # GPT-3.5 Series (Azure naming convention)
-        'gpt-35-turbo',
-        'gpt-35-turbo-16k'
-    ]
+    @staticmethod
+    def get_azure_ui_models():
+        """Deployments sugeridos na UI quando o provedor é Azure OpenAI."""
+        return list(Config.AZURE_OPENAI_MODELS)
+
+    @staticmethod
+    def normalize_azure_deployment(deployment):
+        """Garante deployment na allowlist; inválido ou vazio usa o primeiro permitido."""
+        m = (deployment or '').strip()
+        if m in Config.AZURE_OPENAI_MODELS:
+            return m
+        return Config.AZURE_OPENAI_MODELS[0]
+
+    @staticmethod
+    def get_litellm_ui_models():
+        """Lista fixa de modelos permitidos na UI quando o provedor é LiteLLM."""
+        return list(Config.LITELLM_UI_MODELS)
+
+    @staticmethod
+    def normalize_litellm_model(model):
+        """Garante modelo na allowlist; vazio ou inválido usa LITELLM_DEFAULT_MODEL."""
+        m = (model or '').strip()
+        if m in Config.LITELLM_UI_MODELS:
+            return m
+        return Config.LITELLM_DEFAULT_MODEL
     
     @staticmethod
     def init_app(app):

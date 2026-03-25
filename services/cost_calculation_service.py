@@ -93,8 +93,11 @@ class CostCalculationService:
         try:
             precos = self._get_precos_modelos()
             
-            # Obter preços do provedor
-            provider_precos = precos.get(provider.lower(), {})
+            # Obter preços do provedor (LiteLLM usa tabela OpenAI como aproximação)
+            provider_key = provider.lower()
+            if provider_key == 'litellm':
+                provider_key = 'openai'
+            provider_precos = precos.get(provider_key, {})
             if not provider_precos:
                 print(f"Provedor '{provider}' não encontrado nos preços")
                 return 0.0

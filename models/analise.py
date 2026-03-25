@@ -105,7 +105,7 @@ class Analise:
         if not isinstance(self.parametros_openai, dict):
             errors.append('Parâmetros OpenAI devem ser um dicionário')
         else:
-            required_params = ['model', 'temperature', 'max_tokens', 'top_p']
+            required_params = ['model', 'temperature', 'max_tokens']
             for param in required_params:
                 if param not in self.parametros_openai:
                     errors.append(f'Parâmetro OpenAI obrigatório ausente: {param}')

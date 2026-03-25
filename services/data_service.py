@@ -41,7 +41,6 @@ class DataService:
                     'model': self.config.OPENAI_DEFAULT_MODEL,
                     'temperature': self.config.OPENAI_DEFAULT_TEMPERATURE,
                     'max_tokens': self.config.OPENAI_DEFAULT_MAX_TOKENS,
-                    'top_p': self.config.OPENAI_DEFAULT_TOP_P
                 }
             }
         }

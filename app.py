@@ -2,6 +2,7 @@ import os
 import time
 import asyncio
 import concurrent.futures
+from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, Response
 from werkzeug.utils import secure_filename
@@ -113,7 +114,8 @@ DEFAULT_CONFIG = {
     'compressao_backup': 'zip',
     'log_level': 'INFO',
     'cache_size': 100,
-    'max_concurrent': 5,
+    'max_concurrent': 1,
+    'delay_entre_lotes': 0.5,
     'session_timeout': 60,
     'debug_mode': False,
     'log_requests': False,
@@ -122,6 +124,36 @@ DEFAULT_CONFIG = {
 
 # Importar tipos de ação do config
 from config import Config
+
+
+def resolve_analise_em_lote_paralelismo(config) -> tuple:
+    """
+    Paralelismo da rota /executar-analise (qualquer provedor de IA).
+    Fonte única na UI: max_concurrent e delay_entre_lotes (Configurações avançadas).
+    Fallback para chaves legadas analise_paralela / azure_*.
+    """
+    if not config:
+        config = {}
+    raw = config.get("max_concurrent")
+    if raw is None:
+        raw = config.get("analise_paralela")
+    if raw is None:
+        raw = config.get("azure_analise_paralela")
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        n = 1
+    n = max(1, min(20, n))
+    d_raw = config.get("delay_entre_lotes")
+    if d_raw is None:
+        d_raw = config.get("azure_delay_entre_lotes", 0.5)
+    try:
+        delay = float(d_raw)
+    except (TypeError, ValueError):
+        delay = 0.5
+    delay = max(0.0, min(120.0, delay))
+    return n, delay
+
 
 def gerar_dados_graficos(analises, performance_prompts):
     """Gera dados para os gráficos baseados nas análises reais"""
@@ -450,6 +482,7 @@ def nova_intimacao():
             defensor = request.form.get('defensor', '').strip()
             id_tarefa = request.form.get('id_tarefa', '').strip()
             cor_etiqueta = request.form.get('cor_etiqueta', '').strip()
+            smart_context = request.form.get('smart_context') == '1'  # Checkbox retorna '1' se marcado
             
             print(f"Contexto extraído: '{contexto}'")
             print(f"Classificação extraída: '{classificacao_manual}'")
@@ -464,6 +497,7 @@ def nova_intimacao():
             print(f"Defensor: '{defensor}'")
             print(f"ID Tarefa: '{id_tarefa}'")
             print(f"Cor Etiqueta: '{cor_etiqueta}'")
+            print(f"Smart Context: {smart_context}")
             
             if not contexto:
                 print("DEBUG: Contexto vazio, retornando erro")
@@ -484,7 +518,8 @@ def nova_intimacao():
                                            'prazo': prazo,
                                            'defensor': defensor,
                                            'id_tarefa': id_tarefa,
-                                           'cor_etiqueta': cor_etiqueta})
+                                           'cor_etiqueta': cor_etiqueta,
+                                           'smart_context': smart_context})
             
             # Criar a intimação
             intimacao_data = {
@@ -501,6 +536,7 @@ def nova_intimacao():
                 'defensor': defensor if defensor else None,
                 'id_tarefa': id_tarefa if id_tarefa else None,
                 'cor_etiqueta': cor_etiqueta if cor_etiqueta else None,
+                'smart_context': smart_context,
                 'data_criacao': datetime.now().isoformat(),
                 'analises': []
             }
@@ -537,7 +573,8 @@ def nova_intimacao():
                                        'prazo': request.form.get('prazo', ''),
                                        'defensor': request.form.get('defensor', ''),
                                        'id_tarefa': request.form.get('id_tarefa', ''),
-                                       'cor_etiqueta': request.form.get('cor_etiqueta', '')})
+                                       'cor_etiqueta': request.form.get('cor_etiqueta', ''),
+                                       'smart_context': request.form.get('smart_context') == '1'})
     
     return render_template('nova_intimacao.html', 
                          classificacoes=Config.TIPOS_ACAO,
@@ -763,9 +800,24 @@ def novo_prompt():
                                        'descricao': request.form.get('descricao', ''),
                                        'conteudo': request.form.get('conteudo', '')})
     
+    # Aceitar dados via query parameters (para pré-preenchimento)
+    dados = {}
+    if request.method == 'GET':
+        nome = request.args.get('nome', '').strip()
+        descricao = request.args.get('descricao', '').strip()
+        regra_negocio = request.args.get('regra_negocio', '').strip()
+        
+        if nome or descricao or regra_negocio:
+            dados = {
+                'nome': nome,
+                'descricao': descricao,
+                'regra_negocio': regra_negocio,
+                'conteudo': ''  # Sempre vazio quando vem do wizard
+            }
+    
     return render_template('novo_prompt.html',
                          classificacoes=Config.TIPOS_ACAO,
-                         dados={})
+                         dados=dados)
 
 @app.route('/prompts/<id>')
 def visualizar_prompt(id):
@@ -841,10 +893,29 @@ def analise():
         # Usar o ai_manager_service global
         provedor_atual = ai_manager_service.get_current_provider()
         
-        # Debug das configurações
-        modelo_padrao = config.get('azure_deployment', 'gpt-4')
-        temperatura_padrao = config.get('azure_temperatura', 0.7)
-        max_tokens_padrao = config.get('azure_max_tokens')
+        # Debug das configurações (padrões por provedor)
+        if provedor_atual == 'azure':
+            modelo_padrao = Config.normalize_azure_deployment(
+                (config.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+            )
+            temperatura_padrao = config.get('azure_temperatura', 0.7)
+            max_tokens_padrao = config.get('azure_max_tokens')
+            modelos_disponiveis = Config.get_azure_ui_models()
+        elif provedor_atual == 'litellm':
+            modelo_padrao = Config.normalize_litellm_model(
+                (config.get('litellm_default_model') or '').strip() or Config.LITELLM_DEFAULT_MODEL
+            )
+            temperatura_padrao = config.get('temperatura_padrao', 0.7)
+            max_tokens_padrao = config.get('max_tokens_padrao', 500)
+            modelos_disponiveis = Config.get_litellm_ui_models()
+        else:
+            modelo_padrao = config.get('modelo_padrao', 'gpt-4')
+            temperatura_padrao = config.get('temperatura_padrao', 0.7)
+            max_tokens_padrao = config.get('max_tokens_padrao', 500)
+            modelos_disponiveis = Config.OPENAI_MODELS
+        
+        if max_tokens_padrao is None:
+            max_tokens_padrao = 500
         
         print(f"=== DEBUG: Configurações carregadas - Modelo: {modelo_padrao}, Temp: {temperatura_padrao}, Tokens: {max_tokens_padrao} ===")
         
@@ -852,7 +923,7 @@ def analise():
                              prompts=prompts,
                              intimacoes=intimacoes,
                              classificacoes=Config.TIPOS_ACAO,
-                             modelos_disponiveis=Config.OPENAI_MODELS,
+                             modelos_disponiveis=modelos_disponiveis,
                              modelo_padrao=modelo_padrao,
                              temperatura_padrao=temperatura_padrao,
                              max_tokens_padrao=max_tokens_padrao,
@@ -1213,7 +1284,6 @@ Contexto da Intimação:
             'model': modelo,
             'temperature': temperatura,
             'max_tokens': max_tokens,
-            'top_p': 1.0
         }
         
         # Chamar IA
@@ -1404,17 +1474,11 @@ def executar_analise():
         salvar_resultados = configuracoes.get('salvar_resultados', True)
         calcular_acuracia = configuracoes.get('calcular_acuracia', True)
         
-        # Configurações de análise paralela (específicas por provider)
         provider_atual = ai_manager_service.get_current_provider()
-        if provider_atual == 'azure':
-            analise_paralela = int(config.get('azure_analise_paralela', 1))
-            delay_entre_lotes = float(config.get('azure_delay_entre_lotes', 0.5))
-        else:
-            analise_paralela = int(config.get('analise_paralela', 1))
-            delay_entre_lotes = float(config.get('delay_entre_lotes', 0.5))
-        
+        analise_paralela, delay_entre_lotes = resolve_analise_em_lote_paralelismo(config)
+
         print(f"=== DEBUG: Provider: {provider_atual}, Modelo: {modelo}, Temp: {temperatura}, Tokens: {max_tokens} ===")
-        print(f"=== DEBUG: Análise Paralela: {analise_paralela}, Delay: {delay_entre_lotes}s ===")
+        print(f"=== DEBUG: Análise em lote (max_concurrent): {analise_paralela}, Delay: {delay_entre_lotes}s ===")
         
         resultados = []
         
@@ -1477,7 +1541,6 @@ Contexto da Intimação:
                         'model': modelo,
                         'temperature': temperatura,
                         'max_tokens': max_tokens,
-                        'top_p': 1.0
                     }
                     
                     # Fazer chamada para IA usando o gerenciador
@@ -2277,6 +2340,14 @@ def configuracoes():
     """Página de configurações do sistema"""
     if request.method == 'POST':
         try:
+            lit_raw = (request.form.get('litellm_default_model') or '').strip()
+            if lit_raw and lit_raw not in Config.LITELLM_UI_MODELS:
+                flash(
+                    'Modelo LiteLLM inválido. Escolha um dos modelos listados para o proxy.',
+                    'error',
+                )
+                return redirect(url_for('configuracoes'))
+
             # Processar dados do formulário
             config_data = {
                 # Chave da API vem da variável de ambiente (.env)
@@ -2307,11 +2378,13 @@ def configuracoes():
                 'compressao_backup': request.form.get('compressao_backup', 'zip'),
                 'log_level': request.form.get('log_level', 'INFO'),
                 'cache_size': int(request.form.get('cache_size', 100)),
-                'max_concurrent': int(request.form.get('max_concurrent', 5)),
+                'max_concurrent': int(request.form.get('max_concurrent', 1)),
+                'delay_entre_lotes': float(request.form.get('delay_entre_lotes', 0.5)),
                 'session_timeout': int(request.form.get('session_timeout', 60)),
                 'debug_mode': request.form.get('debug_mode') == 'on',
                 'log_requests': request.form.get('log_requests') == 'on',
-                'cache_enabled': request.form.get('cache_enabled') == 'on'
+                'cache_enabled': request.form.get('cache_enabled') == 'on',
+                'litellm_default_model': (request.form.get('litellm_default_model') or '').strip(),
             }
             
             data_service.save_config(config_data)
@@ -2353,11 +2426,13 @@ def configuracoes():
         # Valores padrão para configurações
         config.setdefault('ai_provider', provedor_atual)
         config.setdefault('modelo_padrao', 'gpt-4')
+        config.setdefault('litellm_default_model', Config.LITELLM_DEFAULT_MODEL)
         # Não definir valor padrão para azure_temperatura se já existe
         if 'azure_temperatura' not in config:
             config['azure_temperatura'] = 0.7
         if 'azure_max_tokens' not in config:
             config['azure_max_tokens'] = config.get('max_tokens_padrao')
+        config.setdefault('azure_deployment', Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT)
         config.setdefault('timeout_padrao', 30)
         config.setdefault('max_retries', 3)
         config.setdefault('retry_delay', 1)
@@ -2376,7 +2451,8 @@ def configuracoes():
         config.setdefault('compressao_backup', 'zip')
         config.setdefault('log_level', 'INFO')
         config.setdefault('cache_size', 100)
-        config.setdefault('max_concurrent', 5)
+        config.setdefault('max_concurrent', 1)
+        config.setdefault('delay_entre_lotes', 0.5)
         config.setdefault('session_timeout', 60)
         config.setdefault('debug_mode', False)
         config.setdefault('log_requests', False)
@@ -2412,18 +2488,24 @@ def configuracoes():
         # Obter informações do provedor atual
         provedor_atual = ai_manager_service.get_current_provider()
         
-        # Usar todos os modelos disponíveis (OpenAI + Azure) para a página de configurações
-        modelos_disponiveis = list(set(Config.OPENAI_MODELS + Config.AZURE_OPENAI_MODELS))
-        modelos_disponiveis.sort()  # Ordenar alfabeticamente
+        # OpenAI: lista completa no select de modelo padrão; Azure: só deployments permitidos
+        modelos_disponiveis = list(Config.OPENAI_MODELS)
+        azure_deployment_options = Config.get_azure_ui_models()
         
         # Carregar preços da API
         precos_openai = config.get('precos_openai', Config.PRECOS_OPENAI_PADRAO)
         precos_azure = config.get('precos_azure', Config.PRECOS_AZURE_PADRAO)
+
+        analise_lote_max_concurrent, analise_lote_delay = resolve_analise_em_lote_paralelismo(config)
         
         return render_template('configuracoes.html',
                              config=config,
                              provedor_atual=provedor_atual,
                              modelos_disponiveis=modelos_disponiveis,
+                             azure_deployment_options=azure_deployment_options,
+                             litellm_ui_models=Config.get_litellm_ui_models(),
+                             analise_lote_max_concurrent=analise_lote_max_concurrent,
+                             analise_lote_delay=analise_lote_delay,
                              status_sistema=status_sistema,
                              uso_api=uso_api,
                              logs_recentes=logs_recentes,
@@ -2432,10 +2514,15 @@ def configuracoes():
                              
     except Exception as e:
         flash(f'Erro ao carregar configurações: {str(e)}', 'error')
+        _mc, _dl = resolve_analise_em_lote_paralelismo(DEFAULT_CONFIG)
         return render_template('configuracoes.html',
                              config=DEFAULT_CONFIG,
                              provedor_atual='openai',
-                             modelos_disponiveis=Config.OPENAI_MODELS,
+                             modelos_disponiveis=list(Config.OPENAI_MODELS),
+                             azure_deployment_options=Config.get_azure_ui_models(),
+                             litellm_ui_models=Config.get_litellm_ui_models(),
+                             analise_lote_max_concurrent=_mc,
+                             analise_lote_delay=_dl,
                              precos_openai=Config.PRECOS_OPENAI_PADRAO,
                              precos_azure=Config.PRECOS_AZURE_PADRAO,
                              status_sistema={},
@@ -2650,6 +2737,57 @@ def duplicar_prompt(id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
+@app.route('/api/prompts', methods=['POST'])
+def criar_prompt_api():
+    """API para criar um novo prompt"""
+    try:
+        data = request.get_json()
+        
+        nome = data.get('nome', '').strip()
+        descricao = data.get('descricao', '').strip()
+        regra_negocio = data.get('regra_negocio', '').strip()
+        conteudo = data.get('conteudo', '').strip()
+        
+        if not nome or not conteudo:
+            return jsonify({
+                'success': False,
+                'message': 'Nome e conteúdo do prompt são obrigatórios.'
+            }), 400
+        
+        # Validar se o prompt contém a variável {CONTEXTO}
+        warning_message = None
+        if '{CONTEXTO}' not in conteudo:
+            warning_message = 'O prompt deve conter a variável {CONTEXTO} para funcionar corretamente.'
+        
+        # Criar o prompt
+        prompt_data = {
+            'nome': nome,
+            'descricao': descricao if descricao else None,
+            'regra_negocio': regra_negocio if regra_negocio else None,
+            'conteudo': conteudo,
+            'data_criacao': datetime.now().isoformat(),
+            'total_usos': 0,
+            'acuracia_media': 0,
+            'tempo_medio': 0,
+            'custo_total': 0,
+            'historico_uso': [],
+            'ativo': True
+        }
+        
+        prompt_id = data_service.criar_prompt(prompt_data)
+        
+        response = {
+            'success': True,
+            'message': 'Prompt criado com sucesso!',
+            'prompt_id': prompt_id,
+            'warning': warning_message
+        }
+        
+        return jsonify(response), 201
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/api/prompts/<id>/toggle-ativo', methods=['POST'])
 def toggle_prompt_ativo(id):
     """Alternar status ativo/inativo de um prompt"""
@@ -2765,6 +2903,24 @@ def alterar_provedor_ia():
             'message': f'Erro ao alterar provedor: {str(e)}'
         }), 500
 
+@app.route('/api/configuracoes/testar-litellm', methods=['POST'])
+def testar_conexao_litellm():
+    """Testar conexão com LiteLLM (credenciais do .env)."""
+    try:
+        from services.litellm_service import LiteLLMService
+        svc = LiteLLMService()
+        sucesso, mensagem = svc.test_connection()
+        if sucesso:
+            return jsonify({
+                'success': True,
+                'message': mensagem,
+                'models': svc.get_available_models()[:5],
+            })
+        return jsonify({'success': False, 'message': mensagem}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/configuracoes/testar-azure', methods=['POST'])
 def testar_conexao_azure():
     """API para testar conexão com Azure OpenAI"""
@@ -2841,16 +2997,16 @@ def salvar_configuracao_azure():
         config = data_service.get_config() or {}
         
         # Atualizar configurações do Azure
+        dep_in = (data.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+        azure_deployment = Config.normalize_azure_deployment(dep_in)
         config.update({
             'azure_api_key': data.get('azure_api_key', ''),
             'azure_endpoint': data.get('azure_endpoint', ''),
             'azure_api_version': data.get('azure_api_version', '2024-02-15-preview'),
-            'azure_deployment': data.get('azure_deployment', 'gpt-4'),
+            'azure_deployment': azure_deployment,
             'azure_temperatura': float(data.get('azure_temperatura', 0.7)),
             'azure_max_tokens': int(data.get('azure_max_tokens', 500)),
             'azure_timeout': int(data.get('azure_timeout', 30)),
-            'azure_analise_paralela': int(data.get('azure_analise_paralela', 1)),
-            'azure_delay_entre_lotes': float(data.get('azure_delay_entre_lotes', 0.5))
         })
         
         # Salvar configuração
@@ -3038,7 +3194,6 @@ Retorne APENAS o JSON, sem texto adicional.
         parametros = {
             'temperatura': temperatura_config,
             'max_tokens': max_tokens_config,
-            'top_p': 1.0
         }
         
         # Fazer chamada para IA usando o gerenciador igual à análise
@@ -3995,12 +4150,15 @@ def analisar_prompt_individual():
         
         # Usar configuração personalizada se disponível
         if config_personalizada and config_personalizada != {}:
-            persona = config_personalizada.get('persona', 'Você é um especialista em análise de prompts de IA para classificação jurídica.')
-            instrucoes_resposta = config_personalizada.get('instrucoesResposta', '')
+            # Wizard: apenas persona + blocos dos checkboxes; regras = objeto sob análise (banco).
+            persona = (config_personalizada.get('persona') or '').strip()
+            if not persona:
+                persona = (
+                    'Você é um especialista em análise de prompts de IA para classificação jurídica.'
+                )
             incluir_contexto = config_personalizada.get('incluirContextoIntimacao', True)
             incluir_gabarito = config_personalizada.get('incluirInformacaoAdicional', True)
-            
-            # Construir contexto da intimação
+
             contexto_intimacao = ''
             if intimacao_data and incluir_contexto:
                 contexto_intimacao = f"""CONTEXTO DA INTIMAÇÃO:
@@ -4016,8 +4174,7 @@ CONTEÚDO DA INTIMAÇÃO:
 {intimacao_data.get('contexto', 'N/A')}
 
 """
-            
-            # Construir gabarito
+
             informacao_adicional = ''
             if intimacao_data and incluir_gabarito:
                 informacao_adicional = f"""GABARITO (CLASSIFICAÇÃO CORRETA):
@@ -4027,57 +4184,70 @@ INFORMAÇÕES ADICIONAIS:
 {intimacao_data.get('informacao_adicional', 'N/A')}
 
 """
-            
-            # Usar taxa de acerto enviada pelo frontend
-            taxa_acerto = ''
-            if taxa_acerto_frontend:
-                taxa_acerto = f" (Taxa de acerto: {taxa_acerto_frontend}%)"
-            else:
-                # Fallback: buscar taxa de acerto do prompt
+
+            # Nome do prompt, taxa e triagem pela IA: vêm do JSON do wizard + fallback no banco
+            linhas_meta = [
+                "=== IDENTIFICAÇÃO DO PROMPT E DESEMPENHO ===",
+                f"Nome do prompt: {prompt_nome}",
+            ]
+            partes_taxa = []
+            if taxa_acerto_frontend not in (None, "", "N/A"):
+                partes_taxa.append(f"Taxa exibida na interface: {taxa_acerto_frontend}%")
+            if acertos is not None and total_analises is not None:
+                partes_taxa.append(
+                    f"Acertos / total de análises (nesta intimação): {acertos}/{total_analises}"
+                )
+            if not partes_taxa and intimacao_id:
                 try:
                     prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
                     for p in prompts_acerto:
-                        if p['prompt_id'] == prompt_id:
-                            taxa_acerto = f" (Taxa de acerto: {p['taxa_acerto']}%)"
+                        if p["prompt_id"] == prompt_id:
+                            partes_taxa.append(
+                                f"Taxa no banco (por intimação): {p['taxa_acerto']}%"
+                            )
                             break
                 except Exception as e:
-                    print(f"Erro ao buscar taxa de acerto: {e}")
-            
-            # Construir seção com dados da análise original
-            dados_analise_original_texto = ''
+                    print(f"Erro ao buscar taxa de acerto (wizard): {e}")
+            linhas_meta.append(
+                "Resumo de acerto: " + (" | ".join(partes_taxa) if partes_taxa else "Não disponível")
+            )
             if dados_analise_original:
-                dados_analise_original_texto = f"""
-=== RESPOSTA DA IA NA ANÁLISE ORIGINAL ===
-CLASSIFICAÇÃO FEITA PELA IA: {dados_analise_original.get('resultado_ia', 'N/A')}
+                linhas_meta.extend(
+                    [
+                        "",
+                        "=== TRIAGEM FEITA PELA IA (ANÁLISE ORIGINAL GRAVADA PARA ESTE PROMPT) ===",
+                        f"Classificação retornada pela IA: {dados_analise_original.get('resultado_ia', 'N/A')}",
+                        "",
+                        "Resposta completa da IA:",
+                        str(dados_analise_original.get("resposta_completa", "N/A")),
+                        "",
+                        "Informação adicional fornecida pela IA:",
+                        str(dados_analise_original.get("informacao_adicional", "N/A")),
+                        "",
+                        "Sugestão da IA:",
+                        str(dados_analise_original.get("sugestao", "N/A")),
+                    ]
+                )
+            else:
+                linhas_meta.extend(
+                    [
+                        "",
+                        "=== TRIAGEM FEITA PELA IA ===",
+                        "Não há registro de análise anterior deste prompt para esta intimação "
+                        "(ou os dados não foram carregados).",
+                    ]
+                )
+            bloco_prompt_triagem = "\n".join(linhas_meta)
 
-RESPOSTA COMPLETA DA IA:
-{dados_analise_original.get('resposta_completa', 'N/A')}
-
-INFORMAÇÃO ADICIONAL FORNECIDA PELA IA:
-{dados_analise_original.get('informacao_adicional', 'N/A')}
-
-SUGESTÃO DA IA:
-{dados_analise_original.get('sugestao', 'N/A')}
-
-"""
-            
-            # Construir prompt de análise
-            # Usar regras de negócio em vez do conteúdo completo
             regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
-            
-            prompt_analise = f"""{persona}
-
-{contexto_intimacao}
-
-{informacao_adicional}
-
-{dados_analise_original_texto}
-
-=== PROMPT A ANALISAR ===
-PROMPT: {prompt_nome}{taxa_acerto}
-{regras_negocio}
-
-{instrucoes_resposta}"""
+            partes = [persona]
+            if contexto_intimacao.strip():
+                partes.append(contexto_intimacao.strip())
+            if informacao_adicional.strip():
+                partes.append(informacao_adicional.strip())
+            partes.append(bloco_prompt_triagem.strip())
+            partes.append(f"=== PROMPT A ANALISAR (REGRAS DE NEGÓCIO) ===\n{regras_negocio}")
+            prompt_analise = "\n\n".join(partes)
         else:
             # Prompt padrão
             contexto_intimacao = ''
@@ -4176,11 +4346,19 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
         
         # Buscar configurações específicas do provider
         if provider_atual == 'azure':
-            modelo_analise = config.get('azure_deployment')
+            modelo_analise = Config.normalize_azure_deployment(
+                (config.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+            )
             temperatura_analise = config.get('azure_temperatura')
             max_tokens_analise = config.get('azure_max_tokens')
         elif provider_atual == 'openai':
             modelo_analise = config.get('modelo_padrao')
+            temperatura_analise = config.get('temperatura_padrao')
+            max_tokens_analise = config.get('max_tokens_padrao')
+        elif provider_atual == 'litellm':
+            modelo_analise = Config.normalize_litellm_model(
+                (config.get('litellm_default_model') or '').strip() or Config.LITELLM_DEFAULT_MODEL
+            )
             temperatura_analise = config.get('temperatura_padrao')
             max_tokens_analise = config.get('max_tokens_padrao')
         else:
@@ -4208,14 +4386,19 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
                 'message': f'Max tokens não configurado para o provider {provider_atual}'
             }), 400
         
-        # Parâmetros para análise
+        # Wizard usa prompt muito longo; max_tokens baixo da config pode zerar a saída útil.
+        mt = int(max_tokens_analise)
+        if config_personalizada and config_personalizada != {}:
+            mt = max(mt, 4096)
+
         parametros_analise = {
             'model': modelo_analise,
             'temperature': temperatura_analise,
-            'max_tokens': max_tokens_analise,
-            'top_p': 1.0
+            'max_tokens': mt,
         }
-        
+        if config_personalizada and config_personalizada != {}:
+            parametros_analise['raw_user_prompt_only'] = True
+
         # Chamar IA
         classificacao, resposta_texto, tokens_info = ai_service.analisar_intimacao(
             "",  # contexto vazio - já está no prompt
@@ -4411,11 +4594,19 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
             
             # Buscar configurações específicas do provider
             if provider_atual == 'azure':
-                modelo_analise = config.get('azure_deployment')
+                modelo_analise = Config.normalize_azure_deployment(
+                    (config.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+                )
                 temperatura_analise = config.get('azure_temperatura')
                 max_tokens_analise = config.get('azure_max_tokens')
             elif provider_atual == 'openai':
                 modelo_analise = config.get('modelo_padrao')
+                temperatura_analise = config.get('temperatura_padrao')
+                max_tokens_analise = config.get('max_tokens_padrao')
+            elif provider_atual == 'litellm':
+                modelo_analise = Config.normalize_litellm_model(
+                    (config.get('litellm_default_model') or '').strip() or Config.LITELLM_DEFAULT_MODEL
+                )
                 temperatura_analise = config.get('temperatura_padrao')
                 max_tokens_analise = config.get('max_tokens_padrao')
             else:
@@ -4450,7 +4641,6 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
                 'model': modelo_analise,
                 'temperature': temperatura_analise,
                 'max_tokens': max_tokens_analise,
-                'top_p': 1.0
             }
             
             classificacao, resposta_texto, tokens_info = ai_service.analisar_intimacao(
@@ -4526,12 +4716,102 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
             'message': f'Erro interno: {str(e)}'
         }), 500
 
-if __name__ == '__main__':
-    # Criar diretórios necessários
-    os.makedirs('data', exist_ok=True)
-    os.makedirs('templates', exist_ok=True)
-    os.makedirs('static/css', exist_ok=True)
-    os.makedirs('static/js', exist_ok=True)
+def _montar_prompt_triagem_customizada(
+    intimacao: Dict[str, Any],
+    regras_quadro: str,
+    prompt_base: Optional[Dict[str, Any]],
+) -> str:
+    """Monta o mesmo texto de user que vai para a IA no teste de triagem (wizard).
+    Regras = só o texto do quadro; não usa regra_negocio do banco."""
+    contexto = f"""
+Contexto da Intimação:
+{intimacao.get('contexto', '')}
+"""
+    if not prompt_base:
+        return f"""
+Você é um especialista em análise jurídica da Defensoria Pública.
+
+{regras_quadro}
+
+{contexto}
+
+Com base nas regras de negócio fornecidas e no contexto da intimação, classifique a ação necessária.
+
+Responda apenas com uma das seguintes opções:
+- RENUNCIAR_PRAZO
+- OCULTAR
+- ELABORAR_PECA
+- CONTATAR_ASSISTIDO
+- ANALISAR_PROCESSO
+- ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
+- URGENCIA
+"""
+    conteudo_src = prompt_base.get('conteudo') or ''
+    tinha_contexto = '{CONTEXTO}' in conteudo_src
+    prompt_final = conteudo_src
+    if '{REGRADENEGOCIO}' in prompt_final:
+        prompt_final = prompt_final.replace('{REGRADENEGOCIO}', regras_quadro)
+    else:
+        bloco_regras = (
+            "\n\n=== REGRAS DE NEGÓCIO (TESTE DO WIZARD — TEXTO DO QUADRO) ===\n"
+            f"{regras_quadro}\n"
+        )
+        if tinha_contexto:
+            prompt_final = prompt_final.replace('{CONTEXTO}', bloco_regras + '\n{CONTEXTO}', 1)
+        else:
+            prompt_final = prompt_final + bloco_regras
+    prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
+    if not tinha_contexto:
+        prompt_final = prompt_final + '\n\n' + contexto
+    return prompt_final
+
+
+@app.route('/api/preview-prompt-triagem-customizada', methods=['POST'])
+def preview_prompt_triagem_customizada():
+    """Retorna o prompt exato que será enviado no teste de triagem (sem chamar a IA)."""
+    try:
+        data = request.get_json()
+        intimacao_id = data.get('intimacao_id')
+        regras_negocio_customizadas = data.get('regras_negocio', '')
+        prompt_base_id = data.get('prompt_base_id')
+
+        if not intimacao_id:
+            return jsonify({
+                'success': False,
+                'message': 'ID da intimação é necessário'
+            }), 400
+
+        intimacao = data_service.get_intimacao_by_id(intimacao_id)
+        if not intimacao:
+            return jsonify({
+                'success': False,
+                'message': 'Intimação não encontrada'
+            }), 404
+
+        prompt_base = None
+        if prompt_base_id:
+            prompt_base = data_service.get_prompt_by_id(prompt_base_id)
+            if not prompt_base:
+                return jsonify({
+                    'success': False,
+                    'message': 'Prompt não encontrado'
+                }), 404
+
+        prompt_final = _montar_prompt_triagem_customizada(
+            intimacao, regras_negocio_customizadas, prompt_base
+        )
+        return jsonify({
+            'success': True,
+            'prompt_final': prompt_final,
+            'aviso_regras_vazias': not (regras_negocio_customizadas or '').strip(),
+        })
+    except Exception as e:
+        print(f"Erro no preview do prompt de triagem: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}'
+        }), 500
+
 
 @app.route('/api/testar-triagem-customizada', methods=['POST'])
 def testar_triagem_customizada():
@@ -4567,42 +4847,9 @@ def testar_triagem_customizada():
         if prompt_base_id:
             prompt_base = data_service.get_prompt_by_id(prompt_base_id)
         
-        # Preparar contexto da intimação
-        contexto = f"""
-Contexto da Intimação:
-{intimacao.get('contexto', '')}
-"""
-        
-        # Preparar prompt final
-        if prompt_base:
-            # Usar prompt base como template
-            prompt_final = prompt_base['conteudo']
-            # Substituir {REGRADENEGOCIO} pelas regras customizadas
-            if '{REGRADENEGOCIO}' in prompt_final:
-                prompt_final = prompt_final.replace('{REGRADENEGOCIO}', regras_negocio_customizadas)
-            # Substituir {CONTEXTO}
-            if '{CONTEXTO}' in prompt_final:
-                prompt_final = prompt_final.replace('{CONTEXTO}', contexto)
-        else:
-            # Usar prompt padrão simples
-            prompt_final = f"""
-Você é um especialista em análise jurídica da Defensoria Pública.
-
-{regras_negocio_customizadas}
-
-{contexto}
-
-Com base nas regras de negócio fornecidas e no contexto da intimação, classifique a ação necessária.
-
-Responda apenas com uma das seguintes opções:
-- RENUNCIAR_PRAZO
-- OCULTAR
-- ELABORAR_PECA
-- CONTATAR_ASSISTIDO
-- ANALISAR_PROCESSO
-- ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
-- URGENCIA
-"""
+        prompt_final = _montar_prompt_triagem_customizada(
+            intimacao, regras_negocio_customizadas, prompt_base
+        )
         
         # Obter configurações de IA
         ai_service = AIManagerService()
@@ -4619,11 +4866,19 @@ Responda apenas com uma das seguintes opções:
         provider_atual = ai_service.get_current_provider()
         
         if provider_atual == 'azure':
-            modelo = config.get('azure_deployment')
+            modelo = Config.normalize_azure_deployment(
+                (config.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+            )
             temperatura = config.get('azure_temperatura')
             max_tokens = config.get('azure_max_tokens')
         elif provider_atual == 'openai':
             modelo = config.get('modelo_padrao')
+            temperatura = config.get('temperatura_padrao')
+            max_tokens = config.get('max_tokens_padrao')
+        elif provider_atual == 'litellm':
+            modelo = Config.normalize_litellm_model(
+                (config.get('litellm_default_model') or '').strip() or Config.LITELLM_DEFAULT_MODEL
+            )
             temperatura = config.get('temperatura_padrao')
             max_tokens = config.get('max_tokens_padrao')
         else:
@@ -4638,18 +4893,18 @@ Responda apenas com uma das seguintes opções:
                 'message': f'Configuração de IA incompleta para o provider {provider_atual}'
             }), 400
         
-        # Preparar parâmetros para a IA
+        mt = max(int(max_tokens), 4096)
         parametros = {
             'model': modelo,
             'temperature': temperatura,
-            'max_tokens': max_tokens,
-            'top_p': 1.0
+            'max_tokens': mt,
+            'raw_user_prompt_only': True,
         }
         
         # Chamar IA
         inicio_analise = time.time()
         resultado_ia, resposta_ia, tokens_info = ai_service.analisar_intimacao(
-            contexto, prompt_final, parametros
+            '', prompt_final, parametros
         )
         fim_analise = time.time()
         tempo_processamento = fim_analise - inicio_analise
@@ -4671,7 +4926,7 @@ Responda apenas com uma das seguintes opções:
                 'regras_utilizadas': regras_negocio_customizadas,
                 'modelo_utilizado': modelo,
                 'temperatura_utilizada': temperatura,
-                'max_tokens_utilizado': max_tokens
+                'max_tokens_utilizado': mt
             }
         })
         
@@ -4683,4 +4938,8 @@ Responda apenas com uma das seguintes opções:
         }), 500
 
 if __name__ == '__main__':
+    os.makedirs('data', exist_ok=True)
+    os.makedirs('templates', exist_ok=True)
+    os.makedirs('static/css', exist_ok=True)
+    os.makedirs('static/js', exist_ok=True)
     app.run(debug=True, host='0.0.0.0', port=5000)

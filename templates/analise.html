@@ -102,6 +102,8 @@
             <span id="provedor-info">
                 {% if provedor_atual == 'azure' %}
                     Azure OpenAI
+                {% elif provedor_atual == 'litellm' %}
+                    LiteLLM (proxy)
                 {% else %}
                     OpenAI
                 {% endif %}
@@ -134,6 +136,8 @@
                                     <span id="config-provider-title">
                                         {% if provedor_atual == 'azure' %}
                                             Configurações do Azure OpenAI
+                                        {% elif provedor_atual == 'litellm' %}
+                                            Configurações do LiteLLM
                                         {% else %}
                                             Configurações da OpenAI
                                         {% endif %}
@@ -314,6 +318,7 @@
                                                 <th class="col-checkbox" style="width: 25%;">Card da Intimação</th>
                                                 <th class="col-defensor" style="width: 10%;">Defensor</th>
                                                 <th class="col-classe" style="width: 10%;">Classe</th>
+                                                <th class="col-smart-context" style="width: 8%;">Smart Context</th>
                                                 <th class="col-classificacao" style="width: 12%;">Classificação Manual</th>
                                                 <th class="col-informacoes" style="width: 15%;">Informações Adicionais</th>
                                                 <th class="col-taxa" style="width: 10%; cursor: pointer;" onclick="ordenarTabelaIntimacoes('taxa_acerto')">
@@ -328,7 +333,7 @@
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}">
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
@@ -354,6 +359,17 @@
                                                     </span>
                                                     {% else %}
                                                     <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="col-smart-context">
+                                                    {% if intimacao.smart_context %}
+                                                    <span class="badge bg-success" title="Esta intimação utiliza contexto inteligente">
+                                                        <i class="bi bi-check-circle"></i> Sim
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary" title="Esta intimação não utiliza contexto inteligente">
+                                                        <i class="bi bi-x-circle"></i> Não
+                                                    </span>
                                                     {% endif %}
                                                 </td>
                                                 <td class="col-classificacao classificacao-cell">
@@ -718,6 +734,34 @@
                     </div>
                 </div>
                 
+                <!-- Filtro por Smart Context -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-lightning-charge text-primary"></i>
+                        <strong>Smart Context:</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todos-smart-context" checked>
+                        <label class="form-check-label" for="filtro-todos-smart-context">
+                            <strong>Todas as intimações</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-apenas-smart-context">
+                        <label class="form-check-label" for="filtro-apenas-smart-context">
+                            <i class="bi bi-check-circle text-success"></i>
+                            <strong>Apenas com Smart Context</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-sem-smart-context">
+                        <label class="form-check-label" for="filtro-sem-smart-context">
+                            <i class="bi bi-x-circle text-secondary"></i>
+                            <strong>Apenas sem Smart Context</strong>
+                        </label>
+                    </div>
+                </div>
+                
                 <!-- Filtro por Destaque -->
                 <div class="mb-3">
                     <label class="form-label">
@@ -806,12 +850,18 @@
                                 Defensor
                         </label>
                     </div>
-                        <div class="form-check">
+                    <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="col-classe" checked>
                             <label class="form-check-label" for="col-classe">
                                 Classe
-                            </label>
-                        </div>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="col-smart-context" checked>
+                            <label class="form-check-label" for="col-smart-context">
+                                Smart Context
+                        </label>
+                    </div>
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="col-classificacao" checked>
                             <label class="form-check-label" for="col-classificacao">
@@ -1031,21 +1081,36 @@
 
     .intimacoes-cards-table th:nth-child(4),
     .intimacoes-cards-table td:nth-child(4) {
-        width: 20% !important;
+        width: 10% !important;
     }
 
     .intimacoes-cards-table th:nth-child(5),
     .intimacoes-cards-table td:nth-child(5) {
-        width: 12% !important;
+        width: 8% !important;
     }
 
     .intimacoes-cards-table th:nth-child(6),
     .intimacoes-cards-table td:nth-child(6) {
-        width: 10% !important;
+        width: 12% !important;
     }
 
     .intimacoes-cards-table th:nth-child(7),
     .intimacoes-cards-table td:nth-child(7) {
+        width: 15% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(8),
+    .intimacoes-cards-table td:nth-child(8) {
+        width: 10% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(9),
+    .intimacoes-cards-table td:nth-child(9) {
+        width: 10% !important;
+    }
+
+    .intimacoes-cards-table th:nth-child(10),
+    .intimacoes-cards-table td:nth-child(10) {
         width: 8% !important;
     }
 
@@ -2170,7 +2235,7 @@ function configurarColunasIntimacoes() {
 // Função para aplicar configuração de colunas
 function aplicarConfigColunasIntimacoes() {
     const colunas = [
-        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-smart-context', 'col-classificacao',
         'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
     ];
     
@@ -2207,7 +2272,7 @@ function aplicarConfigColunasIntimacoes() {
 // Função para resetar colunas
 function resetarColunasIntimacoes() {
     const colunas = [
-        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-smart-context', 'col-classificacao',
         'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
     ];
     
@@ -2236,7 +2301,7 @@ function carregarConfigColunasIntimacoes() {
 // Função para aplicar configuração sem fechar modal
 function aplicarConfigColunasIntimacoesSemFecharModal() {
     const colunas = [
-        'col-checkbox', 'col-defensor', 'col-classe', 'col-classificacao',
+        'col-checkbox', 'col-defensor', 'col-classe', 'col-smart-context', 'col-classificacao',
         'col-informacoes', 'col-taxa', 'col-data', 'col-acoes'
     ];
     
@@ -2384,6 +2449,41 @@ function carregarClasses(classes) {
         </div>
     `).join('');
     
+    // Adicionar event listeners para Smart Context
+    const checkTodosSmartContext = document.getElementById('filtro-todos-smart-context');
+    const checkApenasSmartContext = document.getElementById('filtro-apenas-smart-context');
+    const checkSemSmartContext = document.getElementById('filtro-sem-smart-context');
+    
+    // Quando "Todas as intimações" é marcado, desmarca os outros
+    if (checkTodosSmartContext) {
+        checkTodosSmartContext.addEventListener('change', function() {
+            if (this.checked) {
+                checkApenasSmartContext.checked = false;
+                checkSemSmartContext.checked = false;
+            }
+        });
+    }
+    
+    // Quando "Apenas com Smart Context" é marcado, desmarca "Todas" e "Sem"
+    if (checkApenasSmartContext) {
+        checkApenasSmartContext.addEventListener('change', function() {
+            if (this.checked) {
+                checkTodosSmartContext.checked = false;
+                checkSemSmartContext.checked = false;
+            }
+        });
+    }
+    
+    // Quando "Apenas sem Smart Context" é marcado, desmarca "Todas" e "Com"
+    if (checkSemSmartContext) {
+        checkSemSmartContext.addEventListener('change', function() {
+            if (this.checked) {
+                checkTodosSmartContext.checked = false;
+                checkApenasSmartContext.checked = false;
+            }
+        });
+    }
+    
     // Adicionar event listener para o check "Todas as classes"
     const checkTodasClasses = document.getElementById('filtro-todas-classes');
     checkTodasClasses.addEventListener('change', function() {
@@ -2451,6 +2551,11 @@ function aplicarFiltro() {
     const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
     const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
     
+    // Obter filtro de Smart Context
+    const todosSmartContext = document.getElementById('filtro-todos-smart-context').checked;
+    const apenasSmartContext = document.getElementById('filtro-apenas-smart-context').checked;
+    const semSmartContext = document.getElementById('filtro-sem-smart-context').checked;
+    
     // Obter filtro de destacadas
     const todasIntimacoes = document.getElementById('filtro-todas-intimacoes').checked;
     const apenasDestacadas = document.getElementById('filtro-apenas-destacadas').checked;
@@ -2465,6 +2570,10 @@ function aplicarFiltro() {
         // Obter classe da linha (precisamos adicionar data-classe)
         const classe = row.dataset.classe || '';
         
+        // Obter smart context da linha
+        const smartContextValue = row.dataset.smartContext || '0';
+        const temSmartContext = smartContextValue === '1';
+        
         // Obter taxa de acerto da intimação
         const taxaAcertoElement = row.querySelector('.taxa-acerto-cell .badge');
         let taxaAcerto = 0;
@@ -2477,6 +2586,16 @@ function aplicarFiltro() {
         let mostrarClassificacao = todasClassificacoes || classificacoesSelecionadas.includes(classificacao);
         let mostrarClasse = todasClasses || classesSelecionadas.includes(classe);
         let mostrarTaxa = taxaAcerto >= taxaMinima && taxaAcerto <= taxaMaxima;
+        
+        // Filtro de Smart Context
+        let mostrarSmartContext = true;
+        if (!todosSmartContext) {
+            if (apenasSmartContext && !temSmartContext) {
+                mostrarSmartContext = false;
+            } else if (semSmartContext && temSmartContext) {
+                mostrarSmartContext = false;
+            }
+        }
         
         // Filtro de destacadas - GAMBIARRA: usando campo invisível
         let mostrarDestacada = true;
@@ -2496,7 +2615,7 @@ function aplicarFiltro() {
             }
         }
         
-        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarDestacada) {
+        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarSmartContext && mostrarDestacada) {
             row.style.display = '';
         } else {
             row.style.display = 'none';
@@ -2518,6 +2637,9 @@ function limparFiltros() {
     document.getElementById('filtro-todos-defensores').checked = true;
     document.getElementById('filtro-todas-classificacoes').checked = true;
     document.getElementById('filtro-todas-classes').checked = true;
+    document.getElementById('filtro-todos-smart-context').checked = true;
+    document.getElementById('filtro-apenas-smart-context').checked = false;
+    document.getElementById('filtro-sem-smart-context').checked = false;
     
     // Limpar filtros de taxa
     document.getElementById('taxa-minima').value = '';

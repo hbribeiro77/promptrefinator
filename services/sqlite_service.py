@@ -66,9 +66,17 @@ class SQLiteService:
                     defensor TEXT,
                     id_tarefa TEXT,
                     cor_etiqueta TEXT,
+                    smart_context BOOLEAN DEFAULT 0,
                     data_criacao TEXT NOT NULL
                 )
             ''')
+            
+            # Adicionar coluna smart_context se não existir (para bancos já criados)
+            try:
+                conn.execute('ALTER TABLE intimacoes ADD COLUMN smart_context BOOLEAN DEFAULT 0')
+            except sqlite3.OperationalError:
+                # Coluna já existe, ignorar erro
+                pass
             
             # Criar tabela de análises
             conn.execute('''
@@ -247,6 +255,9 @@ class SQLiteService:
                 # Converter destacada de int para boolean
                 if 'destacada' in intimacao:
                     intimacao['destacada'] = bool(intimacao['destacada'])
+                # Converter smart_context de int para boolean
+                if 'smart_context' in intimacao:
+                    intimacao['smart_context'] = bool(intimacao['smart_context'])
                 # Buscar análises desta intimação
                 intimacao['analises'] = self.get_analises_by_intimacao(intimacao['id'])
                 intimacoes.append(intimacao)
@@ -262,6 +273,9 @@ class SQLiteService:
                 # Converter destacada de int para boolean
                 if 'destacada' in intimacao:
                     intimacao['destacada'] = bool(intimacao['destacada'])
+                # Converter smart_context de int para boolean
+                if 'smart_context' in intimacao:
+                    intimacao['smart_context'] = bool(intimacao['smart_context'])
                 # Buscar análises desta intimação
                 intimacao['analises'] = self.get_analises_by_intimacao(intimacao_id)
                 return intimacao
@@ -283,8 +297,8 @@ class SQLiteService:
                 INSERT OR REPLACE INTO intimacoes 
                 (id, contexto, classificacao_manual, informacao_adicional, processo,
                  orgao_julgador, classe, disponibilizacao, intimado, status, prazo,
-                 defensor, id_tarefa, cor_etiqueta, data_criacao)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 defensor, id_tarefa, cor_etiqueta, smart_context, data_criacao)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 intimacao['id'],
                 intimacao.get('contexto', ''),
@@ -300,6 +314,7 @@ class SQLiteService:
                 intimacao.get('defensor', ''),
                 intimacao.get('id_tarefa', ''),
                 intimacao.get('cor_etiqueta', ''),
+                1 if intimacao.get('smart_context', False) else 0,  # Converter boolean para int (0/1)
                 intimacao['data_criacao']
             ))
             

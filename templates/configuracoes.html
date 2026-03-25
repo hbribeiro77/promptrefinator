@@ -53,16 +53,14 @@
                     <select class="form-select" id="ai-provider" name="ai_provider" onchange="alterarProvedor()">
                         <option value="openai" {% if provedor_atual == 'openai' %}selected{% endif %}>OpenAI (GPT-3.5, GPT-4)</option>
                         <option value="azure" {% if provedor_atual == 'azure' %}selected{% endif %}>Azure OpenAI</option>
-                        <option value="anthropic" disabled>Anthropic Claude (Em breve)</option>
-                        <option value="google" disabled>Google Gemini (Em breve)</option>
-                        <option value="local" disabled>Modelo Local (Em breve)</option>
+                        <option value="litellm" {% if provedor_atual == 'litellm' %}selected{% endif %}>LiteLLM (proxy)</option>
                     </select>
                     <div class="form-text">
                         <i class="bi bi-info-circle"></i>
                         Selecione o provedor de IA que será usado para análise das intimações.
                         <br>
-                        <strong>Provedor ativo:</strong> <span id="provider-status" class="badge {% if provedor_atual == 'openai' or provedor_atual == 'azure' %}bg-success{% else %}bg-warning{% endif %}">
-                            {% if provedor_atual == 'openai' %}OpenAI{% elif provedor_atual == 'azure' %}Azure OpenAI{% else %}{{ provedor_atual|title }}{% endif %}
+                        <strong>Provedor ativo:</strong> <span id="provider-status" class="badge {% if provedor_atual in ['openai', 'azure', 'litellm'] %}bg-success{% else %}bg-warning{% endif %}">
+                            {% if provedor_atual == 'openai' %}OpenAI{% elif provedor_atual == 'azure' %}Azure OpenAI{% elif provedor_atual == 'litellm' %}LiteLLM{% else %}{{ provedor_atual|title }}{% endif %}
                         </span>
                     </div>
                 </div>
@@ -174,41 +172,6 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <label for="analise-paralela" class="form-label">
-                                <i class="bi bi-lightning-charge text-warning"></i>
-                                Análises Paralelas
-                            </label>
-                            <input type="number" class="form-control" id="analise-paralela" name="analise_paralela" 
-                                   value="{{ config.analise_paralela or 1 }}" min="1" max="10">
-                            <div class="form-text">
-                                <i class="bi bi-info-circle"></i>
-                                Número de intimações analisadas simultaneamente (1-10)
-                                <br>
-                                <small class="text-muted">
-                                    <strong>Recomendação:</strong> 2-3 para melhor performance
-                                </small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="delay-entre-lotes" class="form-label">
-                                <i class="bi bi-clock text-info"></i>
-                                Delay entre Lotes (segundos)
-                            </label>
-                            <input type="number" class="form-control" id="delay-entre-lotes" name="delay_entre_lotes" 
-                                   value="{{ config.delay_entre_lotes or 0.5 }}" min="0" max="5" step="0.1">
-                            <div class="form-text">
-                                <i class="bi bi-info-circle"></i>
-                                Tempo de espera entre lotes de análises paralelas
-                                <br>
-                                <small class="text-muted">
-                                    <strong>Recomendação:</strong> 0.5-1.0 segundos
-                                </small>
-                            </div>
-                        </div>
-                    </div>
                 </form>
             </div>
         </div>
@@ -285,16 +248,17 @@
                     <div class="row">
                         <div class="col-md-6">
                             <label for="azure-deployment" class="form-label">Deployment Padrão</label>
+                            {% set ad = (config.get('azure_deployment') or '') %}
+                            {% set az_sel = ad if ad in azure_deployment_options else azure_deployment_options[0] %}
                         <select class="form-select" id="azure-deployment" name="azure_deployment">
-                            {% for modelo in modelos_disponiveis %}
-                            <option value="{{ modelo }}" {% if modelo == config.azure_deployment %}selected{% endif %}>
+                            {% for modelo in azure_deployment_options %}
+                            <option value="{{ modelo }}" {% if modelo == az_sel %}selected{% endif %}>
                                 {{ modelo }}
                             </option>
                             {% endfor %}
                         </select>
-                                   placeholder="gpt-4" value="{{ config.azure_deployment or 'gpt-4' }}">
                             <div class="form-text">
-                                Nome do deployment configurado no Azure
+                                Por enquanto apenas <code>gpt-4o</code> (nome do deployment no Azure deve coincidir).
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -330,41 +294,6 @@
                         </div>
                     </div>
                     
-                    <div class="row mt-3">
-                        <div class="col-md-6">
-                            <label for="azure-analise-paralela" class="form-label">
-                                <i class="bi bi-lightning-charge text-warning"></i>
-                                Análises Paralelas
-                            </label>
-                            <input type="number" class="form-control" id="azure-analise-paralela" name="azure_analise_paralela" 
-                                   value="{{ config.azure_analise_paralela or 1 }}" min="1" max="10">
-                            <div class="form-text">
-                                <i class="bi bi-info-circle"></i>
-                                Número de intimações analisadas simultaneamente (1-10)
-                                <br>
-                                <small class="text-muted">
-                                    <strong>Recomendação:</strong> 2-3 para melhor performance
-                                </small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="azure-delay-entre-lotes" class="form-label">
-                                <i class="bi bi-clock text-info"></i>
-                                Delay entre Lotes (segundos)
-                            </label>
-                            <input type="number" class="form-control" id="azure-delay-entre-lotes" name="azure_delay_entre_lotes" 
-                                   value="{{ config.azure_delay_entre_lotes or 0.5 }}" min="0" max="5" step="0.1">
-                            <div class="form-text">
-                                <i class="bi bi-info-circle"></i>
-                                Tempo de espera entre lotes de análises paralelas
-                                <br>
-                                <small class="text-muted">
-                                    <strong>Recomendação:</strong> 0.5-1.0 segundos
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="mt-3">
                         <button type="button" class="btn btn-primary" onclick="testarConexaoAzure()">
                             <i class="bi bi-wifi"></i>
@@ -379,14 +308,61 @@
             </div>
         </div>
 
+        <!-- LiteLLM (proxy OpenAI-compatible) -->
+        <div class="card mb-4" id="litellm-config" style="display: none;">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-link-45deg"></i>
+                    LiteLLM
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    <strong>Conexão:</strong> configure <code>LITELLM_API_KEY</code> e <code>LITELLM_ENDPOINT</code> no arquivo <code>.env</code>.
+                </p>
+                <div class="mb-3">
+                    <label for="litellm-default-model" class="form-label">Modelo padrão (LiteLLM)</label>
+                    {% set lm = (config.get('litellm_default_model') or '') %}
+                    {% set lit_sel = lm if lm in litellm_ui_models else litellm_ui_models[0] %}
+                    <select class="form-select" id="litellm-default-model" name="litellm_default_model">
+                        {% for m in litellm_ui_models %}
+                        <option value="{{ m }}" {% if m == lit_sel %}selected{% endif %}>{{ m }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">
+                        Lista fixa do proxy institucional. Salve as configurações gerais para persistir; sem valor salvo, usa o padrão do <code>.env</code> (se válido) ou o primeiro da lista.
+                    </div>
+                </div>
+                <details class="small text-muted mb-3">
+                    <summary class="text-secondary" style="cursor: pointer;">Opcional: teste de conexão e fallback (.env)</summary>
+                    <ul class="mb-0 mt-2 ps-3">
+                        <li><code>LITELLM_TEST_MODEL</code> — modelo usado só no botão &quot;Testar conexão&quot; (deve estar na lista acima).</li>
+                        <li><code>LITELLM_DEFAULT_MODEL</code> — fallback quando não há modelo salvo na configuração.</li>
+                    </ul>
+                </details>
+                <button type="button" class="btn btn-primary" onclick="testarConexaoLiteLLM()">
+                    <i class="bi bi-wifi"></i>
+                    Testar conexão LiteLLM
+                </button>
+            </div>
+        </div>
+
         <!-- Configurações de Preços da API -->
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center"
+                 style="cursor: pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#precos-api-collapse"
+                 aria-expanded="false"
+                 aria-controls="precos-api-collapse"
+                 role="button">
                 <h5 class="card-title mb-0">
                     <i class="bi bi-currency-dollar"></i>
                     Preços da API
                 </h5>
+                <i class="bi bi-chevron-down text-muted" aria-hidden="true"></i>
             </div>
+            <div id="precos-api-collapse" class="collapse">
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i>
@@ -616,6 +592,7 @@
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
 
@@ -1009,15 +986,29 @@
                     </div>
                     
                     <div class="row mt-3">
-                        <div class="col-md-6">
-                            <label for="max-concurrent" class="form-label">Máximo de Análises Simultâneas</label>
-                            <input type="number" class="form-control" id="max-concurrent" name="max_concurrent" 
-                                   value="{{ config.max_concurrent or 5 }}" min="1" max="20">
+                        <div class="col-md-4">
+                            <label for="max-concurrent" class="form-label">
+                                <i class="bi bi-lightning-charge text-warning"></i>
+                                Análises simultâneas (lote na página Análise IA)
+                            </label>
+                            <input type="number" class="form-control" id="max-concurrent" name="max_concurrent"
+                                   value="{{ analise_lote_max_concurrent }}" min="1" max="20">
                             <div class="form-text">
-                                Número máximo de análises executadas em paralelo
+                                <strong>1</strong> = uma intimação por vez (sequencial). <strong>2–20</strong> = até N chamadas à IA ao mesmo tempo por lote. Vale para <strong>qualquer</strong> provedor (OpenAI, Azure, LiteLLM).
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
+                            <label for="delay-entre-lotes" class="form-label">
+                                <i class="bi bi-clock text-info"></i>
+                                Pausa entre lotes (segundos)
+                            </label>
+                            <input type="number" class="form-control" id="delay-entre-lotes" name="delay_entre_lotes"
+                                   value="{{ analise_lote_delay }}" min="0" max="120" step="0.1">
+                            <div class="form-text">
+                                Espera após cada lote quando há mais de uma intimação em paralelo (alivia limite de taxa).
+                            </div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="session-timeout" class="form-label">Timeout de Sessão (minutos)</label>
                             <input type="number" class="form-control" id="session-timeout" name="session_timeout" 
                                    value="{{ config.session_timeout or 60 }}" min="5" max="480">
@@ -1094,6 +1085,8 @@
                                 <small id="provider-api-status">
                                     {% if provedor_atual == 'azure' %}
                                         Azure OpenAI
+                                    {% elif provedor_atual == 'litellm' %}
+                                        LiteLLM
                                     {% else %}
                                         OpenAI API
                                     {% endif %}
@@ -1406,8 +1399,9 @@ function salvarConfiguracoes() {
         }
     }
     
-    // Provider de IA
-    dados.ai_provider = getValue('ai-provider-hidden');
+    // Provider de IA (select é a fonte de verdade)
+    dados.ai_provider = getValue('ai-provider') || getValue('ai-provider-hidden');
+    dados.litellm_default_model = getValue('litellm-default-model');
     
     // OpenAI (chave vem da variável de ambiente)
     dados.modelo_padrao = getValue('modelo-padrao');
@@ -1416,8 +1410,6 @@ function salvarConfiguracoes() {
     dados.timeout_padrao = getValue('timeout-padrao', 'int');
     dados.max_retries = getValue('max-retries', 'int');
     dados.retry_delay = getValue('retry-delay', 'int');
-    dados.analise_paralela = getValue('analise-paralela', 'int');
-    dados.delay_entre_lotes = getValue('delay-entre-lotes', 'float');
     
     // Configurações Gerais
     dados.itens_por_pagina = getValue('itens-por-pagina', 'int');
@@ -1447,6 +1439,7 @@ function salvarConfiguracoes() {
     dados.log_level = getValue('log-level');
     dados.cache_size = getValue('cache-size', 'int');
     dados.max_concurrent = getValue('max-concurrent', 'int');
+    dados.delay_entre_lotes = getValue('delay-entre-lotes', 'float');
     dados.session_timeout = getValue('session-timeout', 'int');
     dados.debug_mode = getValue('debug-mode', 'checked');
     dados.log_requests = getValue('log-requests', 'checked');
@@ -1507,7 +1500,7 @@ function testarConexao() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            showToast('Conexão com OpenAI estabelecida com sucesso!', 'success');
+            showToast(data.message || 'Conexão estabelecida com sucesso!', 'success');
         } else {
             showToast(`Erro na conexão: ${data.message}`, 'error');
         }
@@ -1538,8 +1531,6 @@ function confirmarReset() {
     document.getElementById('timeout-padrao').value = '30';
     document.getElementById('max-retries').value = '3';
     document.getElementById('retry-delay').value = '1';
-    document.getElementById('analise-paralela').value = '1';
-    document.getElementById('delay-entre-lotes').value = '0.5';
     
     document.getElementById('itens-por-pagina').value = '25';
     document.getElementById('formato-data').value = 'DD/MM/YYYY';
@@ -1558,7 +1549,9 @@ function confirmarReset() {
     
     document.getElementById('log-level').value = 'INFO';
     document.getElementById('cache-size').value = '100';
-    document.getElementById('max-concurrent').value = '5';
+    document.getElementById('max-concurrent').value = '1';
+    const delLotes = document.getElementById('delay-entre-lotes');
+    if (delLotes) delLotes.value = '0.5';
     document.getElementById('session-timeout').value = '60';
     document.getElementById('debug-mode').checked = false;
     document.getElementById('log-requests').checked = false;
@@ -1919,6 +1912,8 @@ function alterarProvedor() {
     if (providerApiStatus) {
         if (provedor === 'azure') {
             providerApiStatus.textContent = 'Azure OpenAI';
+        } else if (provedor === 'litellm') {
+            providerApiStatus.textContent = 'LiteLLM';
         } else {
             providerApiStatus.textContent = 'OpenAI API';
         }
@@ -1927,16 +1922,21 @@ function alterarProvedor() {
     // Mostrar/ocultar seções de configuração baseado no provedor
     const openaiConfig = document.getElementById('openai-config');
     const azureConfig = document.getElementById('azure-config');
+    const litellmConfig = document.getElementById('litellm-config');
     
     // Ocultar todas as seções primeiro
     openaiConfig.style.display = 'none';
     azureConfig.style.display = 'none';
+    if (litellmConfig) litellmConfig.style.display = 'none';
     
     if (provedor === 'openai') {
         openaiConfig.style.display = 'block';
         status.className = 'badge bg-success';
     } else if (provedor === 'azure') {
         azureConfig.style.display = 'block';
+        status.className = 'badge bg-success';
+    } else if (provedor === 'litellm') {
+        if (litellmConfig) litellmConfig.style.display = 'block';
         status.className = 'badge bg-success';
     } else {
         status.className = 'badge bg-warning';
@@ -2010,6 +2010,31 @@ function testarConexaoAzure() {
         console.error('Erro:', error);
         showToast('Erro ao testar conexão', 'error');
     })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function testarConexaoLiteLLM() {
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="bi bi-hourglass-split"></i> Testando...';
+    button.disabled = true;
+    fetch('/api/configuracoes/testar-litellm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ use_env_credentials: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message || 'LiteLLM OK', 'success');
+        } else {
+            showToast('Erro: ' + (data.message || 'falha'), 'error');
+        }
+    })
+    .catch(() => showToast('Erro ao testar LiteLLM', 'error'))
     .finally(() => {
         button.innerHTML = originalText;
         button.disabled = false;
@@ -2111,16 +2136,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const provedor = '{{ provedor_atual }}';
     const openaiConfig = document.getElementById('openai-config');
     const azureConfig = document.getElementById('azure-config');
+    const litellmConfig = document.getElementById('litellm-config');
     
     // Ocultar todas as seções primeiro
     openaiConfig.style.display = 'none';
     azureConfig.style.display = 'none';
+    if (litellmConfig) litellmConfig.style.display = 'none';
     
     // Mostrar/ocultar seções baseado no provedor atual
     if (provedor === 'openai') {
         openaiConfig.style.display = 'block';
     } else if (provedor === 'azure') {
         azureConfig.style.display = 'block';
+    } else if (provedor === 'litellm' && litellmConfig) {
+        litellmConfig.style.display = 'block';
     }
     
     // Carregar preços da API

@@ -178,6 +178,21 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="smart_context" name="smart_context" 
+                                   value="1" {% if dados.smart_context %}checked{% endif %}>
+                            <label class="form-check-label" for="smart_context">
+                                <i class="bi bi-star"></i>
+                                <strong>Smart Context</strong>
+                            </label>
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i>
+                                Marque esta opção se a intimação possui smart context.
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <button type="button" class="btn btn-outline-secondary" onclick="limparFormulario()">
                             <i class="bi bi-arrow-clockwise"></i>

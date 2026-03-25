@@ -18,10 +18,11 @@ Automatizar e otimizar o processo de triagem de intimações jurídicas através
 - **Ícones**: Bootstrap Icons 1.10.0
 - **Gráficos**: Chart.js
 - **IA**: OpenAI API (GPT-3.5-turbo, GPT-4) + Azure OpenAI (GPT-4, GPT-35-turbo)
-- **Armazenamento**: SQLite (NOVO) + JSON (legado)
+- **Armazenamento**: SQLite (persistência principal da aplicação)
 - **Exportação**: CSV, Excel
 - **Variáveis de Ambiente**: python-dotenv
-- **Banco de Dados**: SQLite3 (NOVO)
+- **Banco de Dados**: SQLite3
+- **Legado / referência**: existe o módulo `services/data_service.py` (JSON) usado sobretudo em testes; o `app.py` não instancia essa classe — usa apenas `SQLiteService`.
 
 ### **Estrutura de Diretórios**
 ```
@@ -42,8 +43,8 @@ promptrefinator2/
 │   ├── prompt.py
 │   └── analise.py
 ├── services/             # Camada de serviços
-│   ├── data_service.py   # Gerenciamento de dados
-│   ├── sqlite_service.py # Serviço SQLite (NOVO)
+│   ├── data_service.py   # JSON / legado (testes e referência)
+│   ├── sqlite_service.py # Serviço SQLite (uso principal no app)
 │   ├── openai_service.py # Integração OpenAI
 │   ├── azure_service.py  # Integração Azure OpenAI (NOVO)
 │   ├── ai_manager_service.py # Gerenciador de IA (NOVO)
@@ -90,6 +91,10 @@ promptrefinator2/
 - Geração de dados para gráficos
 - **NOVO**: Carregamento de variáveis de ambiente
 
+**Nota técnica:** `app.py` concentra milhares de linhas (rotas, APIs e lógica). É candidato a refatoração (blueprints, módulos por domínio) para manutenção e testes.
+
+**Persistência no código:** a instância global é `data_service = SQLiteService()` (o nome da variável é legado; o tipo real é sempre `SQLiteService`).
+
 **Rotas Principais:**
 - `/` - Dashboard principal
 - `/intimacoes` - Gerenciamento de intimações
@@ -100,24 +105,31 @@ promptrefinator2/
 - `/prompts/<id>` - Visualizar prompt (NOVO)
 - `/prompts/<id>/editar` - Editar prompt (NOVO)
 - `/prompts/<id>/copiar` - Copiar prompt (NOVO)
-- `/prompts/<id>/excluir` - Excluir prompt (NOVO)
 - `/analise` - Interface de análise de IA
 - `/relatorios` - Relatórios e estatísticas
 - `/configuracoes` - Configurações do sistema
 - `/historico` - Histórico de análises (NOVO)
 - `/historico/<session_id>` - Visualizar sessão (NOVO)
 - `/exportar` - Exportação de dados
+- `/comparar-prompts` - Comparação de prompts selecionados
+- `/analises/<analise_id>` - Visualizar uma análise individual
+- `/componentes-demo` - Página de demonstração de componentes (sidebar)
 - `/api/relatorios/pagina/<int:pagina>` - Paginação AJAX
 - `/api/analises/excluir` - Exclusão de análises
 - `/api/analise-progresso` - Server-Sent Events para progresso em tempo real
 - `/api/precos-modelos` - API para obter preços dos modelos
-- `/api/prompts/<id>/excluir` - Excluir prompt via API (NOVO)
+- `/api/prompts/<id>/excluir` - Excluir prompt (`DELETE`; não há rota GET `/prompts/<id>/excluir`)
 - `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
 - `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
 - `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO)
 - `/api/filtros/analise` - API para obter filtros dinâmicos (defensores e classificações) (NOVO)
 - `/api/intimacoes/taxa-acerto` - API para obter taxa de acerto global das intimações (NOVO)
 - `/api/intimacoes/<intimacao_id>/prompts-acerto` - API para obter prompts e taxas de acerto por intimação (NOVO)
+- `/api/intimacoes/<id>/destacar` - API para destacar/remover destaque de intimação (NOVO)
+- `/api/intimacoes/<id>/editar` - API para editar intimação (NOVO)
+- `/api/intimacoes/<id>/excluir` - API para excluir intimação (NOVO)
+
+**Outros endpoints (amostra; lista não exaustiva):** upload/download de banco (`/api/database/upload`, `/api/database/download`), backup (`/api/backup/*`), análise individual de prompt (`/api/analisar-prompt-individual`), diferenças entre prompts (`/api/analisar-diferencas-prompts`), triagem customizada (`/api/testar-triagem-customizada`), configuração de cores (`/api/config/cores`), duplicar prompt (`/api/prompts/<id>/duplicar`), etc.
 
 **Funcionalidades Especiais:**
 - Paginação AJAX para relatórios
@@ -140,6 +152,8 @@ promptrefinator2/
 - **NOVO**: Configuração de colunas na visualização de sessões
 - **NOVO**: Campo "defensor" nas intimações
 - **NOVO**: Campo "informação adicional" nas intimações
+- **NOVO**: Campo "smart_context" nas intimações (contexto inteligente)
+- **NOVO**: Campo "destacada" nas intimações (sistema de destaque)
 - **NOVO**: Regra de negócio exibida nas sessões
 - **NOVO**: Link clicável para prompt nas sessões
 - **NOVO**: Proporção de acertos nas estatísticas
@@ -190,10 +204,11 @@ promptrefinator2/
 - `get_analises_por_sessao()` - Obter análises de uma sessão
 - Substituição automática de `${VARIABLE}` por valores de ambiente
 
-#### **DataService (`services/data_service.py`) - LEGADO**
-**Responsabilidades:**
-- Gerenciamento de dados JSON (mantido para compatibilidade)
-- Migração gradual para SQLite
+#### **DataService (`services/data_service.py`) — legado / testes**
+**Situação na codebase:**
+- Classe orientada a armazenamento JSON; **não** é usada pelo `app.py` em produção.
+- Permanece no repositório para compatibilidade e é referenciada em alguns **testes** (ex.: cálculo de custo).
+- Toda a orquestração web usa **`SQLiteService`**.
 
 #### **AIManagerService (`services/ai_manager_service.py`) - NOVO**
 **Responsabilidades:**
@@ -234,7 +249,7 @@ promptrefinator2/
 
 ### **Template Base (`templates/base.html`)**
 - Layout responsivo com Bootstrap 5
-- Sidebar de navegação
+- Sidebar de navegação (Dashboard, Intimações, Prompts, Análise IA, Histórico, Relatórios, **Componentes** — demo)
 - Sistema de notificações (toasts)
 - Integração com Chart.js para gráficos
 
@@ -257,6 +272,10 @@ promptrefinator2/
 - Exibição de resultados em tempo real
 - Modais para visualização completa de prompts/respostas
 - Coluna "Informação Adicional" configurável
+- **NOVO**: Coluna "Smart Context" com badges visuais (verde/cinza)
+- **NOVO**: Filtros por defensor, classe, Smart Context e destaque
+- **NOVO**: Sistema de filtros dinâmicos com checkboxes "Todos"
+- **NOVO**: Select customizado com badges de acurácia para prompts
 - Persistência de configurações de colunas
 
 #### **Relatórios (`templates/relatorios.html`)**
@@ -312,12 +331,24 @@ promptrefinator2/
 ## 📊 **Modelos de Dados**
 
 ### **Intimação**
+Shape usado no SQLite e na API; a classe Python `models/intimacao.py` expõe `informacao_adicional` (singular) e `smart_context`, mas **não** inclui o campo `destacada` no modelo — esse campo existe na tabela `intimacoes` e é tratado pelo `SQLiteService` e pela UI.
+
 ```json
 {
   "id": "uuid",
   "contexto": "Dados do processo jurídico",
   "classificacao_manual": "Tipo de ação",
-  "informacoes_adicionais": "Observações",
+  "informacao_adicional": "Observações",
+  "defensor": "Nome do defensor",
+  "smart_context": boolean,
+  "destacada": boolean,
+  "processo": "Número do processo",
+  "orgao_julgador": "Órgão julgador",
+  "classe": "Classe processual",
+  "disponibilizacao": "Data de disponibilização (opcional)",
+  "intimado": "Nome do intimado (opcional)",
+  "status": "Status (opcional)",
+  "prazo": "Prazo (opcional)",
   "data_criacao": "timestamp",
   "analises": [
     {
@@ -331,7 +362,6 @@ promptrefinator2/
       "modelo": "Modelo usado",
       "temperatura": float,
       "tokens_usados": int,
-
       "prompt_completo": "Prompt enviado",
       "resposta_completa": "Resposta da IA"
     }
@@ -382,13 +412,13 @@ promptrefinator2/
 1. Usuário acessa `/intimacoes/nova`
 2. Preenche dados do processo jurídico
 3. Define classificação manual esperada
-4. Sistema salva no `intimacoes.json`
+4. Sistema salva no banco SQLite (tabela `intimacoes`)
 
 ### **2. Criação de Prompts**
 1. Usuário acessa `/prompts/novo`
 2. Define template do prompt
 3. Configura parâmetros de IA
-4. Sistema salva no `prompts.json`
+4. Sistema salva no banco SQLite (tabela `prompts`)
 
 ### **3. Análise de Intimações**
 1. Usuário acessa `/analise`
@@ -563,8 +593,12 @@ promptrefinator2/
 ### **CRUD Completo de Intimações**
 - ✅ Criação de intimações com defensor
 - ✅ Campo "informação adicional"
+- ✅ Campo "smart_context" (contexto inteligente)
+- ✅ Campo "destacada" (sistema de destaque)
 - ✅ Visualização detalhada de intimações
 - ✅ Edição e exclusão de intimações
+- ✅ Toggle de Smart Context na visualização
+- ✅ Sistema de destaque com ações em lote
 
 ### **Melhorias na Interface**
 - ✅ Configuração de colunas na visualização de sessões
@@ -599,6 +633,8 @@ promptrefinator2/
 - ✅ Checkboxes "Todos" que controlam seleções individuais
 - ✅ Filtros aplicados apenas em intimações visíveis
 - ✅ Seleção inteligente de "Selecionar Todas" apenas em itens visíveis
+- ✅ **Filtro por Smart Context**: Filtro para intimações com/sem contexto inteligente
+- ✅ **Filtro por Destaque**: Filtro para intimações destacadas
 
 ### **Popover Customizado com Taxa de Acerto**
 - ✅ Taxa de acerto global exibida para cada intimação
@@ -659,8 +695,8 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - Python + Flask (Backend)
 - Bootstrap 5 + Chart.js (Frontend)
 - OpenAI API + Azure OpenAI (IA)
-- SQLite (Persistência principal)
-- JSON (Persistência legado)
+- SQLite (persistência principal)
+- JSON (APIs, serialização e módulo legado `data_service.py` em testes)
 - AJAX (Interatividade)
 - python-dotenv (Variáveis de ambiente)
 
@@ -685,6 +721,9 @@ O Sistema Prompt Refinator é uma solução completa e robusta para análise e o
 - 🎯 Tooltip interativo com detalhes dos prompts
 - 🔗 Prompts clicáveis para visualização detalhada
 - ⏱️ Delay configurável para exibição do popover (500ms)
+- 🧠 Sistema de Smart Context (contexto inteligente) nas intimações
+- 🏷️ Filtro por Smart Context na página de análise
+- 🎨 Coluna Smart Context com badges visuais (verde/cinza)
 
 O sistema está pronto para uso em produção e pode ser facilmente estendido com novas funcionalidades conforme necessário.
 
@@ -973,3 +1012,19 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **Atualização em tempo real**: Cards mudam de cor imediatamente
 - ✅ **Gambiarra de filtro**: Campo invisível para filtro funcionar corretamente
 - ✅ **Mapeamento automático**: Busca ID da intimação através da análise no histórico
+
+### **Sistema de Smart Context (Janeiro 2025)**
+- ✅ **Campo Smart Context**: Campo booleano nas intimações para indicar contexto inteligente
+- ✅ **Coluna na tabela**: Coluna "Smart Context" na página de análise com badges visuais
+- ✅ **Badge verde**: Exibido quando `smart_context = true` (ícone de check)
+- ✅ **Badge cinza**: Exibido quando `smart_context = false` (ícone de X)
+- ✅ **Filtro por Smart Context**: Filtro na página de análise com 3 opções:
+  - Todas as intimações (padrão)
+  - Apenas com Smart Context
+  - Apenas sem Smart Context
+- ✅ **Controle de visibilidade**: Coluna pode ser ocultada/exibida através do botão "Colunas"
+- ✅ **Atributo data-smart-context**: Atributo `data-smart-context="1"` ou `"0"` nas linhas da tabela
+- ✅ **Toggle na visualização**: Checkbox para ativar/desativar Smart Context na página de visualizar intimação
+- ✅ **API de atualização**: Endpoint para atualizar o campo Smart Context
+- ✅ **Integração completa**: Funciona com todos os filtros existentes (defensor, classe, destaque, etc.)
+- ✅ **Persistência**: Valor salvo no banco SQLite (campo `smart_context BOOLEAN DEFAULT 0`)

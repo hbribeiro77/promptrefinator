@@ -5,6 +5,9 @@ from typing import Tuple, Dict, Any, Optional, List
 from config import Config
 from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
+from services.extracao_texto_resposta_chat_completions_openai_compat import (
+    texto_mensagem_assistente,
+)
 
 class OpenAIService(AIServiceInterface):
     """Serviço para integração com a API da OpenAI"""
@@ -90,17 +93,20 @@ class OpenAIService(AIServiceInterface):
         """Analisar intimação usando OpenAI"""
         if not self.client:
             raise Exception("Cliente OpenAI não inicializado. Configure a chave da API.")
-        
-        # Construir prompt completo
-        prompt_completo = self._construir_prompt(prompt_template, contexto)
-        
-        # Validar parâmetros
-        parametros_validados = self._validar_parametros(parametros)
-        
-        # Fazer chamada para OpenAI com retry
+
+        p = dict(parametros)
+        raw_user_only = bool(p.pop("raw_user_prompt_only", False))
+        prompt_completo = (
+            prompt_template
+            if raw_user_only
+            else self._construir_prompt(prompt_template, contexto)
+        )
+        parametros_validados = self._validar_parametros(p)
+        parametros_validados["_raw_user_only"] = raw_user_only
+
         resposta_completa, tokens_info = self._fazer_chamada_com_retry(
-            prompt_completo, 
-            parametros_validados
+            prompt_completo,
+            parametros_validados,
         )
         
         # Extrair classificação da resposta
@@ -134,13 +140,11 @@ class OpenAIService(AIServiceInterface):
             'model': parametros.get('model', parametros_padrao.get('model', 'gpt-4')),
             'temperature': float(parametros.get('temperature', parametros_padrao.get('temperature', 0.7))),
             'max_tokens': int(parametros.get('max_tokens', parametros_padrao.get('max_tokens', 500))),
-            'top_p': float(parametros.get('top_p', parametros_padrao.get('top_p', 1.0)))
         }
         
         # Validar limites
         parametros_validados['temperature'] = max(0.0, min(2.0, parametros_validados['temperature']))
         parametros_validados['max_tokens'] = max(1, parametros_validados['max_tokens'])
-        parametros_validados['top_p'] = max(0.0, min(1.0, parametros_validados['top_p']))
         
         # Verificar se o modelo está na lista de modelos disponíveis
         if parametros_validados['model'] not in self.config.OPENAI_MODELS:
@@ -155,21 +159,25 @@ class OpenAIService(AIServiceInterface):
         """Fazer chamada para OpenAI com retry e backoff exponencial"""
         for tentativa in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=parametros['model'],
-                    messages=[
+                raw_only = bool(parametros.get("_raw_user_only"))
+                if raw_only:
+                    messages: List[Dict[str, str]] = [{"role": "user", "content": prompt}]
+                else:
+                    messages = [
                         {
                             "role": "system",
-                            "content": "Você é um assistente especializado em análise de intimações jurídicas. Responda sempre com uma das classificações solicitadas."
+                            "content": (
+                                "Você é um assistente especializado em análise de intimações jurídicas. "
+                                "Responda sempre com uma das classificações solicitadas."
+                            ),
                         },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
+                        {"role": "user", "content": prompt},
+                    ]
+                response = self.client.chat.completions.create(
+                    model=parametros['model'],
+                    messages=messages,
                     temperature=parametros['temperature'],
                     max_tokens=parametros['max_tokens'],
-                    top_p=parametros['top_p']
                 )
                 
                 # Extrair informações de tokens
@@ -178,8 +186,15 @@ class OpenAIService(AIServiceInterface):
                     'output': response.usage.completion_tokens if response.usage else 0,
                     'total': response.usage.total_tokens if response.usage else 0
                 }
-                
-                return response.choices[0].message.content.strip(), tokens_info
+                choice0 = response.choices[0]
+                texto = texto_mensagem_assistente(choice0.message)
+                if not texto:
+                    fr = getattr(choice0, "finish_reason", None)
+                    print(
+                        "OpenAI: corpo assistant vazio após extração. "
+                        f"finish_reason={fr!r}, model={parametros.get('model')!r}"
+                    )
+                return texto, tokens_info
                 
             except openai.RateLimitError:
                 if tentativa < max_retries - 1:
@@ -299,7 +314,6 @@ class OpenAIService(AIServiceInterface):
             'model': modelo,
             'temperature': temperatura,
             'max_tokens': max_tokens,
-            'top_p': 1.0
         }
         
         return self._fazer_chamada_com_retry(prompt, parametros)
@@ -314,7 +328,6 @@ class OpenAIService(AIServiceInterface):
             'model': self.config.OPENAI_DEFAULT_MODEL,
             'temperature': self.config.OPENAI_DEFAULT_TEMPERATURE,
             'max_tokens': self.config.OPENAI_DEFAULT_MAX_TOKENS,
-            'top_p': self.config.OPENAI_DEFAULT_TOP_P
         }
     
     def validate_parameters(self, parametros: Dict[str, Any]) -> Dict[str, Any]:

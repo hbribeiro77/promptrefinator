@@ -5,6 +5,9 @@ from openai import AzureOpenAI
 from config import Config
 from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
+from services.extracao_texto_resposta_chat_completions_openai_compat import (
+    texto_mensagem_assistente,
+)
 
 class AzureService(AIServiceInterface):
     """Serviço para integração com a API do Azure OpenAI"""
@@ -76,9 +79,13 @@ class AzureService(AIServiceInterface):
             return False, "Cliente Azure OpenAI não inicializado. Verifique as credenciais."
         
         try:
+            db = self.data_service.get_config() or {}
+            deployment = Config.normalize_azure_deployment(
+                (db.get('azure_deployment') or '').strip() or self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+            )
             # Fazer uma chamada simples para testar a conexão
             response = self.client.chat.completions.create(
-                model=self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT,
+                model=deployment,
                 messages=[
                     {"role": "user", "content": "Teste de conexão. Responda apenas 'OK'."}
                 ],
@@ -98,14 +105,19 @@ class AzureService(AIServiceInterface):
             raise Exception("Cliente Azure OpenAI não inicializado")
         
         try:
-            # Construir o prompt
-            prompt = self._construir_prompt(prompt_template, contexto)
-            
-            # Validar parâmetros
-            parametros_validados = self._validar_parametros(parametros)
-            
-            # Fazer chamada com retry
-            resposta_completa, tokens_info = self._fazer_chamada_com_retry(prompt, parametros_validados)
+            p = dict(parametros)
+            raw_user_only = bool(p.pop("raw_user_prompt_only", False))
+            prompt = (
+                prompt_template
+                if raw_user_only
+                else self._construir_prompt(prompt_template, contexto)
+            )
+            parametros_validados = self._validar_parametros(p)
+            parametros_validados["_raw_user_only"] = raw_user_only
+
+            resposta_completa, tokens_info = self._fazer_chamada_com_retry(
+                prompt, parametros_validados
+            )
             
             # Extrair classificação
             classificacao = self._extrair_classificacao(resposta_completa)
@@ -131,12 +143,29 @@ class AzureService(AIServiceInterface):
             raise Exception(f"Erro ao construir prompt: {str(e)}")
     
     def _validar_parametros(self, parametros: Dict[str, Any]) -> Dict[str, Any]:
-        """Validar e ajustar parâmetros para Azure OpenAI"""
+        """Validar e ajustar parâmetros para Azure OpenAI.
+
+        Aceita as chaves usadas pelo app.py (`model`, `temperature`, `max_tokens`)
+        e também `modelo` / `temperatura` (legado).
+        """
+        modelo_api = (
+            parametros.get('model')
+            or parametros.get('modelo')
+            or self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+        )
+        modelo_api = Config.normalize_azure_deployment(modelo_api)
+        if 'temperature' in parametros:
+            temp_raw = parametros['temperature']
+        elif 'temperatura' in parametros:
+            temp_raw = parametros['temperatura']
+        else:
+            temp_raw = self.config.AZURE_OPENAI_DEFAULT_TEMPERATURE
+        temperatura = float(temp_raw)
+
         return {
-            'model': parametros.get('modelo', self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT),
-            'temperature': min(max(parametros.get('temperatura', self.config.AZURE_OPENAI_DEFAULT_TEMPERATURE), 0), 2),
+            'model': modelo_api,
+            'temperature': min(max(temperatura, 0), 2),
             'max_tokens': parametros.get('max_tokens', self.config.AZURE_OPENAI_DEFAULT_MAX_TOKENS),
-            'top_p': min(max(parametros.get('top_p', self.config.AZURE_OPENAI_DEFAULT_TOP_P), 0), 1),
             'frequency_penalty': min(max(parametros.get('frequency_penalty', 0), -2), 2),
             'presence_penalty': min(max(parametros.get('presence_penalty', 0), -2), 2)
         }
@@ -158,7 +187,6 @@ class AzureService(AIServiceInterface):
                     ],
                     temperature=parametros['temperature'],
                     max_tokens=parametros['max_tokens'],
-                    top_p=parametros['top_p']
                 )
                 
                 # Extrair informações de tokens
@@ -167,8 +195,15 @@ class AzureService(AIServiceInterface):
                     'output': response.usage.completion_tokens if response.usage else 0,
                     'total': response.usage.total_tokens if response.usage else 0
                 }
-                
-                return response.choices[0].message.content.strip(), tokens_info
+                choice0 = response.choices[0]
+                texto = texto_mensagem_assistente(choice0.message)
+                if not texto:
+                    fr = getattr(choice0, "finish_reason", None)
+                    print(
+                        "Azure OpenAI: corpo assistant vazio após extração. "
+                        f"finish_reason={fr!r}, model={parametros.get('model')!r}"
+                    )
+                return texto, tokens_info
                 
             except Exception as e:
                 if tentativa < max_retries - 1:
@@ -321,7 +356,6 @@ class AzureService(AIServiceInterface):
             'modelo': modelo,
             'temperatura': temperatura,
             'max_tokens': max_tokens,
-            'top_p': 1.0
         }
         
         # Validar parâmetros antes de fazer a chamada
@@ -339,7 +373,6 @@ class AzureService(AIServiceInterface):
             'modelo': self.config.AZURE_OPENAI_DEFAULT_DEPLOYMENT,
             'temperatura': self.config.AZURE_OPENAI_DEFAULT_TEMPERATURE,
             'max_tokens': self.config.AZURE_OPENAI_DEFAULT_MAX_TOKENS,
-            'top_p': self.config.AZURE_OPENAI_DEFAULT_TOP_P,
             'frequency_penalty': 0,
             'presence_penalty': 0
         }

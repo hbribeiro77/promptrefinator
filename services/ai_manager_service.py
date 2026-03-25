@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Tuple, Optional
 from services.ai_service_interface import AIServiceInterface
 from services.openai_service import OpenAIService
 from services.azure_service import AzureService
+from services.litellm_service import LiteLLMService
 from services.sqlite_service import SQLiteService
 
 class AIManagerService:
@@ -12,7 +13,8 @@ class AIManagerService:
         self.data_service = SQLiteService()
         self.providers = {
             'openai': OpenAIService,
-            'azure': AzureService
+            'azure': AzureService,
+            'litellm': LiteLLMService,
         }
         self.current_provider = None
         self.current_service = None
