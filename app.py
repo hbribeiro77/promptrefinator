@@ -88,8 +88,8 @@ def finalizar_analise(session_id):
 app = Flask(__name__)
 app.secret_key = 'sua_chave_secreta_aqui_mude_em_producao'
 
-# Configurar limite de upload para 100MB
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB
+# Configurar limite de upload para 300MB
+app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # 300MB
 
 # Configurações padrão
 DEFAULT_CONFIG = {
@@ -1074,6 +1074,16 @@ def upload_database():
         
         if not file.filename.endswith('.db'):
             return jsonify({'success': False, 'message': 'Arquivo deve ter extensão .db'}), 400
+
+        max_size = 300 * 1024 * 1024  # 300MB
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > max_size:
+            return jsonify({
+                'success': False,
+                'message': 'Arquivo muito grande. Máximo 300MB.',
+            }), 400
         
         # Fazer backup do banco atual
         backup_path = f"data/database_backup_antes_upload_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
@@ -3814,8 +3824,8 @@ def restaurar_backup_banco():
                 'message': 'Arquivo deve ter extensão .db'
             }), 400
         
-        # Verificar tamanho do arquivo (máximo 100MB)
-        max_size = 100 * 1024 * 1024  # 100MB
+        # Verificar tamanho do arquivo (máximo 300MB)
+        max_size = 300 * 1024 * 1024  # 300MB
         file.seek(0, 2)  # Ir para o final do arquivo
         file_size = file.tell()
         file.seek(0)  # Voltar para o início
@@ -3823,7 +3833,7 @@ def restaurar_backup_banco():
         if file_size > max_size:
             return jsonify({
                 'success': False,
-                'message': 'Arquivo muito grande. Máximo 100MB.'
+                'message': 'Arquivo muito grande. Máximo 300MB.'
             }), 400
         
         # Caminhos dos arquivos

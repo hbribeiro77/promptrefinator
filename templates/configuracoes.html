@@ -2250,10 +2250,10 @@ function validarArquivoBackup() {
         return;
     }
     
-    // Validar tamanho (máximo 100MB)
-    const maxSize = 100 * 1024 * 1024; // 100MB
+    // Validar tamanho (máximo 300MB)
+    const maxSize = 300 * 1024 * 1024; // 300MB
     if (file.size > maxSize) {
-        showToast('Arquivo muito grande. Máximo 100MB.', 'error');
+        showToast('Arquivo muito grande. Máximo 300MB.', 'error');
         input.value = '';
         btnRestaurar.disabled = true;
         return;
