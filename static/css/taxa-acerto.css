@@ -111,6 +111,22 @@
     color: #6c757d;
 }
 
+/* Intimação ainda sem análises (diferente do estado "carregando") */
+.taxa-acerto-sem-testes {
+    min-height: 40px;
+    justify-content: center;
+    user-select: none;
+}
+
+.taxa-acerto-sem-testes .bi {
+    font-size: 1.1rem;
+    opacity: 0.75;
+}
+
+.taxa-acerto-sem-testes small {
+    font-size: 0.7rem;
+}
+
 /* Badges de taxa de acerto */
 .taxa-acerto-cell .badge {
     font-size: 0.8em;

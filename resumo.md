@@ -50,7 +50,8 @@ promptrefinator2/
 │   ├── ai_manager_service.py # Gerenciador de IA (NOVO)
 │   ├── ai_service_interface.py # Interface de IA (NOVO)
 │   ├── cost_calculation_service.py # Cálculo de custos (NOVO)
-│   └── export_service.py # Exportação de dados
+│   ├── export_service.py # Exportação de dados
+│   └── triagem_feedback_transformacao_json_para_importacao_intimacoes_service.py # Feedback triagem → JSON import em lote
 ├── templates/            # Templates HTML
 │   ├── base.html         # Template base
 │   ├── dashboard.html    # Página inicial
@@ -128,6 +129,7 @@ promptrefinator2/
 - `/api/intimacoes/<id>/destacar` - API para destacar/remover destaque de intimação (NOVO)
 - `/api/intimacoes/<id>/editar` - API para editar intimação (NOVO)
 - `/api/intimacoes/<id>/excluir` - API para excluir intimação (NOVO)
+- `/api/intimacoes/transformar-json-feedback-triagem` - `POST`: converte JSON de export de feedback (`content[]`) no payload de importação em lote; aceita `layout` opcional `legacy` (até 24/03/2026) ou `pos_2026_03_25` (25/03/2026 em diante); opcional `formato_layout_feedback` como alias de `layout`
 
 **Outros endpoints (amostra; lista não exaustiva):** upload/download de banco (`/api/database/upload`, `/api/database/download`), backup (`/api/backup/*`), análise individual de prompt (`/api/analisar-prompt-individual`), diferenças entre prompts (`/api/analisar-diferencas-prompts`), triagem customizada (`/api/testar-triagem-customizada`), configuração de cores (`/api/config/cores`), duplicar prompt (`/api/prompts/<id>/duplicar`), etc.
 
@@ -273,7 +275,8 @@ promptrefinator2/
 - Modais para visualização completa de prompts/respostas
 - Coluna "Informação Adicional" configurável
 - **NOVO**: Coluna "Smart Context" com badges visuais (verde/cinza)
-- **NOVO**: Filtros por defensor, classe, Smart Context e destaque
+- **NOVO**: Filtros por defensor, classe, Smart Context, regras do usuário (PRIORIDADE ALTA) e destaque
+- **NOVO**: Ícone no card compacto (`bi-shield-exclamation`) quando a intimação tem `regras_usuario_prioridade_alta`; `data-regras-usuario` na linha da tabela para o filtro do modal
 - **NOVO**: Sistema de filtros dinâmicos com checkboxes "Todos"
 - **NOVO**: Select customizado com badges de acurácia para prompts
 - Persistência de configurações de colunas
@@ -339,6 +342,7 @@ Shape usado no SQLite e na API; a classe Python `models/intimacao.py` expõe `in
   "contexto": "Dados do processo jurídico",
   "classificacao_manual": "Tipo de ação",
   "informacao_adicional": "Observações",
+  "regras_usuario_prioridade_alta": "Regras do usuário com prioridade alta (opcional, texto)",
   "defensor": "Nome do defensor",
   "smart_context": boolean,
   "destacada": boolean,
@@ -1028,3 +1032,12 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **API de atualização**: Endpoint para atualizar o campo Smart Context
 - ✅ **Integração completa**: Funciona com todos os filtros existentes (defensor, classe, destaque, etc.)
 - ✅ **Persistência**: Valor salvo no banco SQLite (campo `smart_context BOOLEAN DEFAULT 0`)
+
+### **Regras do usuário (PRIORIDADE ALTA) e conversão de feedback de triagem (2026)**
+
+- ✅ **Campo SQLite** `regras_usuario_prioridade_alta` (TEXT) na tabela `intimacoes`; preenchimento opcional no formulário **Nova intimação**, persistência em `save_intimacao`, exibição em **Visualizar intimação** (card + export JSON embutido) e chaves opcionais no **import em lote** (`regras_usuario_prioridade_alta`, sinônimos com texto legível).
+- ✅ **Página de análise**: modal **Filtrar** com bloco “Regras do usuário (PRIORIDADE ALTA)” (todas / apenas com / apenas sem), alinhado ao padrão do Smart Context; critérios em `obterCriteriosFiltroModal` e `linhaPassaFiltroModal`.
+- ✅ **Card compacto** (`partials/card_intimacao_compact.html`): ícone de escudo com tooltip contendo o texto das regras quando o campo está preenchido.
+- ✅ **Serviço** `triagem_feedback_transformacao_json_para_importacao_intimacoes_service.py`: parâmetro de **layout** do export (`legacy` vs `pos_2026_03_25`); no layout pós 25/03, janela do prompt a partir de `[INICIO: USER]`, remoção de bloco AI, corte em sentinela de triagem; extração do miolo entre `# Regras do Usuário (PRIORIDADE ALTA)` e `# Informações da Intimação` para preencher `regras_usuario_prioridade_alta` e manter o título `# Regras...` no contexto; registro de import passa a incluir `regras_usuario_prioridade_alta`.
+- ✅ **UI import em lote** (`nova_intimacao.html`): radios para escolher layout; **padrão** “25/03/2026 em diante” (`pos_2026_03_25`); envio de `layout` no `fetch` da conversão feedback → JSON de importação.
+- ✅ **Testes** em `tests/test_triagem_feedback_transformacao_json_layout_export_pos_2026_03_25_e_normalizacao_service.py` (layout, janela USER, regras markdown, etc.).

@@ -114,9 +114,9 @@
                         </div>
                         <div class="col-md-6">
                             <label for="defensor" class="form-label">
-                                Nome do Defensor
+                                Nome do Defensor <span class="text-danger">*</span>
                             </label>
-                            <select class="form-select" id="defensor" name="defensor">
+                            <select class="form-select" id="defensor" name="defensor" required>
                                 <option value="">Selecione o defensor...</option>
                                 {% for defensor in defensores %}
                                     <option value="{{ defensor }}" {% if dados.defensor == defensor %}selected{% endif %}>{{ defensor }}</option>
@@ -179,6 +179,19 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="regras_usuario_prioridade_alta" class="form-label">
+                            Regras do Usuário (PRIORIDADE ALTA)
+                        </label>
+                        <textarea class="form-control" id="regras_usuario_prioridade_alta"
+                                  name="regras_usuario_prioridade_alta" rows="3"
+                                  placeholder="Instruções ou regras que devem prevalecer na análise (opcional)">{{ dados.regras_usuario_prioridade_alta or '' }}</textarea>
+                        <div class="form-text">
+                            <i class="bi bi-shield-exclamation"></i>
+                            Opcional. Use para regras explícitas do usuário; o sistema pode tratá-las com prioridade alta frente a outras orientações.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
                         <div class="form-check">
                             <input class="form-check-input" type="checkbox" id="smart_context" name="smart_context" 
                                    value="1" {% if dados.smart_context %}checked{% endif %}>
@@ -204,6 +217,85 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <div class="card mb-4" id="secao-import-lote">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-cloud-upload"></i>
+                    Importar em lote (JSON)
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="btn-toggle-collapse-import-lote" data-bs-toggle="collapse" data-bs-target="#collapse-import-lote" aria-expanded="false" aria-controls="collapse-import-lote">
+                    Mostrar / ocultar
+                </button>
+            </div>
+            <div id="collapse-import-lote" class="collapse">
+                <div class="card-body">
+                    <p class="text-muted small mb-2">
+                        Envie o mesmo formato exportado pelo seu pipeline: objeto com <code>registros</code> (array) ou um array na raiz.
+                        Chaves aceitas incluem <code>contexto da intimação</code>, <code>processo</code>, <code>classificação manual</code> (ex.: <code>ELABORAR_PECA</code> → tipo do sistema), <code>nome do defensor</code>, <code>cor da etiqueta</code> e, opcionalmente, <code>regras_usuario_prioridade_alta</code> (regras do usuário com prioridade alta).
+                        <strong>Defensor</strong> precisa existir e estar ativo em Configurações (não é criado no lote).
+                        <strong>Cor</strong> só aceita as opções do formulário: amarelo, verde, azul ou os hex <code>#ffe500</code>, <code>#80ff00</code>, <code>#00ffff</code>.
+                        <strong>Classificação manual</strong> é obrigatória em cada registro.
+                        Inclua <code>intimacaoId</code> (ou <code>intimacao_id</code>) para evitar duplicar a mesma intimação do portal.
+                    </p>
+                    <hr class="my-3">
+                    <h6 class="small text-uppercase text-muted mb-2">Converter export de feedback (triagem)</h6>
+                    <p class="text-muted small mb-2">
+                        Cole o JSON bruto com <code>content</code> (array de itens com <code>feedback</code> / <code>triagem</code>).
+                        Escolha o <strong>layout do export</strong>: legado (até 24/03/2026) lê tudo do markdown em <code>triagem.prompt</code>; a partir de 25/03/2026 use <em>25/03/2026 em diante</em> para priorizar campos estruturados em <code>triagem</code> e completar o que faltar pelo prompt.
+                        Use <strong>Converter</strong> para gerar o JSON de importação abaixo; revise avisos e defensores cadastrados antes de importar.
+                    </p>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Arquivo de feedback .json (opcional)</label>
+                        <input type="file" class="form-control form-control-sm" id="import-feedback-file" accept=".json,application/json">
+                    </div>
+                    <div class="mb-2">
+                        <label for="import-feedback-json-source" class="form-label small mb-1">JSON de feedback</label>
+                        <textarea class="form-control font-monospace small" id="import-feedback-json-source" rows="6" placeholder='{ "content": [ { "feedback": {...}, "triagem": {...} } ] }'></textarea>
+                    </div>
+                    <div class="mb-2 small">
+                        <span class="text-muted d-block mb-1">Layout do export de feedback</span>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="import-feedback-layout" id="import-feedback-layout-legacy" value="legacy">
+                            <label class="form-check-label" for="import-feedback-layout-legacy">Até 24/03/2026 (legado)</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="import-feedback-layout" id="import-feedback-layout-pos" value="pos_2026_03_25" checked>
+                            <label class="form-check-label" for="import-feedback-layout-pos">25/03/2026 em diante</label>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-converter-feedback" onclick="converterFeedbackTriagemParaImportacao()">
+                            <i class="bi bi-arrow-down-circle"></i>
+                            Converter para JSON de importação
+                        </button>
+                    </div>
+                    <div id="import-feedback-transform-warnings" class="small mb-3" style="max-height: 160px; overflow-y: auto;"></div>
+                    <hr class="my-3">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Arquivo .json de importação (opcional)</label>
+                        <input type="file" class="form-control form-control-sm" id="import-lote-file" accept=".json,application/json">
+                    </div>
+                    <div class="mb-2">
+                        <label for="import-lote-json" class="form-label small mb-1">JSON de importação</label>
+                        <textarea class="form-control font-monospace small" id="import-lote-json" rows="8" placeholder='{ "registros": [ { "contexto da intimação": "...", "processo": "..." } ] }'></textarea>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="import-lote-dry-run">
+                        <label class="form-check-label small" for="import-lote-dry-run">
+                            Apenas validar (dry run), sem gravar no banco
+                        </label>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-import-lote" onclick="executarImportacaoLote()">
+                            <i class="bi bi-upload"></i>
+                            Importar
+                        </button>
+                    </div>
+                    <div id="import-lote-resultado" class="small" style="max-height: 280px; overflow-y: auto;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -256,7 +348,8 @@
                             'CONTATAR ASSISTIDO': 'warning',
                             'RENUNCIAR PRAZO': 'secondary',
                             'OCULTAR': 'dark',
-                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                            'AGENDAR RETORNO': 'info'
                         } %}
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <small>{{ tipo }}</small>
@@ -373,6 +466,13 @@ function validarFormulario() {
     if (!classificacao) {
         showToast('A classificação manual é obrigatória.', 'error');
         document.getElementById('classificacao_manual').focus();
+        return false;
+    }
+
+    const defensor = document.getElementById('defensor');
+    if (!defensor || !defensor.value || !String(defensor.value).trim()) {
+        showToast('Selecione o nome do defensor responsável.', 'error');
+        if (defensor) defensor.focus();
         return false;
     }
     
@@ -582,5 +682,221 @@ document.addEventListener('DOMContentLoaded', function() {
 window.addEventListener('beforeunload', function() {
     // Não limpar aqui, só quando realmente salvar
 });
+
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('import-lote-file');
+    const ta = document.getElementById('import-lote-json');
+    if (fileInput && ta) {
+        fileInput.addEventListener('change', function() {
+            const f = fileInput.files && fileInput.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                ta.value = ev.target.result || '';
+                showToast('Arquivo carregado no campo JSON de importação.', 'success');
+            };
+            reader.onerror = function() {
+                showToast('Erro ao ler o arquivo.', 'error');
+            };
+            reader.readAsText(f, 'UTF-8');
+        });
+    }
+    const fbFile = document.getElementById('import-feedback-file');
+    const fbTa = document.getElementById('import-feedback-json-source');
+    if (fbFile && fbTa) {
+        fbFile.addEventListener('change', function() {
+            const f = fbFile.files && fbFile.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                fbTa.value = ev.target.result || '';
+                showToast('Arquivo de feedback carregado.', 'success');
+            };
+            reader.onerror = function() {
+                showToast('Erro ao ler o arquivo de feedback.', 'error');
+            };
+            reader.readAsText(f, 'UTF-8');
+        });
+    }
+
+    (function deepLinkImportLoteFeedback() {
+        var params = new URLSearchParams(window.location.search);
+        var v = params.get('import_lote_feedback');
+        if (v !== '1' && v !== 'true' && v !== 'yes') {
+            return;
+        }
+        var collapseEl = document.getElementById('collapse-import-lote');
+        var secao = document.getElementById('secao-import-lote');
+        var feedbackTa = document.getElementById('import-feedback-json-source');
+        var toggleBtn = document.getElementById('btn-toggle-collapse-import-lote');
+
+        function abrirCollapse() {
+            if (collapseEl) {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+                    var inst = bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false });
+                    inst.show();
+                } else {
+                    collapseEl.classList.add('show');
+                }
+            }
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        abrirCollapse();
+        setTimeout(function() {
+            if (secao) {
+                secao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            if (feedbackTa) {
+                feedbackTa.focus({ preventScroll: true });
+            }
+        }, 250);
+
+        params.delete('import_lote_feedback');
+        var q = params.toString();
+        var newUrl = window.location.pathname + (q ? '?' + q : '') + window.location.hash;
+        try {
+            window.history.replaceState({}, '', newUrl);
+        } catch (e) { /* ignore */ }
+    })();
+});
+
+function converterFeedbackTriagemParaImportacao() {
+    const src = document.getElementById('import-feedback-json-source');
+    const dest = document.getElementById('import-lote-json');
+    const warn = document.getElementById('import-feedback-transform-warnings');
+    const btn = document.getElementById('btn-converter-feedback');
+    if (!src || !dest) return;
+    const raw = src.value.trim();
+    if (!raw) {
+        showToast('Cole o JSON de feedback ou escolha um arquivo.', 'warning');
+        return;
+    }
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Convertendo...';
+    }
+    if (warn) warn.innerHTML = '<span class="text-muted">Convertendo...</span>';
+
+    var layoutEl = document.querySelector('input[name="import-feedback-layout"]:checked');
+    var layout = layoutEl && layoutEl.value ? layoutEl.value : 'legacy';
+
+    fetch('/api/intimacoes/transformar-json-feedback-triagem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ json: raw, origem: 'nova_intimacao.html', layout: layout })
+    })
+    .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+    .then(function(res) {
+        if (!res.data.success) {
+            throw new Error(res.data.message || 'Falha na conversão');
+        }
+        dest.value = JSON.stringify(res.data.payload, null, 2);
+        const issues = res.data.issues || [];
+        if (warn) {
+            if (!issues.length) {
+                warn.innerHTML = '<div class="alert alert-success py-2 mb-0 small">Nenhum aviso de campos obrigatórios.</div>';
+            } else {
+                const lines = issues.map(function(it) {
+                    const idPart = (it.intimacaoId != null && String(it.intimacaoId).trim() !== '')
+                        ? 'intimacaoId=' + String(it.intimacaoId).trim()
+                        : 'intimacaoId=(ausente)';
+                    return '<div class="text-warning">#' + it.registro_index + ' · ' + idPart + ' · ' + it.campo + ': ' + it.mensagem + '</div>';
+                }).join('');
+                warn.innerHTML = '<div class="alert alert-warning py-2 mb-0 small"><strong>Avisos (' + issues.length + ')</strong></div><div class="mt-1">' + lines + '</div>';
+            }
+        }
+        showToast('JSON de importação gerado. Revise e clique em Importar.', issues.length ? 'warning' : 'success');
+    })
+    .catch(function(err) {
+        if (warn) warn.innerHTML = '<span class="text-danger">' + (err.message || err) + '</span>';
+        showToast(err.message || 'Erro', 'error');
+    })
+    .finally(function() {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    });
+}
+
+function executarImportacaoLote() {
+    const ta = document.getElementById('import-lote-json');
+    const out = document.getElementById('import-lote-resultado');
+    const dryEl = document.getElementById('import-lote-dry-run');
+    const btn = document.getElementById('btn-import-lote');
+    if (!ta || !out) return;
+    const raw = ta.value.trim();
+    if (!raw) {
+        showToast('Cole o JSON ou escolha um arquivo .json.', 'warning');
+        return;
+    }
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        showToast('JSON inválido: ' + e.message, 'error');
+        return;
+    }
+    const dry = dryEl && dryEl.checked;
+    let body;
+    if (Array.isArray(parsed)) {
+        body = { registros: parsed, dry_run: dry };
+    } else if (typeof parsed === 'object' && parsed !== null) {
+        body = Object.assign({}, parsed, { dry_run: dry });
+    } else {
+        showToast('O JSON deve ser um objeto ou um array.', 'error');
+        return;
+    }
+    const origHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+    }
+    out.innerHTML = '<span class="text-muted">Processando...</span>';
+
+    fetch('/api/intimacoes/importar-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.message || 'Falha na importação');
+        }
+        const imp = data.importados != null ? data.importados : 0;
+        const val = data.validados != null ? data.validados : 0;
+        const linhas = (data.resultados || []).map(function(r) {
+            if (r.sucesso) {
+                const id = r.id ? ' id=' + r.id : '';
+                return '<div class="text-success">#' + r.indice + ' OK' + id + '</div>';
+            }
+            return '<div class="text-danger">#' + r.indice + ' ' + (r.erro || 'erro') + '</div>';
+        }).join('');
+        const cab = '<div class="mb-2"><strong>' + (data.dry_run ? 'Validação (dry run)' : 'Importação') + '</strong>: '
+            + 'total ' + data.total + ', '
+            + (data.dry_run ? 'validados ' + val : 'gravados ' + imp)
+            + ', falhas ' + data.falhas + '</div>';
+        out.innerHTML = cab + '<div class="border rounded p-2 bg-light">' + linhas + '</div>';
+        showToast(
+            data.dry_run ? 'Validação concluída.' : 'Importação concluída.',
+            data.falhas ? 'warning' : 'success'
+        );
+    })
+    .catch(function(err) {
+        out.innerHTML = '<span class="text-danger">' + (err.message || err) + '</span>';
+        showToast(err.message || 'Erro', 'error');
+    })
+    .finally(function() {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    });
+}
 </script>
 {% endblock %}

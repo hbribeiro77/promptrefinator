@@ -1,6 +1,7 @@
 import os
 import time
 import asyncio
+import unicodedata
 import concurrent.futures
 from typing import Any, Dict, Optional
 from datetime import datetime, timedelta
@@ -13,6 +14,10 @@ from services.sqlite_service import SQLiteService
 from services.ai_manager_service import AIManagerService
 from services.export_service import ExportService
 from services.cost_calculation_service import cost_service
+from services.triagem_feedback_transformacao_json_para_importacao_intimacoes_service import (
+    normalize_feedback_export_layout,
+    transform_feedback_json_text,
+)
 
 # Carregar variáveis de ambiente do arquivo .env
 from dotenv import load_dotenv
@@ -124,6 +129,237 @@ DEFAULT_CONFIG = {
 
 # Importar tipos de ação do config
 from config import Config
+
+
+def obter_defensores_disponiveis() -> list:
+    """Obtém defensores ativos do cadastro com fallback para configuração estática."""
+    try:
+        # Migração suave: semeia os nomes legados uma vez (ignora duplicados).
+        data_service.seed_defensores(Config.DEFENSORES)
+        defensores = data_service.get_nomes_defensores_cadastrados(incluir_inativos=False)
+        if defensores:
+            return defensores
+    except Exception as e:
+        print(f"AVISO: Falha ao carregar defensores cadastrados: {e}")
+
+    return list(Config.DEFENSORES)
+
+
+def _import_get_field(reg: dict, *names):
+    """Lê campo do JSON aceitando variações de nome (case-insensitive)."""
+    if not isinstance(reg, dict):
+        return None
+    key_map = {str(k).casefold().strip(): v for k, v in reg.items()}
+    for name in names:
+        nk = str(name).casefold().strip()
+        if nk in key_map:
+            return key_map[nk]
+    return None
+
+
+def _import_strip_accents(s: str) -> str:
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+
+def _import_normalize_classificacao(val, obrigatorio: bool = True) -> str:
+    if val is None:
+        if obrigatorio:
+            raise ValueError('Classificação manual é obrigatória na importação.')
+        return ''
+    s = str(val).strip()
+    if not s:
+        if obrigatorio:
+            raise ValueError('Classificação manual é obrigatória na importação.')
+        return ''
+    cand = ' '.join(s.replace('_', ' ').split())
+    if cand.casefold() == 'analisar':
+        cand = 'ANALISAR PROCESSO'
+    for t in Config.TIPOS_ACAO:
+        if t.casefold() == cand.casefold():
+            return t
+        if _import_strip_accents(t).casefold() == _import_strip_accents(cand).casefold():
+            return t
+    raise ValueError(
+        f'Classificação manual inválida: "{s}". '
+        f'Valores permitidos: {", ".join(Config.TIPOS_ACAO)}'
+    )
+
+
+# Mesmas opções do select em nova_intimacao.html (somente estes valores no banco)
+_IMPORT_CORES_ETIQUETA_PERMITIDAS = ('#ffe500', '#80ff00', '#00ffff')
+
+def _import_normalize_cor(val) -> str:
+    if val is None or str(val).strip() == '':
+        return ''
+    s = str(val).strip()
+    sl = s.lower()
+    mapa = {
+        'amarelo': '#ffe500',
+        'amarela': '#ffe500',
+        'yellow': '#ffe500',
+        'verde': '#80ff00',
+        'green': '#80ff00',
+        'azul': '#00ffff',
+        'ciano': '#00ffff',
+        'cyan': '#00ffff',
+    }
+    if sl in mapa:
+        return mapa[sl]
+    if s.startswith('#'):
+        s_norm = s.lower()
+        if s_norm in _IMPORT_CORES_ETIQUETA_PERMITIDAS:
+            return s_norm
+        raise ValueError(
+            'Cor da etiqueta inválida para importação. '
+            'Use apenas uma das opções do cadastro: amarelo, verde, azul '
+            f'ou os hex {_IMPORT_CORES_ETIQUETA_PERMITIDAS}.'
+        )
+    raise ValueError(
+        'Cor da etiqueta não reconhecida. '
+        'Use amarelo, verde ou azul (como no formulário).'
+    )
+
+
+def _import_parse_bool(val) -> bool:
+    if val is None:
+        return False
+    if isinstance(val, bool):
+        return val
+    s = str(val).strip().lower()
+    return s in ('1', 'true', 'sim', 'yes', 'on')
+
+
+def _import_extrair_intimacao_id_externo(reg: dict) -> Optional[str]:
+    """ID único do portal (ex.: intimacaoId no JSON)."""
+    v = _import_get_field(
+        reg,
+        'intimacaoId',
+        'intimacao_id',
+        'id_intimacao',
+        'intimacao id',
+    )
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s else None
+
+
+def _import_resolver_defensor_select(nome: Optional[str]) -> Optional[str]:
+    if nome is None or not str(nome).strip():
+        return None
+    nome = str(nome).strip()
+    permitidos = obter_defensores_disponiveis()
+    for n in permitidos:
+        if n.casefold() == nome.casefold():
+            return n
+    raise ValueError(
+        f'Defensor não cadastrado ou inativo: "{nome}". '
+        'Cadastre o defensor em Configurações antes de importar ou use o nome exatamente como na lista.'
+    )
+
+
+def _import_montar_intimacao(reg: dict) -> dict:
+    ctx = _import_get_field(
+        reg,
+        'contexto',
+        'contexto da intimação',
+        'contexto_da_intimacao',
+    )
+    if ctx is None or not str(ctx).strip():
+        raise ValueError(
+            'Campo obrigatório ausente ou vazio: contexto (ou "contexto da intimação").'
+        )
+
+    classificacao = _import_normalize_classificacao(
+        _import_get_field(
+            reg,
+            'classificacao_manual',
+            'classificação manual',
+        ),
+        obrigatorio=True,
+    )
+
+    intimacao_id_externo = _import_extrair_intimacao_id_externo(reg)
+    if intimacao_id_externo:
+        existente = data_service.get_id_por_intimacao_id_externo(intimacao_id_externo)
+        if existente:
+            raise ValueError(
+                f'Intimação já cadastrada com intimacaoId={intimacao_id_externo!r} '
+                f'(id interno: {existente}).'
+            )
+
+    info = _import_get_field(
+        reg,
+        'informacoes_adicionais',
+        'informações adicionais',
+        'informacao_adicional',
+    )
+    informacoes = '' if info is None else str(info)
+
+    regras_u = _import_get_field(
+        reg,
+        'regras_usuario_prioridade_alta',
+        'regras do usuário (prioridade alta)',
+        'regras_do_usuario_prioridade_alta',
+    )
+    regras_usuario_prioridade_alta = (
+        None
+        if regras_u is None
+        else (str(regras_u).strip() or None)
+    )
+
+    defensor = _import_resolver_defensor_select(
+        _import_get_field(reg, 'defensor', 'nome do defensor', 'nome_do_defensor')
+    )
+
+    cor = _import_normalize_cor(
+        _import_get_field(reg, 'cor_etiqueta', 'cor da etiqueta', 'cor_da_etiqueta')
+    )
+
+    smart_bool = _import_parse_bool(
+        _import_get_field(reg, 'smart_context', 'smart context')
+    )
+
+    def _s(v):
+        if v is None:
+            return None
+        t = str(v).strip()
+        return t if t else None
+
+    proc = _import_get_field(reg, 'processo')
+    org = _import_get_field(reg, 'orgao_julgador', 'órgão julgador', 'orgao julgador')
+    classe = _import_get_field(reg, 'classe')
+    disp = _import_get_field(reg, 'disponibilizacao', 'disponibilização')
+    intimado = _import_get_field(reg, 'intimado')
+    status = _import_get_field(reg, 'status')
+    prazo = _import_get_field(reg, 'prazo')
+    id_tarefa = _import_get_field(reg, 'id_tarefa', 'id da tarefa')
+
+    out = {
+        'contexto': str(ctx),
+        'classificacao_manual': classificacao,
+        'informacoes_adicionais': informacoes,
+        'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+        'processo': _s(proc),
+        'orgao_julgador': _s(org),
+        'classe': _s(classe),
+        'disponibilizacao': _s(disp),
+        'intimado': _s(intimado),
+        'status': _s(status),
+        'prazo': _s(prazo),
+        'defensor': defensor,
+        'id_tarefa': _s(id_tarefa),
+        'cor_etiqueta': cor,
+        'smart_context': smart_bool,
+        'data_criacao': datetime.now().isoformat(),
+        'analises': [],
+    }
+    if intimacao_id_externo:
+        out['intimacao_id_externo'] = intimacao_id_externo
+    return out
 
 
 def resolve_analise_em_lote_paralelismo(config) -> tuple:
@@ -443,7 +679,7 @@ def listar_intimacoes():
                              config=config,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
-                             defensores=Config.DEFENSORES,
+                             defensores=obter_defensores_disponiveis(),
                              prompts_disponiveis=prompts_disponiveis,
                              filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao, 'prompt_especifico': prompt_especifico, 'temperatura_especifica': temperatura_especifica})
     except Exception as e:
@@ -457,7 +693,7 @@ def listar_intimacoes():
                              config={},
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
-                             defensores=Config.DEFENSORES,
+                             defensores=obter_defensores_disponiveis(),
                              prompts_disponiveis=[],
                              filtros={'busca': '', 'classificacao': '', 'defensor': '', 'ordenacao': 'data_desc', 'prompt_especifico': ''})
 
@@ -472,6 +708,9 @@ def nova_intimacao():
             contexto = request.form.get('contexto', '').strip()
             classificacao_manual = request.form.get('classificacao_manual', '').strip()
             informacoes_adicionais = request.form.get('informacoes_adicionais', '').strip()
+            regras_usuario_prioridade_alta = request.form.get(
+                'regras_usuario_prioridade_alta', ''
+            ).strip()
             processo = request.form.get('processo', '').strip()
             orgao_julgador = request.form.get('orgao_julgador', '').strip()
             classe = request.form.get('classe', '').strip()
@@ -505,10 +744,11 @@ def nova_intimacao():
                 return render_template('nova_intimacao.html', 
                                      classificacoes=Config.TIPOS_ACAO,
                                      tipos_acao=Config.TIPOS_ACAO,
-                                     defensores=Config.DEFENSORES,
+                                     defensores=obter_defensores_disponiveis(),
                                      dados={'contexto': contexto, 
                                            'classificacao_manual': classificacao_manual,
                                            'informacoes_adicionais': informacoes_adicionais,
+                                           'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
                                            'processo': processo,
                                            'orgao_julgador': orgao_julgador,
                                            'classe': classe,
@@ -520,12 +760,61 @@ def nova_intimacao():
                                            'id_tarefa': id_tarefa,
                                            'cor_etiqueta': cor_etiqueta,
                                            'smart_context': smart_context})
+
+            if not defensor:
+                flash('Selecione o nome do defensor responsável.', 'error')
+                return render_template('nova_intimacao.html',
+                                     classificacoes=Config.TIPOS_ACAO,
+                                     tipos_acao=Config.TIPOS_ACAO,
+                                     defensores=obter_defensores_disponiveis(),
+                                     dados={'contexto': contexto,
+                                           'classificacao_manual': classificacao_manual,
+                                           'informacoes_adicionais': informacoes_adicionais,
+                                           'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+                                           'processo': processo,
+                                           'orgao_julgador': orgao_julgador,
+                                           'classe': classe,
+                                           'disponibilizacao': disponibilizacao,
+                                           'intimado': intimado,
+                                           'status': status,
+                                           'prazo': prazo,
+                                           'defensor': defensor,
+                                           'id_tarefa': id_tarefa,
+                                           'cor_etiqueta': cor_etiqueta,
+                                           'smart_context': smart_context})
+
+            try:
+                defensor = _import_resolver_defensor_select(defensor)
+            except ValueError as e:
+                flash(str(e), 'error')
+                return render_template('nova_intimacao.html',
+                                     classificacoes=Config.TIPOS_ACAO,
+                                     tipos_acao=Config.TIPOS_ACAO,
+                                     defensores=obter_defensores_disponiveis(),
+                                     dados={'contexto': contexto,
+                                           'classificacao_manual': classificacao_manual,
+                                           'informacoes_adicionais': informacoes_adicionais,
+                                           'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+                                           'processo': processo,
+                                           'orgao_julgador': orgao_julgador,
+                                           'classe': classe,
+                                           'disponibilizacao': disponibilizacao,
+                                           'intimado': intimado,
+                                           'status': status,
+                                           'prazo': prazo,
+                                           'defensor': request.form.get('defensor', '').strip(),
+                                           'id_tarefa': id_tarefa,
+                                           'cor_etiqueta': cor_etiqueta,
+                                           'smart_context': smart_context})
             
             # Criar a intimação
             intimacao_data = {
                 'contexto': contexto,
                 'classificacao_manual': classificacao_manual if classificacao_manual else None,
                 'informacoes_adicionais': informacoes_adicionais if informacoes_adicionais else None,
+                'regras_usuario_prioridade_alta': (
+                    regras_usuario_prioridade_alta if regras_usuario_prioridade_alta else None
+                ),
                 'processo': processo if processo else None,
                 'orgao_julgador': orgao_julgador if orgao_julgador else None,
                 'classe': classe if classe else None,
@@ -533,7 +822,7 @@ def nova_intimacao():
                 'intimado': intimado if intimado else None,
                 'status': status if status else None,
                 'prazo': prazo if prazo else None,
-                'defensor': defensor if defensor else None,
+                'defensor': defensor,
                 'id_tarefa': id_tarefa if id_tarefa else None,
                 'cor_etiqueta': cor_etiqueta if cor_etiqueta else None,
                 'smart_context': smart_context,
@@ -560,10 +849,13 @@ def nova_intimacao():
             return render_template('nova_intimacao.html', 
                                  classificacoes=Config.TIPOS_ACAO,
                                  tipos_acao=Config.TIPOS_ACAO,
-                                 defensores=Config.DEFENSORES,
+                                 defensores=obter_defensores_disponiveis(),
                                  dados={'contexto': request.form.get('contexto', ''), 
                                        'classificacao_manual': request.form.get('classificacao_manual', ''),
                                        'informacoes_adicionais': request.form.get('informacoes_adicionais', ''),
+                                       'regras_usuario_prioridade_alta': request.form.get(
+                                           'regras_usuario_prioridade_alta', ''
+                                       ),
                                        'processo': request.form.get('processo', ''),
                                        'orgao_julgador': request.form.get('orgao_julgador', ''),
                                        'classe': request.form.get('classe', ''),
@@ -579,7 +871,7 @@ def nova_intimacao():
     return render_template('nova_intimacao.html', 
                          classificacoes=Config.TIPOS_ACAO,
                          tipos_acao=Config.TIPOS_ACAO,
-                         defensores=Config.DEFENSORES,
+                         defensores=obter_defensores_disponiveis(),
                          dados={})
 
 @app.route('/intimacoes/<id>')
@@ -626,7 +918,7 @@ def visualizar_intimacao(id):
                              config=config,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
-                             defensores=Config.DEFENSORES)
+                             defensores=obter_defensores_disponiveis())
                              
     except Exception as e:
         flash(f'Erro ao carregar intimação: {str(e)}', 'error')
@@ -2540,6 +2832,209 @@ def configuracoes():
                              logs_recentes=[])
 
 # Rotas auxiliares e APIs
+
+@app.route('/api/defensores', methods=['GET'])
+def listar_defensores_api():
+    """API para listar defensores cadastrados"""
+    try:
+        incluir_inativos = request.args.get('incluir_inativos', 'false').lower() == 'true'
+        defensores = data_service.get_defensores_cadastrados(incluir_inativos=incluir_inativos)
+        return jsonify({'success': True, 'defensores': defensores})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/defensores', methods=['POST'])
+def criar_defensor_api():
+    """API para criar defensor"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        nome = payload.get('nome', '')
+        defensor = data_service.criar_defensor(nome)
+        return jsonify({'success': True, 'defensor': defensor})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/defensores/<defensor_id>', methods=['PUT'])
+def atualizar_defensor_api(defensor_id):
+    """API para atualizar nome de defensor"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        nome = payload.get('nome', '')
+        defensor = data_service.atualizar_defensor(defensor_id, nome)
+        return jsonify({'success': True, 'defensor': defensor})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/defensores/<defensor_id>/status', methods=['POST'])
+def atualizar_status_defensor_api(defensor_id):
+    """API para ativar/inativar defensor"""
+    try:
+        payload = request.get_json(silent=True) or {}
+        ativo = bool(payload.get('ativo', True))
+        data_service.definir_status_defensor(defensor_id, ativo)
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/defensores/<defensor_id>', methods=['DELETE'])
+def excluir_defensor_api(defensor_id):
+    """API para excluir defensor"""
+    try:
+        data_service.excluir_defensor(defensor_id)
+        return jsonify({'success': True})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/intimacoes/importar-lote', methods=['POST'])
+def importar_intimacoes_lote():
+    """
+    Importa várias intimações a partir de JSON.
+    Corpo: { "registros": [ {...}, ... ] } ou lista na raiz, ou { "origem", "total_registros", "registros" }.
+    Opções: "dry_run": true apenas valida sem gravar.
+    """
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            return jsonify({'success': False, 'message': 'JSON inválido ou vazio.'}), 400
+
+        if isinstance(payload, list):
+            registros = payload
+        elif isinstance(payload, dict):
+            registros = payload.get('registros')
+            if registros is None:
+                return jsonify({
+                    'success': False,
+                    'message': 'Informe a chave "registros" com uma lista de objetos ou envie um array JSON.',
+                }), 400
+        else:
+            return jsonify({'success': False, 'message': 'Formato de payload não suportado.'}), 400
+
+        if not isinstance(registros, list):
+            return jsonify({'success': False, 'message': '"registros" deve ser uma lista.'}), 400
+
+        dry_run = bool(
+            (isinstance(payload, dict) and payload.get('dry_run') is True)
+            or (isinstance(payload, dict) and str(payload.get('dry_run', '')).lower() == 'true')
+        )
+
+        resultados = []
+        ok_count = 0
+        falhas = 0
+
+        for idx, reg in enumerate(registros):
+            if not isinstance(reg, dict):
+                falhas += 1
+                resultados.append({
+                    'indice': idx,
+                    'sucesso': False,
+                    'erro': 'Item não é um objeto JSON.',
+                })
+                continue
+            try:
+                dados = _import_montar_intimacao(reg)
+                if dry_run:
+                    ok_count += 1
+                    resultados.append({
+                        'indice': idx,
+                        'sucesso': True,
+                        'dry_run': True,
+                        'preview_processo': dados.get('processo'),
+                    })
+                else:
+                    oid = data_service.criar_intimacao(dados)
+                    ok_count += 1
+                    resultados.append({
+                        'indice': idx,
+                        'sucesso': True,
+                        'id': oid,
+                    })
+            except Exception as e:
+                falhas += 1
+                resultados.append({
+                    'indice': idx,
+                    'sucesso': False,
+                    'erro': str(e),
+                })
+
+        return jsonify({
+            'success': True,
+            'dry_run': dry_run,
+            'total': len(registros),
+            'importados': ok_count if not dry_run else 0,
+            'validados': ok_count if dry_run else 0,
+            'falhas': falhas,
+            'resultados': resultados,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/intimacoes/transformar-json-feedback-triagem', methods=['POST'])
+def transformar_json_feedback_triagem():
+    """
+    Converte JSON de export de feedback (chave 'content'[]) para o payload de importação em lote.
+    Corpo: { "json": "<string do arquivo>" } ou objeto com 'content' (será serializado).
+    Opcional: layout — "legacy" (export até 24/03/2026) ou "pos_2026_03_25" (25/03/2026 em diante).
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        raw_text = payload.get('json')
+        if raw_text is None and isinstance(payload, dict) and 'content' in payload:
+            raw_text = json.dumps(payload, ensure_ascii=False)
+        if raw_text is None or (isinstance(raw_text, str) and not raw_text.strip()):
+            return jsonify({
+                'success': False,
+                'message': (
+                    'Informe a chave "json" com o texto bruto do JSON de feedback '
+                    '(objeto com "content": [...]).'
+                ),
+            }), 400
+        if not isinstance(raw_text, str):
+            return jsonify({
+                'success': False,
+                'message': 'O campo "json" deve ser texto (string JSON completa).',
+            }), 400
+
+        origem = payload.get('origem')
+        if not isinstance(origem, str) or not origem.strip():
+            origem = 'api'
+
+        try:
+            layout = normalize_feedback_export_layout(
+                payload.get('layout') or payload.get('formato_layout_feedback')
+            )
+        except ValueError as e:
+            return jsonify({'success': False, 'message': str(e)}), 400
+
+        import_payload, issues = transform_feedback_json_text(
+            raw_text, origem=origem, layout=layout
+        )
+        return jsonify({
+            'success': True,
+            'payload': import_payload,
+            'issues': [i.to_dict() for i in issues],
+            'issues_count': len(issues),
+        })
+    except json.JSONDecodeError as e:
+        return jsonify({'success': False, 'message': f'JSON inválido: {e}'}), 400
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 
 @app.route('/api/intimacoes/<id>/editar', methods=['POST'])
 def editar_intimacao_api(id):
@@ -4752,9 +5247,11 @@ Responda apenas com uma das seguintes opções:
 - RENUNCIAR_PRAZO
 - OCULTAR
 - ELABORAR_PECA
+- CONTATO_PECA
 - CONTATAR_ASSISTIDO
 - ANALISAR_PROCESSO
 - ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR
+- AGENDAR_RETORNO
 - URGENCIA
 """
     conteudo_src = prompt_base.get('conteudo') or ''

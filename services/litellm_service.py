@@ -1,7 +1,6 @@
 """Cliente LiteLLM via API compatível com OpenAI (SDK openai + base_url)."""
 import ssl
 import time
-import re
 from typing import Tuple, Dict, Any, List, Optional, Union
 from urllib.parse import urlparse
 
@@ -11,6 +10,9 @@ import openai
 from config import Config
 from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
+from services.classificacao_ia_extracao_resposta_texto_para_tipo_canonico_service import (
+    extrair_classificacao_da_resposta_ia,
+)
 from services.extracao_texto_resposta_chat_completions_openai_compat import (
     texto_mensagem_assistente,
 )
@@ -303,56 +305,7 @@ class LiteLLMService(AIServiceInterface):
         raise Exception("Falha ao completar chamada LiteLLM")
 
     def _extrair_classificacao(self, resposta: str) -> str:
-        if not resposta:
-            return "ERRO: Resposta vazia"
-        resposta_limpa = resposta.strip().upper()
-        mapeamento_variacoes = {
-            "ELABORAR_PECA": "ELABORAR PEÇA",
-            "ELABORAR PECA": "ELABORAR PEÇA",
-            "CONTATAR_ASSISTIDO": "CONTATAR ASSISTIDO",
-            "ANALISAR_PROCESSO": "ANALISAR PROCESSO",
-            "RENUNCIAR_PRAZO": "RENUNCIAR PRAZO",
-            "ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR": "ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR",
-            "URGENCIA": "URGÊNCIA",
-        }
-        import json
-
-        try:
-            dados_json = json.loads(resposta)
-            if "triagem" in dados_json:
-                triagem_ia = dados_json["triagem"].upper().strip()
-                if triagem_ia in mapeamento_variacoes:
-                    return mapeamento_variacoes[triagem_ia]
-                for tipo_acao in self.config.TIPOS_ACAO:
-                    if tipo_acao.upper() == triagem_ia:
-                        return tipo_acao
-        except json.JSONDecodeError:
-            pass
-        for tipo_acao in self.config.TIPOS_ACAO:
-            if tipo_acao.upper() in resposta_limpa:
-                return tipo_acao
-        for variacao, classificacao_padrao in mapeamento_variacoes.items():
-            if variacao in resposta_limpa:
-                return classificacao_padrao
-        for tipo_acao in self.config.TIPOS_ACAO:
-            palavras_chave = tipo_acao.upper().split()
-            if all(p in resposta_limpa for p in palavras_chave):
-                return tipo_acao
-        patterns = [
-            r'"triagem":\s*"([^"]+)"',
-            r"triagem[:\s]*([^\n\.]+)",
-            r"classificação[:\s]*([^\n\.]+)",
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, resposta_limpa, re.IGNORECASE)
-            if match:
-                possivel = match.group(1).strip()
-                if possivel in mapeamento_variacoes:
-                    return mapeamento_variacoes[possivel]
-                for tipo_acao in self.config.TIPOS_ACAO:
-                    if tipo_acao.upper() == possivel:
-                        return tipo_acao
-        return f"ERRO: Classificação não reconhecida - {resposta[:100]}"
+        return extrair_classificacao_da_resposta_ia(resposta, self.config.TIPOS_ACAO)
 
     def get_available_models(self) -> List[str]:
         return Config.get_litellm_ui_models()

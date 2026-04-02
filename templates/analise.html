@@ -266,18 +266,22 @@
 
                     <!-- Seleção de Intimações -->
                     <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                             <label class="form-label mb-0">
                             <i class="bi bi-file-text"></i>
                             Intimações para Analisar
                             <span class="text-danger">*</span>
                         </label>
-                            <div class="d-flex gap-2">
-                                <span id="intimacoes-count" class="badge bg-primary">0 selecionada(s)</span>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="selecionarTodasIntimacoes()">
-                                        <i class="bi bi-check-all"></i>
-                                    Todas
-                                    </button>
+                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                <span id="intimacoes-count" class="badge bg-primary align-self-center">0 selecionada(s)</span>
+                                <span id="intimacoes-presentes" class="badge bg-secondary align-self-center" title="Total na página; com filtro, mostra quantas linhas estão visíveis">{% set _np = intimacoes|length %}{% if _np == 1 %}1 presente{% else %}{{ _np }} presentes{% endif %}</span>
+                                <div class="input-group input-group-sm flex-shrink-0" style="width: 23rem; max-width: min(23rem, 92vw);" title="Busca na linha (ID, processo, texto visível)">
+                                    <span class="input-group-text py-0 px-2"><i class="bi bi-search"></i></span>
+                                    <input type="search" class="form-control" id="filtro-texto-intimacoes"
+                                           placeholder="ID, processo…"
+                                           autocomplete="off" aria-label="Filtrar intimações na tabela">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm px-2" id="btn-limpar-filtro-texto-intimacoes" title="Limpar filtro de texto"><i class="bi bi-x-lg"></i></button>
+                                </div>
                                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparSelecaoIntimacoes()">
                                         <i class="bi bi-x-circle"></i>
                                     Limpar
@@ -298,10 +302,6 @@
                                         <i class="bi bi-gear"></i>
                                         Colunas
                                     </button>
-                                    <a href="{{ url_for('nova_intimacao') }}" class="btn btn-outline-success btn-sm">
-                                        <i class="bi bi-plus-circle"></i>
-                                    Nova
-                                    </a>
                         </div>
                     </div>
 
@@ -333,7 +333,7 @@
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}">
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}" data-regras-usuario="{{ '1' if (intimacao.regras_usuario_prioridade_alta | default('', true) | trim) else '0' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
@@ -380,7 +380,8 @@
                                                         'CONTATAR ASSISTIDO': 'warning',
                                                         'RENUNCIAR PRAZO': 'secondary',
                                                         'OCULTAR': 'dark',
-                                                        'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                                        'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                                                        'AGENDAR RETORNO': 'info'
                                                     } %}
                                                     {% if intimacao.classificacao_manual %}
                                                     <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
@@ -455,6 +456,31 @@
                                             {% endfor %}
                                         </tbody>
                                     </table>
+                                </div>
+                                <div class="card-footer py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-2 bg-light border-top" id="intimacoes-paginacao-bar">
+                                    <div class="small text-muted" id="intimacoes-paginacao-info">—</div>
+                                    <div class="d-flex flex-wrap align-items-center gap-2">
+                                        <label for="intimacoes-por-pagina" class="small text-muted mb-0">Por página</label>
+                                        <select id="intimacoes-por-pagina" class="form-select form-select-sm" style="width: auto; min-width: 4.5rem;" title="Quantidade de intimações por página">
+                                            <option value="10">10</option>
+                                            <option value="25" selected>25</option>
+                                            <option value="50">50</option>
+                                            <option value="100">100</option>
+                                        </select>
+                                        <nav aria-label="Paginação da lista de intimações">
+                                            <ul class="pagination pagination-sm mb-0">
+                                                <li class="page-item" id="intimacoes-pag-ant-li">
+                                                    <button type="button" class="page-link py-1 px-2" id="intimacoes-pag-ant" aria-label="Página anterior">«</button>
+                                                </li>
+                                                <li class="page-item disabled" id="intimacoes-pag-label-li">
+                                                    <span class="page-link py-1 px-2" id="intimacoes-paginacao-label">1 / 1</span>
+                                                </li>
+                                                <li class="page-item" id="intimacoes-pag-prox-li">
+                                                    <button type="button" class="page-link py-1 px-2" id="intimacoes-pag-prox" aria-label="Próxima página">»</button>
+                                                </li>
+                                            </ul>
+                                        </nav>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -758,6 +784,34 @@
                         <label class="form-check-label" for="filtro-sem-smart-context">
                             <i class="bi bi-x-circle text-secondary"></i>
                             <strong>Apenas sem Smart Context</strong>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Filtro por Regras do Usuário (PRIORIDADE ALTA) -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-shield-exclamation text-warning"></i>
+                        <strong>Regras do usuário (PRIORIDADE ALTA):</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todas-regras-usuario" checked>
+                        <label class="form-check-label" for="filtro-todas-regras-usuario">
+                            <strong>Todas as intimações</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-apenas-com-regras-usuario">
+                        <label class="form-check-label" for="filtro-apenas-com-regras-usuario">
+                            <i class="bi bi-shield-exclamation text-warning"></i>
+                            <strong>Apenas com regras do usuário</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-apenas-sem-regras-usuario">
+                        <label class="form-check-label" for="filtro-apenas-sem-regras-usuario">
+                            <i class="bi bi-shield text-secondary"></i>
+                            <strong>Apenas sem regras do usuário</strong>
                         </label>
                     </div>
                 </div>
@@ -1668,6 +1722,8 @@ let dadosCompletos = {}; // Objeto para armazenar prompt e resposta completos
 
 // Variáveis globais para ordenação
 let ordenacaoIntimacoes = { coluna: null, direcao: 'asc' };
+let paginaIntimacoesAtual = 1;
+let intimacoesPorPagina = 25;
 let dadosIntimacoes = [];
 
 // Configuração de colunas
@@ -1781,6 +1837,25 @@ function updateIntimacoesSelection() {
     const checkboxes = document.querySelectorAll('.intimacao-checkbox:checked');
     const count = checkboxes.length;
     document.getElementById('intimacoes-count').textContent = count + ' selecionada(s)';
+
+    const presEl = document.getElementById('intimacoes-presentes');
+    if (presEl) {
+        const allRows = document.querySelectorAll('tr.intimacao-row');
+        const total = allRows.length;
+        let filtradas = 0;
+        allRows.forEach(row => {
+            if (row.dataset.passouFiltro === '1') filtradas++;
+        });
+        if (total === 0) {
+            presEl.textContent = '0 presentes';
+        } else if (filtradas === total) {
+            presEl.textContent = total === 1 ? '1 presente' : total + ' presentes';
+        } else {
+            const fTxt = filtradas === 1 ? '1 filtrada' : filtradas + ' filtradas';
+            const tTxt = total === 1 ? '1 no total' : total + ' no total';
+            presEl.textContent = fTxt + ' · ' + tTxt;
+        }
+    }
     
     // Atualizar checkbox "selecionar todas" considerando apenas intimações visíveis
     const selectAll = document.getElementById('select-all-intimacoes');
@@ -2484,6 +2559,34 @@ function carregarClasses(classes) {
         });
     }
     
+    const checkTodasRegrasUsuario = document.getElementById('filtro-todas-regras-usuario');
+    const checkApenasComRegrasUsuario = document.getElementById('filtro-apenas-com-regras-usuario');
+    const checkApenasSemRegrasUsuario = document.getElementById('filtro-apenas-sem-regras-usuario');
+    if (checkTodasRegrasUsuario) {
+        checkTodasRegrasUsuario.addEventListener('change', function() {
+            if (this.checked) {
+                checkApenasComRegrasUsuario.checked = false;
+                checkApenasSemRegrasUsuario.checked = false;
+            }
+        });
+    }
+    if (checkApenasComRegrasUsuario) {
+        checkApenasComRegrasUsuario.addEventListener('change', function() {
+            if (this.checked) {
+                checkTodasRegrasUsuario.checked = false;
+                checkApenasSemRegrasUsuario.checked = false;
+            }
+        });
+    }
+    if (checkApenasSemRegrasUsuario) {
+        checkApenasSemRegrasUsuario.addEventListener('change', function() {
+            if (this.checked) {
+                checkTodasRegrasUsuario.checked = false;
+                checkApenasComRegrasUsuario.checked = false;
+            }
+        });
+    }
+    
     // Adicionar event listener para o check "Todas as classes"
     const checkTodasClasses = document.getElementById('filtro-todas-classes');
     checkTodasClasses.addEventListener('change', function() {
@@ -2518,116 +2621,224 @@ function limparFiltroTaxa() {
     document.getElementById('taxa-maxima').value = '';
 }
 
-// Função para aplicar filtro
-function aplicarFiltro() {
-    // Obter filtros de defensores
+function obterCriteriosFiltroModal() {
     const todosDefensores = document.getElementById('filtro-todos-defensores').checked;
     const defensoresSelecionados = [];
-    
     if (!todosDefensores) {
-        const checkboxesDefensores = document.querySelectorAll('.filtro-defensor:checked');
-        checkboxesDefensores.forEach(cb => defensoresSelecionados.push(cb.value));
+        document.querySelectorAll('.filtro-defensor:checked').forEach(cb => defensoresSelecionados.push(cb.value));
     }
-    
-    // Obter filtros de classificações
     const todasClassificacoes = document.getElementById('filtro-todas-classificacoes').checked;
     const classificacoesSelecionadas = [];
-    
     if (!todasClassificacoes) {
-        const checkboxesClassificacoes = document.querySelectorAll('.filtro-classificacao:checked');
-        checkboxesClassificacoes.forEach(cb => classificacoesSelecionadas.push(cb.value));
+        document.querySelectorAll('.filtro-classificacao:checked').forEach(cb => classificacoesSelecionadas.push(cb.value));
     }
-    
-    // Obter filtros de classes
     const todasClasses = document.getElementById('filtro-todas-classes').checked;
     const classesSelecionadas = [];
-    
     if (!todasClasses) {
-        const checkboxesClasses = document.querySelectorAll('.filtro-classe:checked');
-        checkboxesClasses.forEach(cb => classesSelecionadas.push(cb.value));
+        document.querySelectorAll('.filtro-classe:checked').forEach(cb => classesSelecionadas.push(cb.value));
     }
-    
-    // Obter filtros de taxa de acerto
     const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
     const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
-    
-    // Obter filtro de Smart Context
     const todosSmartContext = document.getElementById('filtro-todos-smart-context').checked;
     const apenasSmartContext = document.getElementById('filtro-apenas-smart-context').checked;
     const semSmartContext = document.getElementById('filtro-sem-smart-context').checked;
-    
-    // Obter filtro de destacadas
-    const todasIntimacoes = document.getElementById('filtro-todas-intimacoes').checked;
+    const todasRegrasUsuario = document.getElementById('filtro-todas-regras-usuario').checked;
+    const apenasComRegrasUsuario = document.getElementById('filtro-apenas-com-regras-usuario').checked;
+    const apenasSemRegrasUsuario = document.getElementById('filtro-apenas-sem-regras-usuario').checked;
     const apenasDestacadas = document.getElementById('filtro-apenas-destacadas').checked;
-    
-    // Aplicar filtros nos checkboxes de intimações
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    checkboxes.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        const classificacao = checkbox.dataset.classificacao || '';
-        const defensor = row.dataset.defensor || '';
-        
-        // Obter classe da linha (precisamos adicionar data-classe)
-        const classe = row.dataset.classe || '';
-        
-        // Obter smart context da linha
-        const smartContextValue = row.dataset.smartContext || '0';
-        const temSmartContext = smartContextValue === '1';
-        
-        // Obter taxa de acerto da intimação
-        const taxaAcertoElement = row.querySelector('.taxa-acerto-cell .badge');
-        let taxaAcerto = 0;
-        if (taxaAcertoElement) {
-            const taxaText = taxaAcertoElement.textContent.replace('%', '');
-            taxaAcerto = parseFloat(taxaText) || 0;
+    return {
+        todosDefensores, defensoresSelecionados,
+        todasClassificacoes, classificacoesSelecionadas,
+        todasClasses, classesSelecionadas,
+        taxaMinima, taxaMaxima,
+        todosSmartContext, apenasSmartContext, semSmartContext,
+        todasRegrasUsuario, apenasComRegrasUsuario, apenasSemRegrasUsuario,
+        apenasDestacadas
+    };
+}
+
+function linhaPassaFiltroModal(row, checkbox, c) {
+    const classificacao = checkbox.dataset.classificacao || '';
+    const defensor = row.dataset.defensor || '';
+    const classe = row.dataset.classe || '';
+    const smartContextValue = row.dataset.smartContext || '0';
+    const temSmartContext = smartContextValue === '1';
+    const regrasUsuarioValue = row.dataset.regrasUsuario || '0';
+    const temRegrasUsuario = regrasUsuarioValue === '1';
+    const taxaAcertoElement = row.querySelector('.taxa-acerto-cell .badge');
+    let taxaAcerto = 0;
+    if (taxaAcertoElement) {
+        const taxaText = taxaAcertoElement.textContent.replace('%', '');
+        taxaAcerto = parseFloat(taxaText) || 0;
+    }
+    const mostrarDefensor = c.todosDefensores || c.defensoresSelecionados.includes(defensor);
+    const mostrarClassificacao = c.todasClassificacoes || c.classificacoesSelecionadas.includes(classificacao);
+    const mostrarClasse = c.todasClasses || c.classesSelecionadas.includes(classe);
+    const mostrarTaxa = taxaAcerto >= c.taxaMinima && taxaAcerto <= c.taxaMaxima;
+    let mostrarSmartContext = true;
+    if (!c.todosSmartContext) {
+        if (c.apenasSmartContext && !temSmartContext) {
+            mostrarSmartContext = false;
+        } else if (c.semSmartContext && temSmartContext) {
+            mostrarSmartContext = false;
         }
-        
-        let mostrarDefensor = todosDefensores || defensoresSelecionados.includes(defensor);
-        let mostrarClassificacao = todasClassificacoes || classificacoesSelecionadas.includes(classificacao);
-        let mostrarClasse = todasClasses || classesSelecionadas.includes(classe);
-        let mostrarTaxa = taxaAcerto >= taxaMinima && taxaAcerto <= taxaMaxima;
-        
-        // Filtro de Smart Context
-        let mostrarSmartContext = true;
-        if (!todosSmartContext) {
-            if (apenasSmartContext && !temSmartContext) {
-                mostrarSmartContext = false;
-            } else if (semSmartContext && temSmartContext) {
-                mostrarSmartContext = false;
-            }
+    }
+    let mostrarRegrasUsuario = true;
+    if (!c.todasRegrasUsuario) {
+        if (c.apenasComRegrasUsuario && !temRegrasUsuario) {
+            mostrarRegrasUsuario = false;
+        } else if (c.apenasSemRegrasUsuario && temRegrasUsuario) {
+            mostrarRegrasUsuario = false;
         }
-        
-        // Filtro de destacadas - GAMBIARRA: usando campo invisível
-        let mostrarDestacada = true;
-        if (apenasDestacadas) {
-            const campoDestacada = row.querySelector('.intimacao-destacada-value');
-            if (campoDestacada) {
-                const destacada = campoDestacada.value === '1';
-                mostrarDestacada = destacada;
-                console.log('DEBUG FILTRO GAMBIARRA:', {
-                    intimacaoId: row.dataset.intimacaoId,
-                    valorCampo: campoDestacada.value,
-                    destacada: destacada,
-                    apenasDestacadas: apenasDestacadas
-                });
-            } else {
-                mostrarDestacada = false;
-            }
-        }
-        
-        if (mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarSmartContext && mostrarDestacada) {
-            row.style.display = '';
+    }
+    let mostrarDestacada = true;
+    if (c.apenasDestacadas) {
+        const campoDestacada = row.querySelector('.intimacao-destacada-value');
+        if (campoDestacada) {
+            const destacada = campoDestacada.value === '1';
+            mostrarDestacada = destacada;
+            console.log('DEBUG FILTRO GAMBIARRA:', {
+                intimacaoId: row.dataset.intimacaoId,
+                valorCampo: campoDestacada.value,
+                destacada: destacada,
+                apenasDestacadas: c.apenasDestacadas
+            });
         } else {
+            mostrarDestacada = false;
+        }
+    }
+    return mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarSmartContext && mostrarRegrasUsuario && mostrarDestacada;
+}
+
+function linhaCorrespondeFiltroTexto(row, qRaw) {
+    const q = (qRaw || '').trim().toLowerCase();
+    if (!q) return true;
+    const id = (row.getAttribute('data-intimacao-id') || '').toLowerCase();
+    const hay = (row.innerText || '').toLowerCase().replace(/\s+/g, ' ');
+    const tokens = q.split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+    return tokens.some(t => id === t || id.includes(t) || hay.includes(t));
+}
+
+function atualizarBarraPaginacaoIntimacoes(totalFiltradas, totalPaginas, start, end) {
+    const info = document.getElementById('intimacoes-paginacao-info');
+    const label = document.getElementById('intimacoes-paginacao-label');
+    const btnAnt = document.getElementById('intimacoes-pag-ant');
+    const btnProx = document.getElementById('intimacoes-pag-prox');
+    const liAnt = document.getElementById('intimacoes-pag-ant-li');
+    const liProx = document.getElementById('intimacoes-pag-prox-li');
+    if (info) {
+        if (totalFiltradas === 0) {
+            info.textContent = 'Nenhuma intimação com os filtros atuais.';
+        } else {
+            const fim = Math.min(end, totalFiltradas);
+            const ini = start + 1;
+            info.textContent = 'Mostrando ' + ini + '–' + fim + ' de ' + totalFiltradas + ' filtradas';
+        }
+    }
+    if (label) {
+        label.textContent = 'Página ' + paginaIntimacoesAtual + ' de ' + totalPaginas;
+    }
+    const desAnt = paginaIntimacoesAtual <= 1;
+    const desProx = paginaIntimacoesAtual >= totalPaginas || totalFiltradas === 0;
+    if (btnAnt) {
+        btnAnt.disabled = desAnt;
+    }
+    if (btnProx) {
+        btnProx.disabled = desProx;
+    }
+    if (liAnt) {
+        liAnt.classList.toggle('disabled', desAnt);
+    }
+    if (liProx) {
+        liProx.classList.toggle('disabled', desProx);
+    }
+}
+
+function aplicarFiltroEPaginacaoIntimacoes(resetPagina) {
+    if (resetPagina) {
+        paginaIntimacoesAtual = 1;
+    }
+    const input = document.getElementById('filtro-texto-intimacoes');
+    const q = input ? input.value : '';
+    const c = obterCriteriosFiltroModal();
+    const perSel = document.getElementById('intimacoes-por-pagina');
+    const perRaw = perSel && perSel.value ? parseInt(perSel.value, 10) : intimacoesPorPagina;
+    const per = Math.max(5, perRaw || 25);
+    intimacoesPorPagina = per;
+
+    document.querySelectorAll('tr.intimacao-row').forEach(row => {
+        const checkbox = row.querySelector('.intimacao-checkbox');
+        if (!checkbox) return;
+        const modalOk = linhaPassaFiltroModal(row, checkbox, c);
+        const textOk = linhaCorrespondeFiltroTexto(row, q);
+        const ok = modalOk && textOk;
+        row.dataset.passouFiltro = ok ? '1' : '0';
+        if (!ok) {
             row.style.display = 'none';
-            checkbox.checked = false; // Desmarcar se estiver oculto
+            checkbox.checked = false;
         }
     });
-    
-    atualizarResumo();
-    
+
+    const matching = Array.from(document.querySelectorAll('tr.intimacao-row')).filter(r => r.dataset.passouFiltro === '1');
+    const totalFiltradas = matching.length;
+    const totalPaginas = Math.max(1, Math.ceil(totalFiltradas / per) || 1);
+    if (paginaIntimacoesAtual > totalPaginas) {
+        paginaIntimacoesAtual = totalPaginas;
+    }
+    if (paginaIntimacoesAtual < 1) {
+        paginaIntimacoesAtual = 1;
+    }
+    const start = (paginaIntimacoesAtual - 1) * per;
+    const end = start + per;
+    matching.forEach((row, idx) => {
+        row.style.display = (idx >= start && idx < end) ? '' : 'none';
+    });
+
+    atualizarBarraPaginacaoIntimacoes(totalFiltradas, totalPaginas, start, end);
+    updateIntimacoesSelection();
+}
+
+function sincronizarVisibilidadeLinhasIntimacoes(opts) {
+    const reset = !opts || opts.resetPagina !== false;
+    aplicarFiltroEPaginacaoIntimacoes(reset);
+}
+
+function irPaginaIntimacoesRelativa(delta) {
+    paginaIntimacoesAtual += delta;
+    aplicarFiltroEPaginacaoIntimacoes(false);
+    const tbl = document.querySelector('.intimacoes-cards-table');
+    if (tbl) {
+        tbl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function aplicarIntimacaoIdsDaQueryString() {
+    const params = new URLSearchParams(window.location.search);
+    const ids = params.getAll('intimacao_ids').map(s => String(s).trim()).filter(Boolean);
+    if (!ids.length) return;
+    const input = document.getElementById('filtro-texto-intimacoes');
+    if (input) input.value = ids.join(' ');
+    sincronizarVisibilidadeLinhasIntimacoes();
+    document.querySelectorAll('tr.intimacao-row').forEach(row => {
+        const rid = row.getAttribute('data-intimacao-id');
+        if (rid && ids.includes(rid)) {
+            const cb = row.querySelector('.intimacao-checkbox');
+            if (cb) cb.checked = true;
+        }
+    });
+    updateIntimacoesSelection();
+    params.delete('intimacao_ids');
+    const qs = params.toString();
+    const newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+    history.replaceState(null, '', newUrl);
+}
+
+// Função para aplicar filtro
+function aplicarFiltro() {
+    sincronizarVisibilidadeLinhasIntimacoes();
     const modal = bootstrap.Modal.getInstance(document.getElementById('modalFiltro'));
     modal.hide();
-    
     showToast('Filtro aplicado com sucesso!', 'success');
 }
 
@@ -2640,6 +2851,9 @@ function limparFiltros() {
     document.getElementById('filtro-todos-smart-context').checked = true;
     document.getElementById('filtro-apenas-smart-context').checked = false;
     document.getElementById('filtro-sem-smart-context').checked = false;
+    document.getElementById('filtro-todas-regras-usuario').checked = true;
+    document.getElementById('filtro-apenas-com-regras-usuario').checked = false;
+    document.getElementById('filtro-apenas-sem-regras-usuario').checked = false;
     
     // Limpar filtros de taxa
     document.getElementById('taxa-minima').value = '';
@@ -2650,14 +2864,7 @@ function limparFiltros() {
     document.querySelectorAll('.filtro-classificacao').forEach(cb => cb.checked = true);
     document.querySelectorAll('.filtro-classe').forEach(cb => cb.checked = true);
     
-    // Mostrar todas as intimações
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    checkboxes.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        row.style.display = '';
-    });
-    
-    atualizarResumo();
+    sincronizarVisibilidadeLinhasIntimacoes();
     showToast('Filtros limpos!', 'info');
 }
 
@@ -2719,6 +2926,9 @@ function atualizarTaxasAcerto(taxasAcerto) {
             criarPopoverReutilizavel(intimacaoId, triggerElement);
         }
     });
+    if (typeof sincronizarVisibilidadeLinhasIntimacoes === 'function') {
+        sincronizarVisibilidadeLinhasIntimacoes();
+    }
 }
 
 
@@ -3361,8 +3571,11 @@ function excluirIntimacaoTabela(intimacaoId) {
                     row.remove();
                 }
                 
-                // Atualizar contador de intimações
-                updateIntimacoesSelection();
+                if (typeof sincronizarVisibilidadeLinhasIntimacoes === 'function') {
+                    sincronizarVisibilidadeLinhasIntimacoes({ resetPagina: false });
+                } else {
+                    updateIntimacoesSelection();
+                }
             } else {
                 showToast(`Erro ao excluir: ${data.message}`, 'error');
             }
@@ -3383,7 +3596,8 @@ function getBadgeClass(classificacao) {
         'RENUNCIAR PRAZO': 'bg-success',
         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'bg-secondary',
         'URGÊNCIA': 'bg-danger',
-        'OCULTAR': 'bg-dark'
+        'OCULTAR': 'bg-dark',
+        'AGENDAR RETORNO': 'bg-info'
     };
     
     return badgeClasses[classificacao] || 'bg-secondary';
@@ -3398,12 +3612,66 @@ document.addEventListener('DOMContentLoaded', function() {
     carregarConfiguracaoColunas();
     carregarConfigColunasIntimacoes();
     
+    try {
+        const guardado = sessionStorage.getItem('analiseIntimPorPagina');
+        if (guardado) {
+            const n = parseInt(guardado, 10);
+            if (n >= 5) {
+                intimacoesPorPagina = n;
+                const selPag = document.getElementById('intimacoes-por-pagina');
+                if (selPag) {
+                    selPag.value = String(n);
+                }
+            }
+        }
+    } catch (e) { /* ignore */ }
+    
+    sincronizarVisibilidadeLinhasIntimacoes();
     
     // Inicializar botão de regras de negócio
     atualizarBotaoRegrasNegocio();
     
     // Carregar taxas de acerto das intimações
     carregarTaxasAcerto();
+    
+    const selPorPagina = document.getElementById('intimacoes-por-pagina');
+    if (selPorPagina) {
+        selPorPagina.addEventListener('change', function() {
+            const n = parseInt(this.value, 10) || 25;
+            intimacoesPorPagina = Math.max(5, n);
+            try {
+                sessionStorage.setItem('analiseIntimPorPagina', String(intimacoesPorPagina));
+            } catch (e) { /* ignore */ }
+            sincronizarVisibilidadeLinhasIntimacoes();
+        });
+    }
+    const btnPagAnt = document.getElementById('intimacoes-pag-ant');
+    const btnPagProx = document.getElementById('intimacoes-pag-prox');
+    if (btnPagAnt) {
+        btnPagAnt.addEventListener('click', function() {
+            irPaginaIntimacoesRelativa(-1);
+        });
+    }
+    if (btnPagProx) {
+        btnPagProx.addEventListener('click', function() {
+            irPaginaIntimacoesRelativa(1);
+        });
+    }
+    
+    const filtroTextoIntim = document.getElementById('filtro-texto-intimacoes');
+    const btnLimparFiltroTexto = document.getElementById('btn-limpar-filtro-texto-intimacoes');
+    if (filtroTextoIntim) {
+        filtroTextoIntim.addEventListener('input', function() {
+            sincronizarVisibilidadeLinhasIntimacoes();
+        });
+    }
+    if (btnLimparFiltroTexto && filtroTextoIntim) {
+        btnLimparFiltroTexto.addEventListener('click', function() {
+            filtroTextoIntim.value = '';
+            sincronizarVisibilidadeLinhasIntimacoes();
+        });
+    }
+    aplicarIntimacaoIdsDaQueryString();
     
     // Listener para reposicionar popovers quando a janela for redimensionada
     // Função movida para o componente reutilizável
@@ -3494,6 +3762,10 @@ function ordenarTabelaIntimacoes(coluna) {
     
     // Atualizar ícones de ordenação
     atualizarIconesOrdenacaoIntimacoes(coluna, ordenacaoIntimacoes.direcao);
+    
+    if (typeof aplicarFiltroEPaginacaoIntimacoes === 'function') {
+        aplicarFiltroEPaginacaoIntimacoes(false);
+    }
     
     console.log('=== DEBUG: Ordenação concluída ===');
 }

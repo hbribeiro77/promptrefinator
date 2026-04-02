@@ -717,6 +717,55 @@
             </div>
         </div>
 
+        <!-- Cadastro de Defensores -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-people"></i>
+                    Defensores
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-8">
+                        <label for="novo-defensor-nome" class="form-label">Novo Defensor</label>
+                        <input type="text" class="form-control" id="novo-defensor-nome" placeholder="Digite o nome do defensor">
+                    </div>
+                    <div class="col-md-4 d-grid">
+                        <button type="button" class="btn btn-primary" onclick="criarDefensor()">
+                            <i class="bi bi-plus-circle"></i>
+                            Adicionar Defensor
+                        </button>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">Defensores Cadastrados</h6>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="mostrar-inativos-defensores" onchange="carregarDefensoresAdmin()">
+                        <label class="form-check-label" for="mostrar-inativos-defensores">Mostrar inativos</label>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th style="width: 120px;">Status</th>
+                                <th style="width: 220px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="defensores-admin-tbody">
+                            <tr>
+                                <td colspan="3" class="text-muted">Carregando defensores...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <!-- Configurações de Escala de Cores -->
         <div class="card mb-4">
             <div class="card-header">
@@ -2125,6 +2174,161 @@ function carregarPrecosAPI() {
     // }
 }
 
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function carregarDefensoresAdmin() {
+    const tbody = document.getElementById('defensores-admin-tbody');
+    if (!tbody) return;
+
+    const incluirInativos = document.getElementById('mostrar-inativos-defensores')?.checked ? 'true' : 'false';
+    tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Carregando defensores...</td></tr>';
+
+    fetch(`/api/defensores?incluir_inativos=${incluirInativos}`)
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao carregar defensores');
+            }
+
+            const defensores = data.defensores || [];
+            if (defensores.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-muted">Nenhum defensor cadastrado.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = defensores.map(defensor => {
+                const nomeEscapado = escapeHtml(defensor.nome);
+                const nomeCodificado = encodeURIComponent(defensor.nome || '');
+                const ativo = Boolean(defensor.ativo);
+                const badge = ativo
+                    ? '<span class="badge bg-success">Ativo</span>'
+                    : '<span class="badge bg-secondary">Inativo</span>';
+                const botaoStatus = ativo
+                    ? `<button type="button" class="btn btn-sm btn-outline-warning" onclick="alterarStatusDefensor('${defensor.id}', false)">Inativar</button>`
+                    : `<button type="button" class="btn btn-sm btn-outline-success" onclick="alterarStatusDefensor('${defensor.id}', true)">Ativar</button>`;
+
+                return `
+                    <tr>
+                        <td>${nomeEscapado}</td>
+                        <td>${badge}</td>
+                        <td class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="editarDefensor('${defensor.id}', '${nomeCodificado}')">Renomear</button>
+                            ${botaoStatus}
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="excluirDefensor('${defensor.id}')">Excluir</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('Erro ao carregar defensores:', error);
+            tbody.innerHTML = '<tr><td colspan="3" class="text-danger">Erro ao carregar defensores.</td></tr>';
+        });
+}
+
+function criarDefensor() {
+    const input = document.getElementById('novo-defensor-nome');
+    if (!input) return;
+
+    const nome = (input.value || '').trim();
+    if (!nome) {
+        showToast('Informe o nome do defensor.', 'warning');
+        return;
+    }
+
+    fetch('/api/defensores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao criar defensor');
+            }
+            input.value = '';
+            showToast('Defensor adicionado com sucesso!', 'success');
+            carregarDefensoresAdmin();
+        })
+        .catch(error => {
+            showToast(error.message, 'error');
+        });
+}
+
+function editarDefensor(defensorId, nomeCodificado) {
+    const nomeAtual = decodeURIComponent(nomeCodificado || '');
+    const novoNome = prompt('Novo nome do defensor:', nomeAtual || '');
+    if (novoNome === null) return;
+
+    const nome = (novoNome || '').trim();
+    if (!nome) {
+        showToast('Nome inválido.', 'warning');
+        return;
+    }
+
+    fetch(`/api/defensores/${defensorId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao atualizar defensor');
+            }
+            showToast('Defensor atualizado com sucesso!', 'success');
+            carregarDefensoresAdmin();
+        })
+        .catch(error => {
+            showToast(error.message, 'error');
+        });
+}
+
+function alterarStatusDefensor(defensorId, ativo) {
+    fetch(`/api/defensores/${defensorId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ativo })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao atualizar status');
+            }
+            showToast('Status do defensor atualizado!', 'success');
+            carregarDefensoresAdmin();
+        })
+        .catch(error => {
+            showToast(error.message, 'error');
+        });
+}
+
+function excluirDefensor(defensorId) {
+    if (!confirm('Deseja excluir este defensor?')) return;
+
+    fetch(`/api/defensores/${defensorId}`, {
+        method: 'DELETE'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Erro ao excluir defensor');
+            }
+            showToast('Defensor excluído com sucesso!', 'success');
+            carregarDefensoresAdmin();
+        })
+        .catch(error => {
+            showToast(error.message, 'error');
+        });
+}
+
 // Inicializar configurações do provedor na carga da página
 document.addEventListener('DOMContentLoaded', function() {
     const provedor = '{{ provedor_atual }}';
@@ -2151,6 +2355,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Carregar estatísticas do banco
     carregarStatsBanco();
+    carregarDefensoresAdmin();
 })
 
 // Função para fazer backup do banco

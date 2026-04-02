@@ -136,18 +136,28 @@
         </div>
     </div>
 
-    <!-- Regra de Negócio -->
+    <!-- Regra de Negócio (colapsável, fechado por padrão) -->
     {% if sessao.configuracoes_parsed and sessao.configuracoes_parsed.regra_negocio %}
     <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="bi bi-file-text"></i>
-                Regra de Negócio Utilizada
-            </h5>
+        <div class="card-header py-2">
+            <button class="btn btn-link text-decoration-none text-dark w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapseRegraNegocioSessao"
+                    aria-expanded="false"
+                    aria-controls="collapseRegraNegocioSessao">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-text"></i>
+                    Regra de Negócio Utilizada
+                </h5>
+                <i class="bi bi-chevron-down small text-muted collapse-regra-chevron"></i>
+            </button>
         </div>
-        <div class="card-body">
-            <div class="bg-light p-3 rounded border">
-                <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; color: #495057;">{{ sessao.configuracoes_parsed.regra_negocio }}</pre>
+        <div id="collapseRegraNegocioSessao" class="collapse">
+            <div class="card-body">
+                <div class="bg-light p-3 rounded border">
+                    <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.9rem; line-height: 1.5; color: #495057;">{{ sessao.configuracoes_parsed.regra_negocio }}</pre>
+                </div>
             </div>
         </div>
     </div>
@@ -606,6 +616,14 @@
 .table th:not(.col-selecao),
 .table td:not(.col-selecao) {
     padding-left: 12px;
+}
+
+/* Cabeçalho colapsável: regra de negócio */
+button[data-bs-target="#collapseRegraNegocioSessao"] .collapse-regra-chevron {
+    transition: transform 0.2s ease;
+}
+button[data-bs-target="#collapseRegraNegocioSessao"]:not(.collapsed) .collapse-regra-chevron {
+    transform: rotate(180deg);
 }
 </style>
 {% endblock %}

@@ -88,6 +88,19 @@ function carregarTaxasAcertoPromptTemperatura(promptId, temperatura) {
         });
 }
 
+/** Célula sem nenhuma análise (API não retorna a intimação ou total_analises === 0). */
+function aplicarCelulaTaxaSemAnalises(elemento) {
+    if (!elemento) return;
+    elemento.classList.remove('taxa-acerto-placeholder');
+    elemento.innerHTML = `
+        <div class="d-flex flex-column align-items-center text-muted taxa-acerto-sem-testes py-1"
+             title="Nenhuma análise foi registrada ainda para esta intimação.">
+            <i class="bi bi-minus-circle" aria-hidden="true"></i>
+            <small class="text-center lh-sm" style="max-width: 5rem;">Sem testes</small>
+        </div>
+    `;
+}
+
 // Atualizar taxas de acerto na interface (para objeto com chaves)
 function atualizarTaxasAcerto(taxasAcerto) {
     console.log('🎯 Atualizando taxas de acerto na interface:', taxasAcerto);
@@ -96,9 +109,14 @@ function atualizarTaxasAcerto(taxasAcerto) {
         console.log(`🔍 Procurando elemento para intimação ${intimacaoId}:`, elemento);
         if (elemento) {
             const dados = taxasAcerto[intimacaoId];
+            const total = dados.total_analises != null ? Number(dados.total_analises) : 0;
             const taxa = dados.taxa_acerto;
-            const total = dados.total_analises;
             const acertos = dados.acertos;
+            if (!total || total === 0) {
+                aplicarCelulaTaxaSemAnalises(elemento);
+                return;
+            }
+            elemento.classList.remove('taxa-acerto-placeholder');
             
             // Determinar cor do badge baseado na taxa
             let badgeClass = 'bg-secondary';
@@ -215,6 +233,10 @@ function atualizarTaxasAcerto(taxasAcerto) {
             console.warn(`⚠️ Elemento não encontrado para intimação ${intimacaoId}`);
         }
     });
+    document.querySelectorAll('.taxa-acerto-placeholder').forEach(aplicarCelulaTaxaSemAnalises);
+    if (typeof sincronizarVisibilidadeLinhasIntimacoes === 'function') {
+        sincronizarVisibilidadeLinhasIntimacoes({ resetPagina: false });
+    }
 }
 
 // Atualizar taxas de acerto na interface (para array de objetos)
@@ -225,9 +247,14 @@ function atualizarTaxasAcertoArray(taxasAcertoArray) {
         const elemento = document.getElementById(`taxa-acerto-${intimacaoId}`);
         console.log(`🔍 Procurando elemento para intimação ${intimacaoId}:`, elemento);
         if (elemento) {
+            const total = dados.total_analises != null ? Number(dados.total_analises) : 0;
             const taxa = dados.taxa_acerto;
-            const total = dados.total_analises;
             const acertos = dados.acertos;
+            if (!total || total === 0) {
+                aplicarCelulaTaxaSemAnalises(elemento);
+                return;
+            }
+            elemento.classList.remove('taxa-acerto-placeholder');
             
             // Determinar cor do badge baseado na taxa
             let badgeClass = 'bg-secondary';
@@ -283,6 +310,10 @@ function atualizarTaxasAcertoArray(taxasAcertoArray) {
             console.warn(`⚠️ Elemento não encontrado para intimação ${intimacaoId}`);
         }
     });
+    document.querySelectorAll('.taxa-acerto-placeholder').forEach(aplicarCelulaTaxaSemAnalises);
+    if (typeof sincronizarVisibilidadeLinhasIntimacoes === 'function') {
+        sincronizarVisibilidadeLinhasIntimacoes({ resetPagina: false });
+    }
 }
 
 // Carregar detalhes dos prompts para o popover customizado

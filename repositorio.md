@@ -13,21 +13,9 @@ git add .
 ```
 
 ### 3. Fazer commit com mensagem descritiva
+Use uma mensagem que descreva o que mudou (ex.: regras do usuário, conversão de feedback, filtros na análise, `resumo.md`).
 ```bash
-git commit -m "Sistema de Destaque de Intimações - Funcionalidade Completa
-
-- ✅ Sistema completo para destacar/remover destaque de intimações
-- ✅ Componente reutilizável com botão e CSS centralizados
-- ✅ Persistência no banco SQLite com campo destacada
-- ✅ Visual: Cards ficam amarelos quando destacados
-- ✅ Funcionalidade: Botão alterna corretamente (destacar/remover)
-- ✅ Filtros: 'Apenas destacadas' em todas as páginas
-- ✅ Compatibilidade: Funciona em todas as páginas (intimações, análise, histórico)
-- ✅ API endpoint: /api/intimacoes/<id>/destacar para atualizar estado
-- ✅ JavaScript defensivo: Prevenção de múltiplas inicializações
-- ✅ Correção de tipos: JavaScript reconhece tanto 'true' quanto '1'
-- ✅ Integração completa: Sistema funciona em todas as interfaces
-- ✅ Resumo.md atualizado com nova funcionalidade"
+git commit -m "Sua mensagem aqui"
 ```
 
 ### 4. Fazer push para o repositório remoto

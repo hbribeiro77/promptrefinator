@@ -1,10 +1,12 @@
 import openai
 import time
-import re
 from typing import Tuple, Dict, Any, Optional, List
 from config import Config
 from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
+from services.classificacao_ia_extracao_resposta_texto_para_tipo_canonico_service import (
+    extrair_classificacao_da_resposta_ia,
+)
 from services.extracao_texto_resposta_chat_completions_openai_compat import (
     texto_mensagem_assistente,
 )
@@ -220,80 +222,7 @@ class OpenAIService(AIServiceInterface):
     
     def _extrair_classificacao(self, resposta: str) -> str:
         """Extrair classificação da resposta da IA"""
-        if not resposta:
-            return "ERRO: Resposta vazia"
-        
-        # Limpar resposta
-        resposta_limpa = resposta.strip().upper()
-        
-        # Mapeamento de variações para classificações padrão
-        mapeamento_variacoes = {
-            'ELABORAR_PECA': 'ELABORAR PEÇA',
-            'ELABORAR PECA': 'ELABORAR PEÇA',
-            'CONTATAR_ASSISTIDO': 'CONTATAR ASSISTIDO',
-            'ANALISAR_PROCESSO': 'ANALISAR PROCESSO',
-            'RENUNCIAR_PRAZO': 'RENUNCIAR PRAZO',
-            'ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR': 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR',
-            'URGENCIA': 'URGÊNCIA'
-        }
-        
-        # Primeiro, tentar extrair o valor do JSON
-        import json
-        try:
-            # Tentar fazer parse do JSON
-            dados_json = json.loads(resposta)
-            if 'triagem' in dados_json:
-                triagem_ia = dados_json['triagem'].upper().strip()
-                # Verificar se existe no mapeamento
-                if triagem_ia in mapeamento_variacoes:
-                    return mapeamento_variacoes[triagem_ia]
-                # Verificar se é uma das classificações padrão
-                for tipo_acao in self.config.TIPOS_ACAO:
-                    if tipo_acao.upper() == triagem_ia:
-                        return tipo_acao
-        except json.JSONDecodeError:
-            pass
-        
-        # Se não conseguiu extrair do JSON, tentar busca direta
-        for tipo_acao in self.config.TIPOS_ACAO:
-            if tipo_acao.upper() in resposta_limpa:
-                return tipo_acao
-        
-        # Tentar correspondência com variações
-        for variacao, classificacao_padrao in mapeamento_variacoes.items():
-            if variacao in resposta_limpa:
-                return classificacao_padrao
-        
-        # Se não encontrou uma classificação exata, tentar correspondência parcial
-        for tipo_acao in self.config.TIPOS_ACAO:
-            palavras_chave = tipo_acao.upper().split()
-            if all(palavra in resposta_limpa for palavra in palavras_chave):
-                return tipo_acao
-        
-        # Tentar extrair usando regex para padrões comuns
-        patterns = [
-            r'"triagem":\s*"([^"]+)"',
-            r'triagem[:\s]*([^\n\.]+)',
-            r'classificação[:\s]*([^\n\.]+)',
-            r'resposta[:\s]*([^\n\.]+)',
-            r'ação[:\s]*([^\n\.]+)',
-            r'^([^\n\.]+)$'  # Linha única
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, resposta_limpa, re.IGNORECASE)
-            if match:
-                possivel_classificacao = match.group(1).strip()
-                # Verificar se existe no mapeamento
-                if possivel_classificacao in mapeamento_variacoes:
-                    return mapeamento_variacoes[possivel_classificacao]
-                # Verificar se é uma das classificações padrão
-                for tipo_acao in self.config.TIPOS_ACAO:
-                    if tipo_acao.upper() == possivel_classificacao:
-                        return tipo_acao
-        
-        # Se ainda não encontrou, retornar a resposta original com indicação de erro
-        return f"ERRO: Classificação não reconhecida - {resposta[:100]}"
+        return extrair_classificacao_da_resposta_ia(resposta, self.config.TIPOS_ACAO)
     
     def get_available_models(self) -> list:
         """Obter lista de modelos disponíveis"""

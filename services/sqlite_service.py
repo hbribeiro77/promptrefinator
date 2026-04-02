@@ -77,6 +77,28 @@ class SQLiteService:
             except sqlite3.OperationalError:
                 # Coluna já existe, ignorar erro
                 pass
+
+            # ID externo do portal (ex.: intimacaoId do eProc) — deduplicação na importação
+            try:
+                conn.execute(
+                    'ALTER TABLE intimacoes ADD COLUMN intimacao_id_externo TEXT'
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute(
+                    'CREATE UNIQUE INDEX IF NOT EXISTS idx_intimacoes_id_externo '
+                    'ON intimacoes(intimacao_id_externo)'
+                )
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                conn.execute(
+                    'ALTER TABLE intimacoes ADD COLUMN regras_usuario_prioridade_alta TEXT'
+                )
+            except sqlite3.OperationalError:
+                pass
             
             # Criar tabela de análises
             conn.execute('''
@@ -115,6 +137,16 @@ class SQLiteService:
                     FOREIGN KEY (prompt_id) REFERENCES prompts (id)
                 )
             ''')
+
+            # Tabela de defensores (cadastro administrativo)
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS defensores (
+                    id TEXT PRIMARY KEY,
+                    nome TEXT NOT NULL,
+                    ativo INTEGER DEFAULT 1,
+                    data_criacao TEXT NOT NULL
+                )
+            ''')
             
             # Criar índices para performance
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_intimacao ON analises(intimacao_id)')
@@ -122,6 +154,7 @@ class SQLiteService:
             conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_prompt ON historico_acuracia(prompt_id)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_condicoes ON historico_acuracia(prompt_id, numero_intimacoes, temperatura)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_data ON analises(data_analise)')
+            conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_defensores_nome_lower ON defensores(LOWER(nome))')
             
             conn.commit()
     
@@ -281,6 +314,18 @@ class SQLiteService:
                 return intimacao
             return None
     
+    def get_id_por_intimacao_id_externo(self, intimacao_id_externo: str) -> Optional[str]:
+        """Retorna o id interno (UUID) se já existir intimação com esse ID externo."""
+        if not intimacao_id_externo or not str(intimacao_id_externo).strip():
+            return None
+        key = str(intimacao_id_externo).strip()
+        with self.get_connection() as conn:
+            row = conn.execute(
+                'SELECT id FROM intimacoes WHERE intimacao_id_externo = ?',
+                (key,),
+            ).fetchone()
+            return row[0] if row else None
+
     def save_intimacao(self, intimacao: Dict[str, Any]) -> str:
         """Salvar uma intimação"""
         with self.get_connection() as conn:
@@ -291,14 +336,28 @@ class SQLiteService:
             # Data de criação
             if 'data_criacao' not in intimacao:
                 intimacao['data_criacao'] = datetime.now().isoformat()
+
+            ext_raw = intimacao.get('intimacao_id_externo')
+            if ext_raw is not None and str(ext_raw).strip() != '':
+                ext_key = str(ext_raw).strip()
+                existing = conn.execute(
+                    'SELECT id FROM intimacoes WHERE intimacao_id_externo = ? AND id != ?',
+                    (ext_key, intimacao['id']),
+                ).fetchone()
+                if existing:
+                    raise ValueError(
+                        f'Já existe intimação com intimacaoId (externo) {ext_key!r}. '
+                        f'ID interno existente: {existing[0]}.'
+                    )
             
             # Inserir ou atualizar intimação (SEM salvar análises aninhadas)
             conn.execute('''
                 INSERT OR REPLACE INTO intimacoes 
                 (id, contexto, classificacao_manual, informacao_adicional, processo,
                  orgao_julgador, classe, disponibilizacao, intimado, status, prazo,
-                 defensor, id_tarefa, cor_etiqueta, smart_context, data_criacao)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 defensor, id_tarefa, cor_etiqueta, smart_context, data_criacao,
+                 intimacao_id_externo, regras_usuario_prioridade_alta)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 intimacao['id'],
                 intimacao.get('contexto', ''),
@@ -315,7 +374,9 @@ class SQLiteService:
                 intimacao.get('id_tarefa', ''),
                 intimacao.get('cor_etiqueta', ''),
                 1 if intimacao.get('smart_context', False) else 0,  # Converter boolean para int (0/1)
-                intimacao['data_criacao']
+                intimacao['data_criacao'],
+                (str(ext_raw).strip() if ext_raw is not None and str(ext_raw).strip() != '' else None),
+                intimacao.get('regras_usuario_prioridade_alta') or '',
             ))
             
             # NÃO salvar análises aninhadas aqui - elas são salvas separadamente via adicionar_analise_intimacao()
@@ -652,6 +713,147 @@ class SQLiteService:
                 ORDER BY defensor
             ''')
             return [row[0] for row in cursor.fetchall()]
+
+    # Métodos para cadastro administrativo de defensores
+    def seed_defensores(self, nomes: List[str]) -> int:
+        """Garante que uma lista de defensores exista no cadastro"""
+        inseridos = 0
+        if not nomes:
+            return inseridos
+
+        with self.get_connection() as conn:
+            for nome in nomes:
+                nome_limpo = (nome or '').strip()
+                if not nome_limpo:
+                    continue
+
+                cursor = conn.execute(
+                    'SELECT id FROM defensores WHERE LOWER(nome) = LOWER(?)',
+                    (nome_limpo,),
+                )
+                if cursor.fetchone():
+                    continue
+
+                conn.execute(
+                    '''
+                    INSERT INTO defensores (id, nome, ativo, data_criacao)
+                    VALUES (?, ?, 1, ?)
+                    ''',
+                    (str(uuid.uuid4()), nome_limpo, datetime.now().isoformat()),
+                )
+                inseridos += 1
+
+            conn.commit()
+
+        return inseridos
+
+    def get_defensores_cadastrados(self, incluir_inativos: bool = False) -> List[Dict[str, Any]]:
+        """Lista defensores cadastrados"""
+        with self.get_connection() as conn:
+            query = 'SELECT id, nome, ativo, data_criacao FROM defensores'
+            params: List[Any] = []
+            if not incluir_inativos:
+                query += ' WHERE ativo = 1'
+            query += ' ORDER BY nome'
+
+            cursor = conn.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_nomes_defensores_cadastrados(self, incluir_inativos: bool = False) -> List[str]:
+        """Lista somente os nomes dos defensores cadastrados"""
+        defensores = self.get_defensores_cadastrados(incluir_inativos=incluir_inativos)
+        return [d.get('nome') for d in defensores if d.get('nome')]
+
+    def criar_defensor(self, nome: str) -> Dict[str, Any]:
+        """Cria um novo defensor"""
+        nome_limpo = (nome or '').strip()
+        if not nome_limpo:
+            raise ValueError('Nome do defensor é obrigatório.')
+
+        with self.get_connection() as conn:
+            existente = conn.execute(
+                'SELECT id FROM defensores WHERE LOWER(nome) = LOWER(?)',
+                (nome_limpo,),
+            ).fetchone()
+            if existente:
+                raise ValueError('Já existe um defensor com esse nome.')
+
+            defensor = {
+                'id': str(uuid.uuid4()),
+                'nome': nome_limpo,
+                'ativo': 1,
+                'data_criacao': datetime.now().isoformat(),
+            }
+            conn.execute(
+                '''
+                INSERT INTO defensores (id, nome, ativo, data_criacao)
+                VALUES (?, ?, ?, ?)
+                ''',
+                (defensor['id'], defensor['nome'], defensor['ativo'], defensor['data_criacao']),
+            )
+            conn.commit()
+            return defensor
+
+    def atualizar_defensor(self, defensor_id: str, nome: str) -> Dict[str, Any]:
+        """Atualiza o nome de um defensor e propaga para intimações"""
+        nome_limpo = (nome or '').strip()
+        if not nome_limpo:
+            raise ValueError('Nome do defensor é obrigatório.')
+
+        with self.get_connection() as conn:
+            atual = conn.execute(
+                'SELECT id, nome, ativo, data_criacao FROM defensores WHERE id = ?',
+                (defensor_id,),
+            ).fetchone()
+            if not atual:
+                raise ValueError('Defensor não encontrado.')
+
+            duplicado = conn.execute(
+                'SELECT id FROM defensores WHERE LOWER(nome) = LOWER(?) AND id != ?',
+                (nome_limpo, defensor_id),
+            ).fetchone()
+            if duplicado:
+                raise ValueError('Já existe um defensor com esse nome.')
+
+            nome_anterior = atual['nome']
+            conn.execute('UPDATE defensores SET nome = ? WHERE id = ?', (nome_limpo, defensor_id))
+            conn.execute('UPDATE intimacoes SET defensor = ? WHERE defensor = ?', (nome_limpo, nome_anterior))
+            conn.commit()
+
+            return {
+                'id': atual['id'],
+                'nome': nome_limpo,
+                'ativo': atual['ativo'],
+                'data_criacao': atual['data_criacao'],
+            }
+
+    def definir_status_defensor(self, defensor_id: str, ativo: bool) -> None:
+        """Ativa ou inativa defensor"""
+        with self.get_connection() as conn:
+            cursor = conn.execute('UPDATE defensores SET ativo = ? WHERE id = ?', (1 if ativo else 0, defensor_id))
+            if cursor.rowcount == 0:
+                raise ValueError('Defensor não encontrado.')
+            conn.commit()
+
+    def excluir_defensor(self, defensor_id: str) -> None:
+        """Exclui defensor se não houver uso em intimações"""
+        with self.get_connection() as conn:
+            defensor = conn.execute(
+                'SELECT id, nome FROM defensores WHERE id = ?',
+                (defensor_id,),
+            ).fetchone()
+            if not defensor:
+                raise ValueError('Defensor não encontrado.')
+
+            total_usos = conn.execute(
+                'SELECT COUNT(*) FROM intimacoes WHERE defensor = ?',
+                (defensor['nome'],),
+            ).fetchone()[0]
+            if total_usos > 0:
+                raise ValueError('Não é possível excluir: defensor já utilizado em intimações.')
+
+            conn.execute('DELETE FROM defensores WHERE id = ?', (defensor_id,))
+            conn.commit()
     
     def get_classes_unicas(self) -> List[str]:
         """Obter lista de classes únicas das intimações"""
@@ -1171,7 +1373,7 @@ class SQLiteService:
                 FROM analises a
                 LEFT JOIN intimacoes i ON a.intimacao_id = i.id
                 WHERE a.session_id = ?
-                ORDER BY a.data_analise DESC
+                ORDER BY COALESCE(i.destacada, 0) DESC, a.data_analise DESC
             ''', (session_id,))
             
             analises = []

@@ -85,9 +85,11 @@ class Config:
         'RENUNCIAR PRAZO',
         'OCULTAR',
         'ELABORAR PEÇA',
+        'CONTATO PEÇA',
         'CONTATAR ASSISTIDO',
         'ANALISAR PROCESSO',
         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR',
+        'AGENDAR RETORNO',
         'URGÊNCIA'
     ]
     

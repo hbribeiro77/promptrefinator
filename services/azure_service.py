@@ -5,6 +5,10 @@ from openai import AzureOpenAI
 from config import Config
 from services.sqlite_service import SQLiteService
 from services.ai_service_interface import AIServiceInterface
+from services.classificacao_ia_extracao_resposta_texto_para_tipo_canonico_service import (
+    classificacao_extracao_indica_falha_nucleo,
+    extrair_classificacao_da_resposta_ia,
+)
 from services.extracao_texto_resposta_chat_completions_openai_compat import (
     texto_mensagem_assistente,
 )
@@ -217,118 +221,39 @@ class AzureService(AIServiceInterface):
         raise Exception("Falha ao completar chamada Azure OpenAI após múltiplas tentativas")
     
     def _extrair_classificacao(self, resposta: str) -> str:
-        """Extrair classificação da resposta"""
-        if not resposta:
-            return "ERRO: Resposta vazia"
-        
-        # Limpar resposta
-        resposta_limpa = resposta.strip().upper()
-        
-        # Mapeamento de variações para classificações padrão
-        mapeamento_variacoes = {
-            'ELABORAR_PECA': 'ELABORAR PEÇA',
-            'ELABORAR PECA': 'ELABORAR PEÇA',
-            'CONTATAR_ASSISTIDO': 'CONTATAR ASSISTIDO',
-            'ANALISAR_PROCESSO': 'ANALISAR PROCESSO',
-            'RENUNCIAR_PRAZO': 'RENUNCIAR PRAZO',
-            'ENCAMINHAR_INTIMACAO_PARA_OUTRO_DEFENSOR': 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR',
-            'URGENCIA': 'URGÊNCIA'
-        }
-        
-        # Primeiro, tentar extrair o valor do JSON
-        import json
-        try:
-            # Tentar fazer parse do JSON
-            dados_json = json.loads(resposta)
-            if 'triagem' in dados_json:
-                triagem_ia = dados_json['triagem'].upper().strip()
-                # Verificar se existe no mapeamento
-                if triagem_ia in mapeamento_variacoes:
-                    return mapeamento_variacoes[triagem_ia]
-                # Verificar se é uma das classificações padrão
-                tipos_validos = [
-                    'RENUNCIAR PRAZO', 'OCULTAR', 'ELABORAR PEÇA', 
-                    'CONTATAR ASSISTIDO', 'ANALISAR PROCESSO', 
-                    'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR', 'URGÊNCIA'
-                ]
-                for tipo in tipos_validos:
-                    if tipo.upper() == triagem_ia:
-                        return tipo
-        except json.JSONDecodeError:
-            pass
-        
-        # Se não conseguiu extrair do JSON, tentar busca direta
-        tipos_validos = [
-            'RENUNCIAR PRAZO', 'OCULTAR', 'ELABORAR PEÇA', 
-            'CONTATAR ASSISTIDO', 'ANALISAR PROCESSO', 
-            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR', 'URGÊNCIA'
-        ]
-        
-        for tipo_acao in tipos_validos:
-            if tipo_acao.upper() in resposta_limpa:
-                return tipo_acao
-        
-        # Tentar correspondência com variações
-        for variacao, classificacao_padrao in mapeamento_variacoes.items():
-            if variacao in resposta_limpa:
-                return classificacao_padrao
-        
-        # Se não encontrou uma classificação exata, tentar correspondência parcial
-        for tipo_acao in tipos_validos:
-            palavras_chave = tipo_acao.upper().split()
-            if all(palavra in resposta_limpa for palavra in palavras_chave):
-                return tipo_acao
-        
-        # Tentar extrair usando regex para padrões comuns
-        patterns = [
-            r'"triagem":\s*"([^"]+)"',
-            r'triagem[:\s]*([^\n\.]+)',
-            r'classificação[:\s]*([^\n\.]+)',
-            r'resposta[:\s]*([^\n\.]+)',
-            r'ação[:\s]*([^\n\.]+)',
-            r'^([^\n\.]+)$'  # Linha única
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, resposta_limpa, re.IGNORECASE)
-            if match:
-                possivel_classificacao = match.group(1).strip()
-                # Verificar se existe no mapeamento
-                if possivel_classificacao in mapeamento_variacoes:
-                    return mapeamento_variacoes[possivel_classificacao]
-                # Verificar se é uma das classificações padrão
-                for tipo_acao in tipos_validos:
-                    if tipo_acao.upper() == possivel_classificacao:
-                        return tipo_acao
-        
-        # Padrões para extrair classificação (fallback)
+        """Extrair classificação da resposta (núcleo compartilhado + fallbacks específicos Azure)."""
+        tipos = self.config.TIPOS_ACAO
+        core = extrair_classificacao_da_resposta_ia(resposta, tipos)
+        if not classificacao_extracao_indica_falha_nucleo(core):
+            return core
+        fb = self._extrair_classificacao_fallback_azure(resposta, tipos)
+        return fb if fb is not None else core
+
+    def _extrair_classificacao_fallback_azure(
+        self, resposta: str, tipos_validos: List[str]
+    ) -> Optional[str]:
+        """Regex e heurísticas que existiam só no Azure quando o núcleo não resolve."""
         padroes = [
-            r'(?:CLASSIFICAÇÃO|AÇÃO):\s*([A-ZÁÊÇÕ\s]+)',
-            r'(?:Classificação|Ação):\s*([A-Záêçõ\s]+)',
-            r'\*\*(?:CLASSIFICAÇÃO|AÇÃO)\*\*:\s*([A-ZÁÊÇÕ\s]+)',
-            r'\*\*(?:Classificação|Ação)\*\*:\s*([A-Záêçõ\s]+)'
+            r"(?:CLASSIFICAÇÃO|AÇÃO):\s*([A-ZÁÊÇÕ\s]+)",
+            r"(?:Classificação|Ação):\s*([A-Záêçõ\s]+)",
+            r"\*\*(?:CLASSIFICAÇÃO|AÇÃO)\*\*:\s*([A-ZÁÊÇÕ\s]+)",
+            r"\*\*(?:Classificação|Ação)\*\*:\s*([A-Záêçõ\s]+)",
         ]
-        
         for padrao in padroes:
             match = re.search(padrao, resposta, re.IGNORECASE)
             if match:
                 classificacao = match.group(1).strip().upper()
-                # Validar se é uma classificação conhecida
                 for tipo in tipos_validos:
                     if tipo in classificacao or classificacao in tipo:
                         return tipo
-                
                 return classificacao
-        
-        # Se não encontrar padrão, tentar extrair da primeira linha
-        linhas = resposta.split('\n')
+
+        linhas = resposta.split("\n")
         for linha in linhas:
             linha = linha.strip()
-            if linha and not linha.startswith('**') and len(linha) < 100:
+            if linha and not linha.startswith("**") and len(linha) < 100:
                 return linha.upper()
-        
-        # Se ainda não encontrou, retornar a resposta original com indicação de erro
-        return f"ERRO: Classificação não reconhecida - {resposta[:100]}"
+        return None
     
     def get_available_models(self) -> List[str]:
         """Obter lista de modelos (deployments) disponíveis no Azure"""

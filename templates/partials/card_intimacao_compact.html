@@ -1,11 +1,18 @@
 <!-- Componente Card Compacto de Intimação para Tabela -->
 <a href="{{ url_for('visualizar_intimacao', id=intimacao.id) }}" class="card-link-wrapper" style="text-decoration: none; color: inherit;">
 <div class="intimacao-card-compact {{ 'intimacao-destacada' if intimacao.destacada else '' }}">
-    <div class="card-intimacao-header-compact">
-        <div class="card-intimacao-processo-compact">
+    <div class="card-intimacao-header-compact d-flex justify-content-between align-items-start gap-1">
+        <div class="card-intimacao-processo-compact flex-grow-1 min-w-0">
             <i class="bi bi-hourglass"></i>
             <span class="processo-numero-compact">{{ intimacao.processo or 'N/A' }}</span>
         </div>
+        {% set _ru = intimacao.regras_usuario_prioridade_alta | default('', true) | trim %}
+        {% if _ru %}
+        <span class="flex-shrink-0 text-warning" title="Regras do usuário (PRIORIDADE ALTA): {{ _ru | e }}"
+              aria-label="Possui regras do usuário com prioridade alta">
+            <i class="bi bi-shield-exclamation fs-5"></i>
+        </span>
+        {% endif %}
     </div>
     <div class="card-intimacao-content-compact">
         <div class="card-intimacao-row-compact">

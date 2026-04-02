@@ -209,7 +209,8 @@
                             'CONTATAR ASSISTIDO': 'warning',
                             'RENUNCIAR PRAZO': 'secondary',
                             'OCULTAR': 'dark',
-                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                            'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                            'AGENDAR RETORNO': 'info'
                         } %}
                         <span id="classificacao_manual-display" class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }} fs-6">
                             {{ intimacao.classificacao_manual }}
@@ -433,6 +434,26 @@
         </div>
         {% endif %}
 
+        {% if intimacao.regras_usuario_prioridade_alta %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-shield-exclamation"></i>
+                    Regras do Usuário (PRIORIDADE ALTA)
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copiarTexto('regras-usuario-prioridade')">
+                    <i class="bi bi-clipboard"></i>
+                    Copiar
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="position-relative">
+                    <pre id="regras-usuario-prioridade" class="bg-light p-3 rounded" style="white-space: pre-wrap;">{{ intimacao.regras_usuario_prioridade_alta }}</pre>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Prompts Usados com Taxa de Acerto -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -511,7 +532,8 @@
                                                 'CONTATAR ASSISTIDO': 'warning',
                                                 'RENUNCIAR PRAZO': 'secondary',
                                                 'OCULTAR': 'dark',
-                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                                                'AGENDAR RETORNO': 'info'
                                             } %}
                                             <span class="badge bg-{{ badge_class.get(analise.resultado_ia, 'secondary') }}">
                                                 {{ analise.resultado_ia }}
@@ -625,7 +647,8 @@
                                 'CONTATAR ASSISTIDO': 'warning',
                                 'RENUNCIAR PRAZO': 'secondary',
                                 'OCULTAR': 'dark',
-                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                                'AGENDAR RETORNO': 'info'
                             } %}
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="badge bg-{{ badge_class.get(resultado, 'secondary') }}">{{ resultado }}</span>
@@ -766,6 +789,7 @@
     "contexto": {{ intimacao.contexto | tojson | safe }},
     "classificacao_manual": {{ intimacao.classificacao_manual | tojson | safe }},
     "informacao_adicional": {{ (intimacao.informacao_adicional or "") | tojson | safe }},
+    "regras_usuario_prioridade_alta": {{ (intimacao.regras_usuario_prioridade_alta or "") | tojson | safe }},
     "data_criacao": {{ intimacao.data_criacao | tojson | safe }}
 }
 </script>
@@ -783,6 +807,7 @@
 const intimacaoData = JSON.parse(document.getElementById('intimacao-data').textContent);
 const analisesData = JSON.parse(document.getElementById('analises-data').textContent);
 const defensoresData = JSON.parse(document.getElementById('defensores-data').textContent);
+const classificacoesTiposAcao = {{ classificacoes | tojson | safe }};
 
 // Debug: mostrar dados da intimação
 console.log('=== DEBUG: Dados da intimação carregados ===');
@@ -857,8 +882,8 @@ function editarCampo(campo) {
             </select>
         `;
     } else if (campo === 'classificacao_manual') {
-        // Para classificação manual, criar select com tipos de ação
-        const classificacoes = ['RENUNCIAR PRAZO', 'OCULTAR', 'ELABORAR PEÇA', 'CONTATAR ASSISTIDO', 'ANALISAR PROCESSO', 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR', 'URGÊNCIA'];
+        // Para classificação manual, criar select com tipos de ação (mesma lista que Config.TIPOS_ACAO)
+        const classificacoes = classificacoesTiposAcao;
         inputHtml = `
             <select class="form-select form-select-sm" id="${campo}-edit">
                 <option value="">Selecione a classificação...</option>
@@ -997,7 +1022,8 @@ function cancelarEdicao(campo) {
                 'CONTATAR ASSISTIDO': 'warning',
                 'RENUNCIAR PRAZO': 'secondary',
                 'OCULTAR': 'dark',
-                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                'AGENDAR RETORNO': 'info'
             };
             const bgClass = badgeClass[classificacaoValue] || 'secondary';
             displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${classificacaoValue}</span>`;
@@ -1087,7 +1113,8 @@ function atualizarDisplay(campo, valor) {
                 'CONTATAR ASSISTIDO': 'warning',
                 'RENUNCIAR PRAZO': 'secondary',
                 'OCULTAR': 'dark',
-                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary'
+                'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
+                'AGENDAR RETORNO': 'info'
             };
             const bgClass = badgeClass[valor] || 'secondary';
             displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${valor}</span>`;
@@ -1114,6 +1141,7 @@ function exportarIntimacao() {
         contexto: intimacaoData.contexto,
         classificacao_manual: intimacaoData.classificacao_manual,
         informacao_adicional: intimacaoData.informacao_adicional,
+        regras_usuario_prioridade_alta: intimacaoData.regras_usuario_prioridade_alta,
         data_criacao: intimacaoData.data_criacao,
         total_analises: analisesData.length,
         analises: analisesData
