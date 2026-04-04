@@ -210,7 +210,8 @@
                             'RENUNCIAR PRAZO': 'secondary',
                             'OCULTAR': 'dark',
                             'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                            'AGENDAR RETORNO': 'info'
+                            'AGENDAR RETORNO': 'info',
+                            'INDETERMINADO': 'light'
                         } %}
                         <span id="classificacao_manual-display" class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }} fs-6">
                             {{ intimacao.classificacao_manual }}
@@ -533,7 +534,8 @@
                                                 'RENUNCIAR PRAZO': 'secondary',
                                                 'OCULTAR': 'dark',
                                                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                                                'AGENDAR RETORNO': 'info'
+                                                'AGENDAR RETORNO': 'info',
+                                                'INDETERMINADO': 'light'
                                             } %}
                                             <span class="badge bg-{{ badge_class.get(analise.resultado_ia, 'secondary') }}">
                                                 {{ analise.resultado_ia }}
@@ -648,7 +650,8 @@
                                 'RENUNCIAR PRAZO': 'secondary',
                                 'OCULTAR': 'dark',
                                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                                'AGENDAR RETORNO': 'info'
+                                'AGENDAR RETORNO': 'info',
+                                'INDETERMINADO': 'light'
                             } %}
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="badge bg-{{ badge_class.get(resultado, 'secondary') }}">{{ resultado }}</span>
@@ -1023,7 +1026,8 @@ function cancelarEdicao(campo) {
                 'RENUNCIAR PRAZO': 'secondary',
                 'OCULTAR': 'dark',
                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                'AGENDAR RETORNO': 'info'
+                'AGENDAR RETORNO': 'info',
+                'INDETERMINADO': 'light'
             };
             const bgClass = badgeClass[classificacaoValue] || 'secondary';
             displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${classificacaoValue}</span>`;
@@ -1114,7 +1118,8 @@ function atualizarDisplay(campo, valor) {
                 'RENUNCIAR PRAZO': 'secondary',
                 'OCULTAR': 'dark',
                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                'AGENDAR RETORNO': 'info'
+                'AGENDAR RETORNO': 'info',
+                'INDETERMINADO': 'light'
             };
             const bgClass = badgeClass[valor] || 'secondary';
             displayElement.innerHTML = `<span class="badge bg-${bgClass} fs-6">${valor}</span>`;

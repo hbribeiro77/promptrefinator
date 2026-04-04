@@ -88,6 +88,14 @@
                             <p class="mb-2">{{ sessao.modelo }}</p>
                         </div>
                     </div>
+                    {% set cfg = sessao.configuracoes_parsed or {} %}
+                    {% if cfg.get('modo_avaliacao') == 'focado' and cfg.get('tipo_alvo_focado') %}
+                    <div class="alert alert-info py-2 px-3 mb-0 mt-2 small">
+                        <strong>Modo de acurácia focado</strong> no tipo
+                        <span class="badge bg-primary">{{ cfg.get('tipo_alvo_focado') }}</span>.
+                        Acerto: manual = alvo e IA = alvo; ou manual ≠ alvo e IA = INDETERMINADO. Outras respostas da IA contam como erro.
+                    </div>
+                    {% endif %}
 
                 </div>
             </div>

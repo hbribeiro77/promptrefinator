@@ -47,10 +47,13 @@ promptrefinator2/
 │   ├── sqlite_service.py # Serviço SQLite (uso principal no app)
 │   ├── openai_service.py # Integração OpenAI
 │   ├── azure_service.py  # Integração Azure OpenAI (NOVO)
+│   ├── litellm_service.py # LiteLLM (proxy OpenAI-compatible)
 │   ├── ai_manager_service.py # Gerenciador de IA (NOVO)
 │   ├── ai_service_interface.py # Interface de IA (NOVO)
 │   ├── cost_calculation_service.py # Cálculo de custos (NOVO)
 │   ├── export_service.py # Exportação de dados
+│   ├── classificacao_ia_extracao_resposta_texto_para_tipo_canonico_service.py # Normalização do rótulo da IA
+│   ├── calcular_acerto_classificacao_analise_intimacao_service.py # Acerto modo padrão vs focado
 │   └── triagem_feedback_transformacao_json_para_importacao_intimacoes_service.py # Feedback triagem → JSON import em lote
 ├── templates/            # Templates HTML
 │   ├── base.html         # Template base
@@ -122,7 +125,7 @@ promptrefinator2/
 - `/api/prompts/<id>/excluir` - Excluir prompt (`DELETE`; não há rota GET `/prompts/<id>/excluir`)
 - `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
 - `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
-- `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO)
+- `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO); query opcional `modo_avaliacao` (`padrao`, `focado`, `todos`)
 - `/api/filtros/analise` - API para obter filtros dinâmicos (defensores, classificações, **classes**, **lista de áreas** para o modal de filtro)
 - `/api/configuracoes/mapeamento-classes-areas` - `POST` JSON `{ "mapeamento": { "<classe exata>": "<area_id>|null" } }` — persiste o mapa classe → área (a intimação **não** guarda área; só `classe`)
 - `/api/intimacoes/taxa-acerto` - API para obter taxa de acerto global das intimações (NOVO)
@@ -629,6 +632,14 @@ Shape usado no SQLite e na API; a classe Python `models/intimacao.py` expõe `in
 - ✅ Filtros integrados com paginação
 - ✅ Carregamento dinâmico sem recarregar página
 - ✅ Performance otimizada com 20 itens por página
+
+### **Classificação INDETERMINADO e modo de avaliação focado**
+- ✅ Tipo de atuação **`INDETERMINADO`** em `config.TIPOS_ACAO` (triagem/incerteza); na extração do texto da IA, alias **`INDETERMINADA`** → `INDETERMINADO`
+- ✅ **`modo_avaliacao`** por análise: `padrao` (igualdade exata manual × IA) ou `focado` (acerto se manual = tipo alvo e IA = alvo, ou manual ≠ alvo e IA = `INDETERMINADO`; demais combinações contam como erro). Regra em `calcular_acerto_classificacao_analise_intimacao_service`
+- ✅ Colunas SQLite em **`analises`**: `modo_avaliacao`, `tipo_alvo_focado` (criadas/atualizadas via `_ensure_columns` em `sqlite_service`)
+- ✅ **`/executar-analise`**: valida JSON (`modo_avaliacao`, `tipo_alvo_focado` quando focado); persiste nos registros de análise; fluxo sequencial e paralelo usam o mesmo serviço de acerto
+- ✅ **`analise.html`**: escolha de modo + select do tipo alvo (lista de `TIPOS_ACAO` sem `INDETERMINADO`); envio em `configuracoes`
+- ✅ **`historico.html`**: coluna **Modo**, filtro **Modo de avaliação** alinhado à API; **`visualizar_sessao.html`**: alerta quando sessão é modo focado (e tipo alvo)
 
 ### **Correções e Melhorias**
 - ✅ Correção de prompt_nome nas análises (resolvido problema "N/A")

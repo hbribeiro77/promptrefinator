@@ -29,6 +29,16 @@ def test_json_triagem_canonico(tipos):
     assert extrair_classificacao_da_resposta_ia(raw, tipos) == "OCULTAR"
 
 
+def test_json_triagem_indeterminado(tipos):
+    raw = '{"triagem": "INDETERMINADO"}'
+    assert extrair_classificacao_da_resposta_ia(raw, tipos) == "INDETERMINADO"
+
+
+def test_json_triagem_alias_indeterminada(tipos):
+    raw = '{"triagem": "INDETERMINADA"}'
+    assert extrair_classificacao_da_resposta_ia(raw, tipos) == "INDETERMINADO"
+
+
 def test_json_triagem_alias_agendar_retorno(tipos):
     raw = '{"triagem": "AGENDAR_RETORNO"}'
     assert extrair_classificacao_da_resposta_ia(raw, tipos) == "AGENDAR RETORNO"

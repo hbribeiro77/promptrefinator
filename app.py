@@ -18,6 +18,11 @@ from services.triagem_feedback_transformacao_json_para_importacao_intimacoes_ser
     normalize_feedback_export_layout,
     transform_feedback_json_text,
 )
+from services.calcular_acerto_classificacao_analise_intimacao_service import (
+    MODO_FOCADO,
+    MODO_PADRAO,
+    calcular_acerto_classificacao,
+)
 
 # Carregar variáveis de ambiente do arquivo .env
 from dotenv import load_dotenv
@@ -129,6 +134,17 @@ DEFAULT_CONFIG = {
 
 # Importar tipos de ação do config
 from config import Config
+
+
+def _tipo_alvo_focado_canonico(raw) -> Optional[str]:
+    """Resolve o texto enviado ao rótulo canônico de Config.TIPOS_ACAO ou None."""
+    if raw is None or str(raw).strip() == '':
+        return None
+    s = str(raw).strip()
+    for t in Config.TIPOS_ACAO:
+        if t.upper() == s.upper():
+            return t
+    return None
 
 
 def obter_defensores_disponiveis() -> list:
@@ -1226,10 +1242,12 @@ def analise():
             intimacao['area_id'] = m['id'] if m else ''
             intimacao['area_nome'] = m['nome'] if m else ''
         
+        tipos_acao_foco = [t for t in Config.TIPOS_ACAO if t != 'INDETERMINADO']
         return render_template('analise.html',
                              prompts=prompts,
                              intimacoes=intimacoes,
                              classificacoes=Config.TIPOS_ACAO,
+                             tipos_acao_foco=tipos_acao_foco,
                              modelos_disponiveis=modelos_disponiveis,
                              modelo_padrao=modelo_padrao,
                              temperatura_padrao=temperatura_padrao,
@@ -1237,10 +1255,12 @@ def analise():
                              provedor_atual=provedor_atual)
     except Exception as e:
         flash(f'Erro ao carregar página de análise: {str(e)}', 'error')
+        tipos_acao_foco = [t for t in Config.TIPOS_ACAO if t != 'INDETERMINADO']
         return render_template('analise.html',
                              prompts=[],
                              intimacoes=[],
                              classificacoes=Config.TIPOS_ACAO,
+                             tipos_acao_foco=tipos_acao_foco,
                              modelos_disponiveis=Config.OPENAI_MODELS,
                              provedor_atual='openai',
                              modelo_padrao='gpt-4',
@@ -1294,6 +1314,7 @@ def api_historico_pagina(pagina):
         prompt_id = request.args.get('prompt_id', '')
         status = request.args.get('status', '')
         acuracia_min = request.args.get('acuracia_min', '')
+        modo_avaliacao = request.args.get('modo_avaliacao', '')
         itens_por_pagina = int(request.args.get('itens_por_pagina', 20))
         
         # Calcular offset
@@ -1307,7 +1328,8 @@ def api_historico_pagina(pagina):
             data_fim=data_fim,
             prompt_id=prompt_id,
             status=status,
-            acuracia_min=acuracia_min
+            acuracia_min=acuracia_min,
+            modo_avaliacao_filtro=modo_avaliacao or None,
         )
         
         # Calcular total de sessões para paginação
@@ -1316,7 +1338,8 @@ def api_historico_pagina(pagina):
             data_fim=data_fim,
             prompt_id=prompt_id,
             status=status,
-            acuracia_min=acuracia_min
+            acuracia_min=acuracia_min,
+            modo_avaliacao_filtro=modo_avaliacao or None,
         )
         
         # Calcular informações de paginação
@@ -1518,9 +1541,10 @@ def exportar_sessao_analise():
         print(f"Erro ao exportar sessão: {e}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
 
-def executar_analise_paralela(intimacao_ids, prompt, modelo, temperatura, max_tokens, 
-                              salvar_resultados, calcular_acuracia, session_id, 
-                              analise_paralela, delay_entre_lotes):
+def executar_analise_paralela(intimacao_ids, prompt, modelo, temperatura, max_tokens,
+                              salvar_resultados, calcular_acuracia, session_id,
+                              analise_paralela, delay_entre_lotes,
+                              modo_avaliacao: str, tipo_alvo_focado: Optional[str]):
     """Executar análise de intimações em paralelo"""
     resultados = []
     
@@ -1545,7 +1569,8 @@ def executar_analise_paralela(intimacao_ids, prompt, modelo, temperatura, max_to
                 future = executor.submit(
                     analisar_intimacao_individual,
                     intimacao_id, prompt, modelo, temperatura, max_tokens,
-                    salvar_resultados, calcular_acuracia, session_id
+                    salvar_resultados, calcular_acuracia, session_id,
+                    modo_avaliacao, tipo_alvo_focado,
                 )
                 futures.append(future)
             
@@ -1568,7 +1593,8 @@ def executar_analise_paralela(intimacao_ids, prompt, modelo, temperatura, max_to
     return resultados
 
 def analisar_intimacao_individual(intimacao_id, prompt, modelo, temperatura, max_tokens,
-                                 salvar_resultados, calcular_acuracia, session_id):
+                                  salvar_resultados, calcular_acuracia, session_id,
+                                  modo_avaliacao: str, tipo_alvo_focado: Optional[str]):
     """Analisar uma intimação individual (para uso em paralelo)"""
     try:
         intimacao = data_service.get_intimacao_by_id(intimacao_id)
@@ -1611,11 +1637,18 @@ Contexto da Intimação:
         fim_analise = time.time()
         tempo_processamento = fim_analise - inicio_analise
         
-        # Calcular acurácia se solicitado
-        acertou = None
-        if calcular_acuracia and intimacao.get('classificacao_manual'):
-            acertou = resultado_ia.strip().upper() == intimacao['classificacao_manual'].strip().upper()
-            print(f"=== DEBUG: Comparação - Manual: {intimacao['classificacao_manual']}, IA: {resultado_ia}, Acertou: {acertou} ===")
+        acertou = calcular_acerto_classificacao(
+            intimacao.get('classificacao_manual'),
+            resultado_ia,
+            modo_avaliacao=modo_avaliacao,
+            tipo_alvo_focado=tipo_alvo_focado,
+            calcular_acuracia=calcular_acuracia,
+        )
+        if acertou is not None:
+            print(
+                f"=== DEBUG: Comparação - Manual: {intimacao.get('classificacao_manual')}, "
+                f"IA: {resultado_ia}, Acertou: {acertou}, modo: {modo_avaliacao} ==="
+            )
         
         # Usar tokens reais da API
         tokens_input = tokens_info.get('input', 0)
@@ -1665,7 +1698,9 @@ Contexto da Intimação:
                 'tokens_output': tokens_output,
                 'custo_real': custo_real,
                 'prompt_completo': prompt_final,
-                'resposta_completa': resposta_ia
+                'resposta_completa': resposta_ia,
+                'modo_avaliacao': modo_avaliacao,
+                'tipo_alvo_focado': tipo_alvo_focado if modo_avaliacao == MODO_FOCADO else None,
             }
             data_service.save_analise(analise_data)
         
@@ -1730,6 +1765,23 @@ def executar_analise():
         if not prompt:
             finalizar_analise(session_id)
             return jsonify({'error': 'Prompt não encontrado'}), 404
+
+        modo_avaliacao_req = (configuracoes.get('modo_avaliacao') or MODO_PADRAO).strip().lower()
+        if modo_avaliacao_req not in (MODO_PADRAO, MODO_FOCADO):
+            finalizar_analise(session_id)
+            return jsonify({'error': 'modo_avaliacao inválido; use padrao ou focado'}), 400
+
+        tipo_alvo_focado_canon: Optional[str] = None
+        if modo_avaliacao_req == MODO_FOCADO:
+            tipo_alvo_focado_canon = _tipo_alvo_focado_canonico(configuracoes.get('tipo_alvo_focado'))
+            if not tipo_alvo_focado_canon:
+                finalizar_analise(session_id)
+                return jsonify({
+                    'error': 'No modo focado, tipo_alvo_focado é obrigatório e deve ser um dos tipos de ação.',
+                }), 400
+            if tipo_alvo_focado_canon == 'INDETERMINADO':
+                finalizar_analise(session_id)
+                return jsonify({'error': 'tipo_alvo_focado não pode ser INDETERMINADO'}), 400
         
         # Preparar configurações para a sessão
         print(f"=== DEBUG: Configurações recebidas: {configuracoes} ===")
@@ -1766,7 +1818,9 @@ def executar_analise():
             'salvar_resultados': configuracoes.get('salvar_resultados', True),
             'calcular_acuracia': configuracoes.get('calcular_acuracia', True),
             'modo_paralelo': configuracoes.get('modo_paralelo', False),
-            'regra_negocio': prompt.get('regra_negocio', '')
+            'regra_negocio': prompt.get('regra_negocio', ''),
+            'modo_avaliacao': modo_avaliacao_req,
+            'tipo_alvo_focado': tipo_alvo_focado_canon,
         }
         
         print(f"=== DEBUG: config_sessao final: {config_sessao} ===")
@@ -1804,9 +1858,10 @@ def executar_analise():
         # Executar análise paralela ou sequencial
         if analise_paralela > 1:
             resultados = executar_analise_paralela(
-                intimacao_ids, prompt, modelo, temperatura, max_tokens, 
-                salvar_resultados, calcular_acuracia, session_id, 
-                analise_paralela, delay_entre_lotes
+                intimacao_ids, prompt, modelo, temperatura, max_tokens,
+                salvar_resultados, calcular_acuracia, session_id,
+                analise_paralela, delay_entre_lotes,
+                modo_avaliacao_req, tipo_alvo_focado_canon,
             )
         else:
             # Análise sequencial (comportamento original)
@@ -1872,11 +1927,18 @@ Contexto da Intimação:
                     tokens_output = tokens_info.get('output', 0)
                     tokens_usados = tokens_info.get('total', tokens_input + tokens_output)
                     
-                    # Calcular acurácia se possível
-                    acertou = None
-                    if calcular_acuracia and intimacao.get('classificacao_manual'):
-                        acertou = resultado_ia.strip().upper() == intimacao['classificacao_manual'].strip().upper()
-                        print(f"=== DEBUG: Comparação - Manual: {intimacao['classificacao_manual']}, IA: {resultado_ia}, Acertou: {acertou} ===")
+                    acertou = calcular_acerto_classificacao(
+                        intimacao.get('classificacao_manual'),
+                        resultado_ia,
+                        modo_avaliacao=modo_avaliacao_req,
+                        tipo_alvo_focado=tipo_alvo_focado_canon,
+                        calcular_acuracia=calcular_acuracia,
+                    )
+                    if acertou is not None:
+                        print(
+                            f"=== DEBUG: Comparação - Manual: {intimacao.get('classificacao_manual')}, "
+                            f"IA: {resultado_ia}, Acertou: {acertou}, modo: {modo_avaliacao_req} ==="
+                        )
                     
                     # Calcular custo real baseado nos tokens
                     provider = ai_manager_service.get_current_provider()
@@ -1920,7 +1982,10 @@ Contexto da Intimação:
                             'tokens_output': tokens_output,
                             'custo_real': custo_real,
                             'prompt_completo': prompt_final,
-                            'resposta_completa': resposta_ia
+                            'resposta_completa': resposta_ia,
+                            'modo_avaliacao': modo_avaliacao_req,
+                            'tipo_alvo_focado': tipo_alvo_focado_canon
+                            if modo_avaliacao_req == MODO_FOCADO else None,
                         }
                         data_service.save_analise(analise_data)
                         print(f"=== DEBUG: Resultado salvo no banco ===")

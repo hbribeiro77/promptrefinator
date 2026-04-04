@@ -7,6 +7,25 @@ from typing import List, Dict, Optional, Any
 from contextlib import contextmanager
 
 
+def _sql_filtro_modo_avaliacao_sessao(modo_avaliacao_filtro: Optional[str]) -> Optional[str]:
+    """
+    Fragmento SQL para filtrar sessoes_analise.configuracoes (JSON) por modo_avaliacao.
+    Valores aceitos: 'padrao', 'focado'. None ou vazio = sem filtro.
+    """
+    if modo_avaliacao_filtro is None or str(modo_avaliacao_filtro).strip() == '':
+        return None
+    m = str(modo_avaliacao_filtro).strip().lower()
+    if m == 'focado':
+        return (
+            "LOWER(TRIM(COALESCE(json_extract(configuracoes, '$.modo_avaliacao'), ''))) = 'focado'"
+        )
+    if m == 'padrao':
+        return (
+            "LOWER(TRIM(COALESCE(json_extract(configuracoes, '$.modo_avaliacao'), ''))) != 'focado'"
+        )
+    return None
+
+
 def _seed_areas_padrao_sqlite(conn) -> None:
     """Garante as quatro áreas padrão (ids estáveis). Função de módulo evita falha se o método da classe sumir por merge."""
     padroes = [
@@ -174,6 +193,17 @@ class SQLiteService:
             conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_condicoes ON historico_acuracia(prompt_id, numero_intimacoes, temperatura)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_data ON analises(data_analise)')
             conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_defensores_nome_lower ON defensores(LOWER(nome))')
+
+            try:
+                conn.execute(
+                    "ALTER TABLE analises ADD COLUMN modo_avaliacao TEXT DEFAULT 'padrao'"
+                )
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute('ALTER TABLE analises ADD COLUMN tipo_alvo_focado TEXT')
+            except sqlite3.OperationalError:
+                pass
 
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS areas (
@@ -490,8 +520,9 @@ class SQLiteService:
                 INSERT OR REPLACE INTO analises 
                 (id, intimacao_id, prompt_id, prompt_nome, data_analise, resultado_ia,
                  acertou, tempo_processamento, modelo, temperatura, tokens_usados,
-                 tokens_input, tokens_output, custo_real, prompt_completo, resposta_completa, session_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tokens_input, tokens_output, custo_real, prompt_completo, resposta_completa, session_id,
+                 modo_avaliacao, tipo_alvo_focado)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 analise['id'],
                 analise.get('intimacao_id', ''),
@@ -509,7 +540,9 @@ class SQLiteService:
                 analise.get('custo_real', 0.0),
                 analise.get('prompt_completo', ''),
                 analise.get('resposta_completa', ''),
-                analise.get('session_id', None)
+                analise.get('session_id', None),
+                analise.get('modo_avaliacao', 'padrao'),
+                analise.get('tipo_alvo_focado'),
             ))
             conn.commit()
             return analise['id']
@@ -615,10 +648,11 @@ class SQLiteService:
             json.dump(config, f, indent=2, ensure_ascii=False)
     
     # Métodos para Sessões de Análise
-    def get_sessoes_analise(self, limit: int = 50, offset: int = 0, 
+    def get_sessoes_analise(self, limit: int = 50, offset: int = 0,
                            data_inicio: str = None, data_fim: str = None,
                            prompt_id: str = None, status: str = None,
-                           acuracia_min: str = None) -> List[Dict[str, Any]]:
+                           acuracia_min: str = None,
+                           modo_avaliacao_filtro: str = None) -> List[Dict[str, Any]]:
         """Obter lista de sessões de análise com filtros e paginação"""
         with self.get_connection() as conn:
             # Construir query com filtros
@@ -640,6 +674,10 @@ class SQLiteService:
             if status:
                 where_conditions.append("status = ?")
                 params.append(status)
+
+            sql_modo = _sql_filtro_modo_avaliacao_sessao(modo_avaliacao_filtro)
+            if sql_modo:
+                where_conditions.append(f"({sql_modo})")
             
             # Construir query base
             query = '''
@@ -721,6 +759,24 @@ class SQLiteService:
                         sessao['configuracoes'] = {}
                 else:
                     sessao['configuracoes'] = {}
+
+                cfg = sessao['configuracoes']
+                if isinstance(cfg, dict):
+                    raw_modo = cfg.get('modo_avaliacao') or 'padrao'
+                    modo = str(raw_modo).strip().lower()
+                    if modo not in ('padrao', 'focado'):
+                        modo = 'padrao'
+                    alvo = cfg.get('tipo_alvo_focado')
+                    sessao['modo_avaliacao'] = modo
+                    sessao['tipo_alvo_focado'] = alvo if modo == 'focado' else None
+                    if modo == 'focado' and alvo:
+                        sessao['modo_teste_rotulo'] = f'Focado: {alvo}'
+                    else:
+                        sessao['modo_teste_rotulo'] = 'Padrão'
+                else:
+                    sessao['modo_avaliacao'] = 'padrao'
+                    sessao['tipo_alvo_focado'] = None
+                    sessao['modo_teste_rotulo'] = 'Padrão'
                 
                 sessoes.append(sessao)
             return sessoes
@@ -1315,7 +1371,8 @@ class SQLiteService:
     
     def get_total_sessoes_analise(self, data_inicio: str = None, data_fim: str = None,
                                  prompt_id: str = None, status: str = None,
-                                 acuracia_min: str = None) -> int:
+                                 acuracia_min: str = None,
+                                 modo_avaliacao_filtro: str = None) -> int:
         """Contar total de sessões de análise com filtros"""
         with self.get_connection() as conn:
             # Construir query com filtros
@@ -1337,6 +1394,10 @@ class SQLiteService:
             if status:
                 where_conditions.append("status = ?")
                 params.append(status)
+
+            sql_modo = _sql_filtro_modo_avaliacao_sessao(modo_avaliacao_filtro)
+            if sql_modo:
+                where_conditions.append(f"({sql_modo})")
             
             # Construir query base
             query = "SELECT COUNT(*) FROM sessoes_analise"

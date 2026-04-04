@@ -328,7 +328,8 @@
                                                 'RENUNCIAR PRAZO': 'secondary',
                                                 'OCULTAR': 'dark',
                                                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                                                'AGENDAR RETORNO': 'info'
+                                                'AGENDAR RETORNO': 'info',
+                                                'INDETERMINADO': 'light'
                                             } %}
                                             <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
                                                 {{ intimacao.classificacao_manual }}
@@ -1546,7 +1547,8 @@ function carregarHistoricoAcuracia() {
                                 'RENUNCIAR PRAZO': 'secondary',
                                 'OCULTAR': 'dark',
                                 'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                                'AGENDAR RETORNO': 'info'
+                                'AGENDAR RETORNO': 'info',
+                                'INDETERMINADO': 'light'
                             } %}
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="badge bg-{{ badge_class.get(resultado, 'secondary') }}">{{ resultado }}</span>

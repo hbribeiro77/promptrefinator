@@ -62,6 +62,17 @@
                     </select>
                 </div>
             </div>
+            <div class="row mt-2">
+                <div class="col-md-3">
+                    <label for="filtro-modo-avaliacao" class="form-label">Modo de avaliação</label>
+                    <select class="form-select" id="filtro-modo-avaliacao">
+                        <option value="">Todos os modos</option>
+                        <option value="padrao">Padrão (IA = classificação manual)</option>
+                        <option value="focado">Focado em um tipo</option>
+                    </select>
+                    <div class="form-text">Filtra pelo modo usado na execução da análise em lote.</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -92,6 +103,7 @@
                         <tr>
                             <th>Data/Hora</th>
                             <th>Prompt</th>
+                            <th>Modo</th>
                             <th>Modelo</th>
                             <th>Intimações</th>
                             <th>Acurácia</th>
@@ -108,6 +120,7 @@
                             data-prompt="{{ sessao.prompt_id }}"
                             data-status="{{ sessao.status }}"
                             data-acuracia="{{ sessao.acuracia }}"
+                            data-modo="{{ sessao.modo_avaliacao | default('padrao') }}"
                             data-session-id="{{ sessao.session_id }}">
                             <td>
                                 <div class="d-flex flex-column">
@@ -122,6 +135,13 @@
                                     <strong>{{ sessao.prompt_nome }}</strong>
                                     <small class="text-muted">Temp: {{ sessao.temperatura }}</small>
                                 </div>
+                            </td>
+                            <td>
+                                {% if sessao.modo_avaliacao | default('padrao') == 'focado' %}
+                                <span class="badge bg-primary text-wrap text-start" style="max-width: 14rem; white-space: normal;">{{ sessao.modo_teste_rotulo }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ sessao.modo_teste_rotulo | default('Padrão') }}</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <span class="badge bg-info">{{ sessao.modelo }}</span>
@@ -277,6 +297,9 @@ function configurarFiltros() {
     
     // Filtro de acurácia
     document.getElementById('filtro-acuracia').addEventListener('change', carregarPagina);
+
+    const filtroModo = document.getElementById('filtro-modo-avaliacao');
+    if (filtroModo) filtroModo.addEventListener('change', carregarPagina);
 }
 
 // Configurar paginação
@@ -331,11 +354,12 @@ function carregarPagina() {
     const filtroPrompt = document.getElementById('filtro-prompt').value;
     const filtroStatus = document.getElementById('filtro-status').value;
     const filtroAcuracia = document.getElementById('filtro-acuracia').value;
+    const filtroModo = document.getElementById('filtro-modo-avaliacao')?.value || '';
     
     // Mostrar loading
     const tbody = document.querySelector('tbody');
     if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="bi bi-hourglass-split"></i> Carregando...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="bi bi-hourglass-split"></i> Carregando...</td></tr>';
     }
     
     // Construir URL com parâmetros
@@ -348,6 +372,7 @@ function carregarPagina() {
     if (filtroPrompt) params.append('prompt_id', filtroPrompt);
     if (filtroStatus) params.append('status', filtroStatus);
     if (filtroAcuracia) params.append('acuracia_min', filtroAcuracia);
+    if (filtroModo) params.append('modo_avaliacao', filtroModo);
     
     // Fazer requisição AJAX
     fetch(`/api/historico/pagina/${paginaAtual}?${params}`)
@@ -361,16 +386,25 @@ function carregarPagina() {
             } else {
                 console.error('Erro ao carregar página:', data.message);
                 if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro ao carregar dados</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Erro ao carregar dados</td></tr>';
                 }
             }
         })
         .catch(error => {
             console.error('Erro na requisição:', error);
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Erro na requisição</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Erro na requisição</td></tr>';
             }
         });
+}
+
+function escapeHtmlHistorico(s) {
+    if (s == null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 // Atualizar tabela com novos dados
@@ -379,17 +413,25 @@ function atualizarTabela(sessoes) {
     if (!tbody) return;
     
     if (sessoes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Nenhuma sessão encontrada</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Nenhuma sessão encontrada</td></tr>';
         return;
     }
     
-    tbody.innerHTML = sessoes.map(sessao => `
+    tbody.innerHTML = sessoes.map(sessao => {
+        const modo = (sessao.modo_avaliacao || 'padrao').toLowerCase();
+        const rotulo = escapeHtmlHistorico(sessao.modo_teste_rotulo || 'Padrão');
+        const badgeModo = modo === 'focado'
+            ? `<span class="badge bg-primary text-wrap text-start" style="max-width: 14rem; white-space: normal;">${rotulo}</span>`
+            : `<span class="badge bg-secondary">${rotulo}</span>`;
+        const sid = escapeHtmlHistorico(sessao.session_id);
+        return `
         <tr class="sessao-row" 
             data-data="${sessao.data_inicio}"
             data-prompt="${sessao.prompt_id}"
             data-status="${sessao.status}"
             data-acuracia="${sessao.acuracia}"
-            data-session-id="${sessao.session_id}">
+            data-modo="${modo}"
+            data-session-id="${sid}">
             <td>
                 <div class="d-flex flex-column">
                     <small class="text-muted">${sessao.data_inicio_formatada}</small>
@@ -398,12 +440,13 @@ function atualizarTabela(sessoes) {
             </td>
             <td>
                 <div class="d-flex flex-column">
-                    <strong>${sessao.prompt_nome}</strong>
+                    <strong>${escapeHtmlHistorico(sessao.prompt_nome)}</strong>
                     <small class="text-muted">Temp: ${sessao.temperatura}</small>
                 </div>
             </td>
+            <td>${badgeModo}</td>
             <td>
-                <span class="badge bg-info">${sessao.modelo}</span>
+                <span class="badge bg-info">${escapeHtmlHistorico(sessao.modelo)}</span>
             </td>
             <td>
                 <div class="d-flex flex-column">
@@ -412,7 +455,7 @@ function atualizarTabela(sessoes) {
                 </div>
             </td>
             <td>
-                ${sessao.acuracia >= 80 ? 
+                ${sessao.acuracia >= 80 ?
                     `<span class="badge bg-success">${sessao.acuracia}%</span>` :
                     sessao.acuracia >= 60 ?
                     `<span class="badge bg-warning">${sessao.acuracia}%</span>` :
@@ -434,7 +477,7 @@ function atualizarTabela(sessoes) {
                 </div>
             </td>
             <td>
-                ${sessao.status === 'concluida' ? 
+                ${sessao.status === 'concluida' ?
                     '<span class="badge bg-success">Concluída</span>' :
                     sessao.status === 'em_andamento' ?
                     '<span class="badge bg-warning">Em andamento</span>' :
@@ -443,24 +486,25 @@ function atualizarTabela(sessoes) {
             </td>
             <td>
                 <div class="btn-group btn-group-sm">
-                    <a href="/historico/${sessao.session_id}" 
+                    <a href="/historico/${sid}" 
                        class="btn btn-outline-primary" title="Visualizar detalhes">
                         <i class="bi bi-eye"></i>
                     </a>
                     <button class="btn btn-outline-secondary" 
-                            onclick="copiarResumoSessao('${sessao.session_id}')" 
+                            onclick="copiarResumoSessao('${sid}')" 
                             title="Copiar resumo">
                         <i class="bi bi-clipboard"></i>
                     </button>
                     <button class="btn btn-outline-danger" 
-                            onclick="excluirSessao('${sessao.session_id}')" 
+                            onclick="excluirSessao('${sid}')" 
                             title="Excluir sessão">
                         <i class="bi bi-trash"></i>
                     </button>
                 </div>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // Atualizar contador de sessões
@@ -511,6 +555,8 @@ function limparFiltros() {
     document.getElementById('filtro-prompt').value = '';
     document.getElementById('filtro-status').value = '';
     document.getElementById('filtro-acuracia').value = '';
+    const fm = document.getElementById('filtro-modo-avaliacao');
+    if (fm) fm.value = '';
     paginaAtual = 1; // Reset para primeira página
     carregarPagina();
 }

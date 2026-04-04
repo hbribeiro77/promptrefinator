@@ -264,6 +264,44 @@
                         </div>
                     </div>
 
+                    <!-- Modo de avaliação da acurácia -->
+                    <div class="mb-4">
+                        <div class="card border-secondary">
+                            <div class="card-header py-2">
+                                <h6 class="mb-0">
+                                    <i class="bi bi-bullseye"></i>
+                                    Modo de avaliação da acurácia
+                                </h6>
+                            </div>
+                            <div class="card-body py-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="modo_avaliacao" id="modo-avaliacao-padrao" value="padrao" checked onchange="atualizarVisibilidadeModoAvaliacaoFocado()">
+                                    <label class="form-check-label" for="modo-avaliacao-padrao">
+                                        <strong>Padrão</strong> — acerto quando a resposta da IA é igual à classificação manual.
+                                    </label>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="radio" name="modo_avaliacao" id="modo-avaliacao-focado" value="focado" onchange="atualizarVisibilidadeModoAvaliacaoFocado()">
+                                    <label class="form-check-label" for="modo-avaliacao-focado">
+                                        <strong>Focado em um tipo</strong> — acerto se: manual = tipo alvo e IA = tipo alvo; ou manual ≠ tipo alvo e IA = INDETERMINADO. Qualquer outra resposta da IA conta como erro.
+                                    </label>
+                                </div>
+                                <div id="grupo-tipo-alvo-focado" class="ms-4" style="display: none;">
+                                    <label for="tipo-alvo-focado" class="form-label">Tipo alvo</label>
+                                    <select class="form-select form-select-sm" id="tipo-alvo-focado" style="max-width: 28rem;">
+                                        <option value="">Selecione…</option>
+                                        {% for tipo in tipos_acao_foco %}
+                                        <option value="{{ tipo }}">{{ tipo }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">
+                                        O prompt deve instruir a IA a usar apenas este tipo ou INDETERMINADO, conforme o caso.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Seleção de Intimações -->
                     <div class="mb-4">
                         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -381,7 +419,8 @@
                                                         'RENUNCIAR PRAZO': 'secondary',
                                                         'OCULTAR': 'dark',
                                                         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
-                                                        'AGENDAR RETORNO': 'info'
+                                                        'AGENDAR RETORNO': 'info',
+                                                        'INDETERMINADO': 'light'
                                                     } %}
                                                     {% if intimacao.classificacao_manual %}
                                                     <span class="badge bg-{{ badge_class.get(intimacao.classificacao_manual, 'secondary') }}">
@@ -2048,6 +2087,14 @@ function scrollParaResultados() {
     }
 }
 
+function atualizarVisibilidadeModoAvaliacaoFocado() {
+    const focado = document.getElementById('modo-avaliacao-focado')?.checked;
+    const grupo = document.getElementById('grupo-tipo-alvo-focado');
+    const sel = document.getElementById('tipo-alvo-focado');
+    if (grupo) grupo.style.display = focado ? 'block' : 'none';
+    if (sel && !focado) sel.value = '';
+}
+
 // Função para executar análise
 function executarAnalise() {
     console.log('=== DEBUG: executarAnalise chamada ===');
@@ -2067,6 +2114,17 @@ function executarAnalise() {
         showToast('Selecione pelo menos uma intimação!', 'error');
         return;
     }
+
+    const modoFocado = document.getElementById('modo-avaliacao-focado')?.checked;
+    const modo_avaliacao = modoFocado ? 'focado' : 'padrao';
+    let tipo_alvo_focado = '';
+    if (modoFocado) {
+        tipo_alvo_focado = (document.getElementById('tipo-alvo-focado')?.value || '').trim();
+        if (!tipo_alvo_focado) {
+            showToast('No modo focado, selecione o tipo alvo.', 'error');
+            return;
+        }
+    }
     
     const dados = {
         prompt_id: promptSelecionado,
@@ -2078,7 +2136,9 @@ function executarAnalise() {
             timeout: parseInt(document.getElementById('timeout').value) || 30,
             salvar_resultados: document.getElementById('salvar-resultados').checked,
             calcular_acuracia: document.getElementById('calcular-acuracia').checked,
-            modo_paralelo: document.getElementById('modo-paralelo').checked
+            modo_paralelo: document.getElementById('modo-paralelo').checked,
+            modo_avaliacao,
+            tipo_alvo_focado,
         }
     };
     
@@ -3053,6 +3113,11 @@ function limparFormulario() {
     document.getElementById('salvar-resultados').checked = true;
     document.getElementById('calcular-acuracia').checked = true;
     document.getElementById('modo-paralelo').checked = false;
+    const modoPadrao = document.getElementById('modo-avaliacao-padrao');
+    if (modoPadrao) modoPadrao.checked = true;
+    const tipoAlvo = document.getElementById('tipo-alvo-focado');
+    if (tipoAlvo) tipoAlvo.value = '';
+    atualizarVisibilidadeModoAvaliacaoFocado();
     
     atualizarResumo();
     limparResultados();
@@ -3671,7 +3736,8 @@ function getBadgeClass(classificacao) {
         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'bg-secondary',
         'URGÊNCIA': 'bg-danger',
         'OCULTAR': 'bg-dark',
-        'AGENDAR RETORNO': 'bg-info'
+        'AGENDAR RETORNO': 'bg-info',
+        'INDETERMINADO': 'bg-light text-dark'
     };
     
     return badgeClasses[classificacao] || 'bg-secondary';
@@ -3685,6 +3751,7 @@ document.addEventListener('DOMContentLoaded', function() {
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
     carregarConfigColunasIntimacoes();
+    atualizarVisibilidadeModoAvaliacaoFocado();
     
     try {
         const guardado = sessionStorage.getItem('analiseIntimPorPagina');

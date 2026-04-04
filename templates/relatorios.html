@@ -1121,15 +1121,16 @@ function criarGraficoPerformancePrompts() {
 // Função para gerar matriz de confusão
 function gerarMatrizConfusao() {
     // Classificações padrão se não vierem do backend
-    const classificacoes = ['RENUNCIAR PRAZO', 'ELABORAR PEÇA', 'ANALISAR PROCESSO', 'CONTATAR ASSISTIDO', 'URGÊNCIA'];
+    const classificacoes = ['RENUNCIAR PRAZO', 'ELABORAR PEÇA', 'ANALISAR PROCESSO', 'CONTATAR ASSISTIDO', 'URGÊNCIA', 'INDETERMINADO'];
     
     // Dados simulados da matriz (normalmente viriam do backend)
     const matriz = [
-        [15, 2, 1, 0, 1],  // RENUNCIAR PRAZO
-        [1, 18, 2, 1, 0],  // ELABORAR PEÇA
-        [0, 1, 12, 1, 0],  // ANALISAR PROCESSO
-        [1, 0, 1, 8, 0],   // CONTATAR ASSISTIDO
-        [0, 1, 0, 0, 6]    // URGÊNCIA
+        [15, 2, 1, 0, 1, 0],  // RENUNCIAR PRAZO
+        [1, 18, 2, 1, 0, 0],  // ELABORAR PEÇA
+        [0, 1, 12, 1, 0, 0],  // ANALISAR PROCESSO
+        [1, 0, 1, 8, 0, 0],   // CONTATAR ASSISTIDO
+        [0, 1, 0, 0, 6, 0],   // URGÊNCIA
+        [2, 0, 1, 0, 0, 4]    // INDETERMINADO
     ];
     
     let html = '<div class="table-responsive"><table class="table table-bordered text-center">';
