@@ -6,6 +6,25 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from contextlib import contextmanager
 
+
+def _seed_areas_padrao_sqlite(conn) -> None:
+    """Garante as quatro áreas padrão (ids estáveis). Função de módulo evita falha se o método da classe sumir por merge."""
+    padroes = [
+        ('civel', 'Cível', 1),
+        ('familia', 'Família', 2),
+        ('crime', 'Crime', 3),
+        ('violencia_domestica', 'Violência doméstica', 4),
+    ]
+    for aid, nome, ordem in padroes:
+        conn.execute(
+            '''
+            INSERT OR IGNORE INTO areas (id, nome, ordem)
+            VALUES (?, ?, ?)
+            ''',
+            (aid, nome, ordem),
+        )
+
+
 class SQLiteService:
     """Serviço para gerenciar dados em SQLite"""
     
@@ -155,6 +174,22 @@ class SQLiteService:
             conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_condicoes ON historico_acuracia(prompt_id, numero_intimacoes, temperatura)')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_data ON analises(data_analise)')
             conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_defensores_nome_lower ON defensores(LOWER(nome))')
+
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS areas (
+                    id TEXT PRIMARY KEY,
+                    nome TEXT NOT NULL,
+                    ordem INTEGER NOT NULL DEFAULT 0
+                )
+            ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS area_classe (
+                    classe TEXT PRIMARY KEY,
+                    area_id TEXT NOT NULL,
+                    FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE
+                )
+            ''')
+            _seed_areas_padrao_sqlite(conn)
             
             conn.commit()
     
@@ -866,6 +901,58 @@ class SQLiteService:
                 ORDER BY classe
             ''')
             return [row[0] for row in cursor.fetchall()]
+
+    def get_areas(self) -> List[Dict[str, Any]]:
+        """Lista áreas ordenadas (para UI e filtros)."""
+        with self.get_connection() as conn:
+            cur = conn.execute(
+                'SELECT id, nome, ordem FROM areas ORDER BY ordem ASC, nome ASC'
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_mapeamento_classe_para_area(self) -> Dict[str, Dict[str, str]]:
+        """Match exato classe (string da intimação) → {id, nome} da área."""
+        with self.get_connection() as conn:
+            cur = conn.execute(
+                '''
+                SELECT ac.classe AS classe, a.id AS area_id, a.nome AS area_nome
+                FROM area_classe ac
+                INNER JOIN areas a ON a.id = ac.area_id
+                '''
+            )
+            out: Dict[str, Dict[str, str]] = {}
+            for row in cur.fetchall():
+                r = dict(row)
+                out[r['classe']] = {'id': r['area_id'], 'nome': r['area_nome']}
+            return out
+
+    def get_mapeamento_classe_para_area_id(self) -> Dict[str, str]:
+        """classe → area_id (para formulário de configurações)."""
+        with self.get_connection() as conn:
+            cur = conn.execute('SELECT classe, area_id FROM area_classe')
+            return {dict(row)['classe']: dict(row)['area_id'] for row in cur.fetchall()}
+
+    def replace_mapeamento_classes_areas(self, mapeamento: Dict[str, Optional[str]]) -> None:
+        """Substitui todo o mapeamento. Valores vazios/nulos = classe sem área."""
+        with self.get_connection() as conn:
+            conn.execute('DELETE FROM area_classe')
+            for classe, area_id in mapeamento.items():
+                if classe is None or not str(classe).strip():
+                    continue
+                cl = str(classe).strip()
+                aid = (area_id or '').strip() if area_id is not None else ''
+                if not aid:
+                    continue
+                ok = conn.execute(
+                    'SELECT 1 FROM areas WHERE id = ?', (aid,)
+                ).fetchone()
+                if not ok:
+                    raise ValueError(f'Área inválida: {aid!r}')
+                conn.execute(
+                    'INSERT INTO area_classe (classe, area_id) VALUES (?, ?)',
+                    (cl, aid),
+                )
+            conn.commit()
     
     def get_intimacoes_por_prompt(self, prompt_id: str) -> List[Dict[str, Any]]:
         """Obter intimações que foram analisadas com um prompt específico"""

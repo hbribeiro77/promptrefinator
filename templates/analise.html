@@ -333,7 +333,7 @@
                                         </thead>
                                         <tbody>
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}" data-regras-usuario="{{ '1' if (intimacao.regras_usuario_prioridade_alta | default('', true) | trim) else '0' }}">
+                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-area-id="{{ intimacao.area_id or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}" data-regras-usuario="{{ '1' if (intimacao.regras_usuario_prioridade_alta | default('', true) | trim) else '0' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
@@ -756,6 +756,27 @@
                         <div class="text-center py-3">
                             <i class="bi bi-hourglass-split"></i>
                             Carregando classes...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Filtro por Área (derivada da classe; mapeamento em Configurações) -->
+                <div class="mb-3">
+                    <label class="form-label">
+                        <i class="bi bi-diagram-3 text-info"></i>
+                        <strong>Área:</strong>
+                    </label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro-todas-areas" checked>
+                        <label class="form-check-label" for="filtro-todas-areas">
+                            <strong>Todas as áreas</strong>
+                        </label>
+                    </div>
+                    <hr>
+                    <div id="filtros-areas">
+                        <div class="text-center py-3">
+                            <i class="bi bi-hourglass-split"></i>
+                            Carregando áreas...
                         </div>
                     </div>
                 </div>
@@ -2403,6 +2424,7 @@ function carregarFiltros() {
                 carregarDefensores(data.defensores);
                 carregarClassificacoes(data.classificacoes);
                 carregarClasses(data.classes);
+                carregarAreas(data.areas || []);
             } else {
                 console.error('Erro ao carregar filtros:', data.message);
                 showToast('Erro ao carregar filtros', 'error');
@@ -2501,6 +2523,43 @@ function carregarClassificacoes(classificacoes) {
             } else {
                 checkTodasClassificacoes.checked = false;
                 checkTodasClassificacoes.indeterminate = true;
+            }
+        });
+    });
+}
+
+// Carregar áreas na modal (inclui opção "Sem área mapeada" para classes sem mapeamento)
+function carregarAreas(areas) {
+    const container = document.getElementById('filtros-areas');
+    if (!container) return;
+    const items = [{ id: '__sem_area__', nome: 'Sem área mapeada' }].concat(
+        (areas || []).map(a => ({ id: a.id, nome: a.nome }))
+    );
+    container.innerHTML = items.map((a, index) => `
+        <div class="form-check">
+            <input class="form-check-input filtro-area" type="checkbox" id="filtro-area-${index}" value="${a.id}" checked>
+            <label class="form-check-label" for="filtro-area-${index}">${a.nome}</label>
+        </div>
+    `).join('');
+    const checkTodasAreas = document.getElementById('filtro-todas-areas');
+    if (!checkTodasAreas) return;
+    checkTodasAreas.addEventListener('change', function() {
+        document.querySelectorAll('.filtro-area').forEach(cb => { cb.checked = this.checked; });
+    });
+    const cbs = document.querySelectorAll('.filtro-area');
+    cbs.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const n = cbs.length;
+            const marcados = document.querySelectorAll('.filtro-area:checked').length;
+            if (marcados === n) {
+                checkTodasAreas.checked = true;
+                checkTodasAreas.indeterminate = false;
+            } else if (marcados === 0) {
+                checkTodasAreas.checked = false;
+                checkTodasAreas.indeterminate = false;
+            } else {
+                checkTodasAreas.checked = false;
+                checkTodasAreas.indeterminate = true;
             }
         });
     });
@@ -2637,6 +2696,11 @@ function obterCriteriosFiltroModal() {
     if (!todasClasses) {
         document.querySelectorAll('.filtro-classe:checked').forEach(cb => classesSelecionadas.push(cb.value));
     }
+    const todasAreas = document.getElementById('filtro-todas-areas').checked;
+    const areasSelecionadas = [];
+    if (!todasAreas) {
+        document.querySelectorAll('.filtro-area:checked').forEach(cb => areasSelecionadas.push(cb.value));
+    }
     const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
     const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
     const todosSmartContext = document.getElementById('filtro-todos-smart-context').checked;
@@ -2650,6 +2714,7 @@ function obterCriteriosFiltroModal() {
         todosDefensores, defensoresSelecionados,
         todasClassificacoes, classificacoesSelecionadas,
         todasClasses, classesSelecionadas,
+        todasAreas, areasSelecionadas,
         taxaMinima, taxaMaxima,
         todosSmartContext, apenasSmartContext, semSmartContext,
         todasRegrasUsuario, apenasComRegrasUsuario, apenasSemRegrasUsuario,
@@ -2674,6 +2739,9 @@ function linhaPassaFiltroModal(row, checkbox, c) {
     const mostrarDefensor = c.todosDefensores || c.defensoresSelecionados.includes(defensor);
     const mostrarClassificacao = c.todasClassificacoes || c.classificacoesSelecionadas.includes(classificacao);
     const mostrarClasse = c.todasClasses || c.classesSelecionadas.includes(classe);
+    const areaIdRow = row.dataset.areaId || '';
+    const chaveArea = areaIdRow ? areaIdRow : '__sem_area__';
+    const mostrarArea = c.todasAreas || c.areasSelecionadas.includes(chaveArea);
     const mostrarTaxa = taxaAcerto >= c.taxaMinima && taxaAcerto <= c.taxaMaxima;
     let mostrarSmartContext = true;
     if (!c.todosSmartContext) {
@@ -2707,7 +2775,7 @@ function linhaPassaFiltroModal(row, checkbox, c) {
             mostrarDestacada = false;
         }
     }
-    return mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarTaxa && mostrarSmartContext && mostrarRegrasUsuario && mostrarDestacada;
+    return mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarArea && mostrarTaxa && mostrarSmartContext && mostrarRegrasUsuario && mostrarDestacada;
 }
 
 function linhaCorrespondeFiltroTexto(row, qRaw) {
@@ -2848,6 +2916,11 @@ function limparFiltros() {
     document.getElementById('filtro-todos-defensores').checked = true;
     document.getElementById('filtro-todas-classificacoes').checked = true;
     document.getElementById('filtro-todas-classes').checked = true;
+    const ftAreas = document.getElementById('filtro-todas-areas');
+    if (ftAreas) {
+        ftAreas.checked = true;
+        ftAreas.indeterminate = false;
+    }
     document.getElementById('filtro-todos-smart-context').checked = true;
     document.getElementById('filtro-apenas-smart-context').checked = false;
     document.getElementById('filtro-sem-smart-context').checked = false;
@@ -2863,6 +2936,7 @@ function limparFiltros() {
     document.querySelectorAll('.filtro-defensor').forEach(cb => cb.checked = true);
     document.querySelectorAll('.filtro-classificacao').forEach(cb => cb.checked = true);
     document.querySelectorAll('.filtro-classe').forEach(cb => cb.checked = true);
+    document.querySelectorAll('.filtro-area').forEach(cb => cb.checked = true);
     
     sincronizarVisibilidadeLinhasIntimacoes();
     showToast('Filtros limpos!', 'info');

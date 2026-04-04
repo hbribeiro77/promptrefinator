@@ -2,6 +2,17 @@
 
 {% block title %}Configurações - Sistema Analisador de Prompts{% endblock %}
 
+{% block extra_css %}
+<style>
+    .collapse-section-toggle[aria-expanded="true"] .collapse-chevron {
+        transform: rotate(180deg);
+    }
+    .collapse-section-toggle .collapse-chevron {
+        transition: transform 0.2s ease;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
@@ -14,7 +25,7 @@
                 <i class="bi bi-arrow-clockwise"></i>
                 Restaurar Padrões
             </button>
-            <button type="button" class="btn btn-sm btn-outline-info" onclick="testarConexao()">
+            <button type="button" class="btn btn-sm btn-outline-info d-none" onclick="testarConexao()">
                 <i class="bi bi-wifi"></i>
                 Testar Conexão
             </button>
@@ -73,13 +84,22 @@
         
         <!-- Configurações da OpenAI -->
         <div class="card mb-4" id="openai-config">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-key"></i>
-                    Configurações da OpenAI
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseOpenaiProviderConfig"
+                        aria-expanded="false"
+                        aria-controls="collapseOpenaiProviderConfig">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-key"></i>
+                        Configurações da OpenAI
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseOpenaiProviderConfig" class="collapse">
+            <div class="card-body border-top">
                 <form id="form-openai">
                     <div class="mb-3">
                         <label for="api-key" class="form-label">
@@ -174,17 +194,27 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
 
         <!-- Configurações do Azure OpenAI -->
         <div class="card mb-4" id="azure-config" style="display: none;">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-cloud"></i>
-                    Configurações do Azure OpenAI
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseAzureProviderConfig"
+                        aria-expanded="false"
+                        aria-controls="collapseAzureProviderConfig">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-cloud"></i>
+                        Configurações do Azure OpenAI
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseAzureProviderConfig" class="collapse">
+            <div class="card-body border-top">
                 <form id="form-azure">
                     <div class="mb-3">
                         <label for="azure-api-key" class="form-label">
@@ -306,17 +336,27 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
 
         <!-- LiteLLM (proxy OpenAI-compatible) -->
         <div class="card mb-4" id="litellm-config" style="display: none;">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-link-45deg"></i>
-                    LiteLLM
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseLitellmProviderConfig"
+                        aria-expanded="false"
+                        aria-controls="collapseLitellmProviderConfig">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-link-45deg"></i>
+                        LiteLLM
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseLitellmProviderConfig" class="collapse">
+            <div class="card-body border-top">
                 <p class="text-muted small mb-3">
                     <strong>Conexão:</strong> configure <code>LITELLM_API_KEY</code> e <code>LITELLM_ENDPOINT</code> no arquivo <code>.env</code>.
                 </p>
@@ -344,6 +384,7 @@
                     <i class="bi bi-wifi"></i>
                     Testar conexão LiteLLM
                 </button>
+            </div>
             </div>
         </div>
 
@@ -598,13 +639,22 @@
 
         <!-- Configurações do Sistema -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-sliders"></i>
-                    Configurações do Sistema
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseConfigSistema"
+                        aria-expanded="false"
+                        aria-controls="collapseConfigSistema">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-sliders"></i>
+                        Configurações do Sistema
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseConfigSistema" class="collapse">
+            <div class="card-body border-top">
                 <form id="form-sistema">
                     <div class="row">
                         <div class="col-md-6">
@@ -715,17 +765,86 @@
                     </div>
                 </form>
             </div>
+            </div>
+        </div>
+
+        <!-- Mapeamento classe → área (área não é salva na intimação; filtro na página Análise) -->
+        <div class="card mb-4">
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseMapeamentoAreasClasses"
+                        aria-expanded="false"
+                        aria-controls="collapseMapeamentoAreasClasses">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-diagram-3"></i>
+                        Áreas e classes
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
+            </div>
+            <div id="collapseMapeamentoAreasClasses" class="collapse">
+            <div class="card-body border-top">
+                <p class="text-muted small mb-3">
+                    Defina a qual <strong>área</strong> pertence cada <strong>classe</strong> (texto igual ao campo classe das intimações).
+                    Na análise, o filtro por área usa esse mapeamento; classes sem área ficam como &quot;Sem área mapeada&quot;.
+                </p>
+                <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+                    <table class="table table-sm table-hover align-middle mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th scope="col">Classe</th>
+                                <th scope="col" style="min-width: 220px;">Área</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for classe in classes_para_areas_mapeamento %}
+                            <tr>
+                                <td><code class="small">{{ classe }}</code></td>
+                                <td>
+                                    <select class="form-select form-select-sm select-mapeamento-classe-area" data-classe="{{ classe | e }}">
+                                        <option value="">— Sem mapeamento —</option>
+                                        {% for a in areas_list %}
+                                        <option value="{{ a.id }}" {% if mapeamento_classe_area.get(classe) == a.id %}selected{% endif %}>{{ a.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="text-muted"><em>Nenhuma classe encontrada nas intimações. Cadastre intimações com classe preenchida para mapear.</em></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <button type="button" class="btn btn-primary mt-3" onclick="salvarMapeamentoClassesAreas()">
+                    <i class="bi bi-save"></i>
+                    Salvar mapeamento de áreas
+                </button>
+            </div>
+            </div>
         </div>
 
         <!-- Cadastro de Defensores -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-people"></i>
-                    Defensores
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseDefensoresAdmin"
+                        aria-expanded="false"
+                        aria-controls="collapseDefensoresAdmin">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-people"></i>
+                        Defensores
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseDefensoresAdmin" class="collapse">
+            <div class="card-body border-top">
                 <div class="row g-2 align-items-end mb-3">
                     <div class="col-md-8">
                         <label for="novo-defensor-nome" class="form-label">Novo Defensor</label>
@@ -764,17 +883,27 @@
                     </table>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- Configurações de Escala de Cores -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-palette"></i>
-                    Escala de Cores para Acurácia
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseEscalaCoresAcuracia"
+                        aria-expanded="false"
+                        aria-controls="collapseEscalaCoresAcuracia">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-palette"></i>
+                        Escala de Cores para Acurácia
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseEscalaCoresAcuracia" class="collapse">
+            <div class="card-body border-top">
                 <form id="form-cores">
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i>
@@ -913,17 +1042,27 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
 
         <!-- Configurações de Backup -->
         <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-shield-check"></i>
-                    Backup e Segurança
-                </h5>
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseBackupSeguranca"
+                        aria-expanded="false"
+                        aria-controls="collapseBackupSeguranca">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-shield-check"></i>
+                        Backup e Segurança
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseBackupSeguranca" class="collapse">
+            <div class="card-body border-top">
                 <form id="form-backup">
                     <div class="row">
                         <div class="col-md-6">
@@ -994,17 +1133,27 @@
                     </div>
                 </form>
             </div>
+            </div>
         </div>
 
         <!-- Configurações Avançadas -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-tools"></i>
-                    Configurações Avançadas
-                </h5>
+        <div class="card mb-4">
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseConfigAvancadas"
+                        aria-expanded="false"
+                        aria-controls="collapseConfigAvancadas">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-tools"></i>
+                        Configurações Avançadas
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
             </div>
-            <div class="card-body">
+            <div id="collapseConfigAvancadas" class="collapse">
+            <div class="card-body border-top">
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle"></i>
                     <strong>Atenção:</strong> Altere essas configurações apenas se souber o que está fazendo.
@@ -1112,6 +1261,88 @@
                         </div>
                     </div>
                 </form>
+            </div>
+            </div>
+        </div>
+
+        <!-- Backup do Banco de Dados (na col-lg-8, logo após Configurações avançadas) -->
+        <div class="card mb-4">
+            <div class="card-header py-2">
+                <button class="btn btn-link collapse-section-toggle text-decoration-none text-reset w-100 text-start p-0 d-flex align-items-center justify-content-between collapsed"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#collapseBackupBancoSqlite"
+                        aria-expanded="false"
+                        aria-controls="collapseBackupBancoSqlite">
+                    <span class="h6 mb-0">
+                        <i class="bi bi-database"></i>
+                        Backup do Banco de Dados
+                    </span>
+                    <i class="bi bi-chevron-down collapse-chevron ms-2 flex-shrink-0"></i>
+                </button>
+            </div>
+            <div id="collapseBackupBancoSqlite" class="collapse">
+            <div class="card-body border-top">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Backup do Banco SQLite</strong>
+                    <br>
+                    Faça o download do banco de dados completo para backup ou análise local.
+                    <br>
+                    O arquivo contém todos os dados: prompts, intimações e análises.
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="d-grid mb-3">
+                            <button type="button" class="btn btn-warning" onclick="fazerBackupBanco()">
+                                <i class="bi bi-download"></i>
+                                Download do Banco
+                            </button>
+                        </div>
+                        <div class="form-text mb-3">
+                            <i class="bi bi-clock"></i>
+                            Último backup: <span id="ultimo-backup">Nunca</span>
+                        </div>
+                        
+                        <!-- Restauração de Backup -->
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-upload"></i>
+                                    Restaurar Backup
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <strong>Atenção!</strong> A restauração irá substituir todos os dados atuais.
+                                </div>
+                                <div class="mb-3">
+                                    <label for="arquivo-backup" class="form-label">Selecionar arquivo de backup (.db)</label>
+                                    <input type="file" class="form-control" id="arquivo-backup" accept=".db" onchange="validarArquivoBackup()">
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-danger" id="btn-restaurar" onclick="restaurarBackup()" disabled>
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                        Restaurar Banco
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">📊 Estatísticas do Banco</h6>
+                                <div id="stats-banco">
+                                    <small class="text-muted">Carregando...</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             </div>
         </div>
     </div>
@@ -1337,81 +1568,6 @@
                     <i class="bi bi-arrow-clockwise"></i>
                     Restaurar Padrões
                 </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Seção de Backup do Banco -->
-<div class="row">
-    <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-database"></i>
-                    Backup do Banco de Dados
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i>
-                    <strong>Backup do Banco SQLite</strong>
-                    <br>
-                    Faça o download do banco de dados completo para backup ou análise local.
-                    <br>
-                    O arquivo contém todos os dados: prompts, intimações e análises.
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="d-grid mb-3">
-                            <button type="button" class="btn btn-warning" onclick="fazerBackupBanco()">
-                                <i class="bi bi-download"></i>
-                                Download do Banco
-                            </button>
-                        </div>
-                        <div class="form-text mb-3">
-                            <i class="bi bi-clock"></i>
-                            Último backup: <span id="ultimo-backup">Nunca</span>
-                        </div>
-                        
-                        <!-- Restauração de Backup -->
-                        <div class="card border-warning">
-                            <div class="card-header bg-warning text-dark">
-                                <h6 class="card-title mb-0">
-                                    <i class="bi bi-upload"></i>
-                                    Restaurar Backup
-                                </h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-warning">
-                                    <i class="bi bi-exclamation-triangle"></i>
-                                    <strong>Atenção!</strong> A restauração irá substituir todos os dados atuais.
-                                </div>
-                                <div class="mb-3">
-                                    <label for="arquivo-backup" class="form-label">Selecionar arquivo de backup (.db)</label>
-                                    <input type="file" class="form-control" id="arquivo-backup" accept=".db" onchange="validarArquivoBackup()">
-                                </div>
-                                <div class="d-grid">
-                                    <button type="button" class="btn btn-danger" id="btn-restaurar" onclick="restaurarBackup()" disabled>
-                                        <i class="bi bi-arrow-clockwise"></i>
-                                        Restaurar Banco
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6 class="card-title">📊 Estatísticas do Banco</h6>
-                                <div id="stats-banco">
-                                    <small class="text-muted">Carregando...</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -1772,6 +1928,32 @@ function salvarPrecosOpenAI() {
         button.innerHTML = originalText;
         button.disabled = false;
     });
+}
+
+function salvarMapeamentoClassesAreas() {
+    const mapeamento = {};
+    document.querySelectorAll('.select-mapeamento-classe-area').forEach(function (sel) {
+        const c = sel.getAttribute('data-classe');
+        if (!c) return;
+        mapeamento[c] = sel.value ? sel.value : null;
+    });
+    fetch('/api/configuracoes/mapeamento-classes-areas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapeamento: mapeamento })
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                showToast('Mapeamento de áreas salvo.', 'success');
+            } else {
+                showToast(data.message || 'Erro ao salvar mapeamento', 'error');
+            }
+        })
+        .catch(function (err) {
+            console.error(err);
+            showToast('Erro ao salvar mapeamento', 'error');
+        });
 }
 
 // Função para salvar preços Azure

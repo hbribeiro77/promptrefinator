@@ -190,6 +190,8 @@ def _import_normalize_classificacao(val, obrigatorio: bool = True) -> str:
 
 # Mesmas opções do select em nova_intimacao.html (somente estes valores no banco)
 _IMPORT_CORES_ETIQUETA_PERMITIDAS = ('#ffe500', '#80ff00', '#00ffff')
+# Import em lote: tamanho mínimo do texto de contexto (após strip)
+_IMPORT_CONTEXTO_MIN_CARACTERES = 200
 
 def _import_normalize_cor(val) -> str:
     if val is None or str(val).strip() == '':
@@ -272,6 +274,12 @@ def _import_montar_intimacao(reg: dict) -> dict:
         raise ValueError(
             'Campo obrigatório ausente ou vazio: contexto (ou "contexto da intimação").'
         )
+    ctx_str = str(ctx).strip()
+    if len(ctx_str) < _IMPORT_CONTEXTO_MIN_CARACTERES:
+        raise ValueError(
+            f'Contexto da intimação muito curto: {len(ctx_str)} caractere(s) após remover espaços nas '
+            f'pontas; o mínimo exigido na importação em lote é {_IMPORT_CONTEXTO_MIN_CARACTERES}.'
+        )
 
     classificacao = _import_normalize_classificacao(
         _import_get_field(
@@ -339,7 +347,7 @@ def _import_montar_intimacao(reg: dict) -> dict:
     id_tarefa = _import_get_field(reg, 'id_tarefa', 'id da tarefa')
 
     out = {
-        'contexto': str(ctx),
+        'contexto': ctx_str,
         'classificacao_manual': classificacao,
         'informacoes_adicionais': informacoes,
         'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
@@ -1210,6 +1218,13 @@ def analise():
             max_tokens_padrao = 500
         
         print(f"=== DEBUG: Configurações carregadas - Modelo: {modelo_padrao}, Temp: {temperatura_padrao}, Tokens: {max_tokens_padrao} ===")
+
+        classe_area = data_service.get_mapeamento_classe_para_area()
+        for intimacao in intimacoes:
+            cl = intimacao.get('classe') or ''
+            m = classe_area.get(cl) if cl else None
+            intimacao['area_id'] = m['id'] if m else ''
+            intimacao['area_nome'] = m['nome'] if m else ''
         
         return render_template('analise.html',
                              prompts=prompts,
@@ -2799,6 +2814,10 @@ def configuracoes():
         precos_azure = config.get('precos_azure', Config.PRECOS_AZURE_PADRAO)
 
         analise_lote_max_concurrent, analise_lote_delay = resolve_analise_em_lote_paralelismo(config)
+
+        areas_list = data_service.get_areas()
+        classes_para_areas_mapeamento = data_service.get_classes_unicas()
+        mapeamento_classe_area = data_service.get_mapeamento_classe_para_area_id()
         
         return render_template('configuracoes.html',
                              config=config,
@@ -2812,11 +2831,20 @@ def configuracoes():
                              uso_api=uso_api,
                              logs_recentes=logs_recentes,
                              precos_openai=precos_openai,
-                             precos_azure=precos_azure)
+                             precos_azure=precos_azure,
+                             areas_list=areas_list,
+                             classes_para_areas_mapeamento=classes_para_areas_mapeamento,
+                             mapeamento_classe_area=mapeamento_classe_area)
                              
     except Exception as e:
         flash(f'Erro ao carregar configurações: {str(e)}', 'error')
         _mc, _dl = resolve_analise_em_lote_paralelismo(DEFAULT_CONFIG)
+        try:
+            _al = data_service.get_areas()
+            _cl = data_service.get_classes_unicas()
+            _map = data_service.get_mapeamento_classe_para_area_id()
+        except Exception:
+            _al, _cl, _map = [], [], {}
         return render_template('configuracoes.html',
                              config=DEFAULT_CONFIG,
                              provedor_atual='openai',
@@ -2829,7 +2857,10 @@ def configuracoes():
                              precos_azure=Config.PRECOS_AZURE_PADRAO,
                              status_sistema={},
                              uso_api={},
-                             logs_recentes=[])
+                             logs_recentes=[],
+                             areas_list=_al,
+                             classes_para_areas_mapeamento=_cl,
+                             mapeamento_classe_area=_map)
 
 # Rotas auxiliares e APIs
 
@@ -4278,12 +4309,14 @@ def obter_filtros_analise():
         
         # Buscar classes únicas do banco
         classes = data_service.get_classes_unicas()
+        areas = data_service.get_areas()
         
         return jsonify({
             'success': True,
             'classificacoes': classificacoes,
             'defensores': defensores,
-            'classes': classes
+            'classes': classes,
+            'areas': [{'id': a['id'], 'nome': a['nome']} for a in areas],
         })
         
     except Exception as e:
@@ -4291,6 +4324,37 @@ def obter_filtros_analise():
             'success': False,
             'message': f'Erro ao obter filtros: {str(e)}'
         }), 500
+
+
+@app.route('/api/configuracoes/mapeamento-classes-areas', methods=['POST'])
+def api_salvar_mapeamento_classes_areas():
+    """Persiste o mapeamento classe → área (área não é gravada na intimação)."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        raw = payload.get('mapeamento')
+        if raw is None or not isinstance(raw, dict):
+            return jsonify({
+                'success': False,
+                'message': 'Campo "mapeamento" (objeto) é obrigatório.',
+            }), 400
+        mapeamento = {}
+        for k, v in raw.items():
+            if k is None:
+                continue
+            ks = str(k).strip()
+            if not ks:
+                continue
+            if v is None or (isinstance(v, str) and not v.strip()):
+                mapeamento[ks] = None
+            else:
+                mapeamento[ks] = str(v).strip()
+        data_service.replace_mapeamento_classes_areas(mapeamento)
+        return jsonify({'success': True})
+    except ValueError as ve:
+        return jsonify({'success': False, 'message': str(ve)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 
 @app.route('/api/backup/restaurar', methods=['POST'])
 def restaurar_backup_banco():

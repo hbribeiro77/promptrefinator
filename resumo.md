@@ -17,7 +17,7 @@ Automatizar e otimizar o processo de triagem de intimações jurídicas através
 - **UI Framework**: Bootstrap 5.3.0
 - **Ícones**: Bootstrap Icons 1.10.0
 - **Gráficos**: Chart.js
-- **IA**: OpenAI API (GPT-3.5-turbo, GPT-4) + Azure OpenAI (GPT-4, GPT-35-turbo)
+- **IA**: OpenAI API (GPT-3.5-turbo, GPT-4) + Azure OpenAI + **LiteLLM** (proxy OpenAI-compatible)
 - **Armazenamento**: SQLite (persistência principal da aplicação)
 - **Exportação**: CSV, Excel
 - **Variáveis de Ambiente**: python-dotenv
@@ -123,7 +123,8 @@ promptrefinator2/
 - `/api/historico/excluir-sessao` - Excluir sessão (NOVO)
 - `/api/historico/exportar-sessao` - Exportar sessão (NOVO)
 - `/api/historico/pagina/<int:pagina>` - Paginação AJAX do histórico (NOVO)
-- `/api/filtros/analise` - API para obter filtros dinâmicos (defensores e classificações) (NOVO)
+- `/api/filtros/analise` - API para obter filtros dinâmicos (defensores, classificações, **classes**, **lista de áreas** para o modal de filtro)
+- `/api/configuracoes/mapeamento-classes-areas` - `POST` JSON `{ "mapeamento": { "<classe exata>": "<area_id>|null" } }` — persiste o mapa classe → área (a intimação **não** guarda área; só `classe`)
 - `/api/intimacoes/taxa-acerto` - API para obter taxa de acerto global das intimações (NOVO)
 - `/api/intimacoes/<intimacao_id>/prompts-acerto` - API para obter prompts e taxas de acerto por intimação (NOVO)
 - `/api/intimacoes/<id>/destacar` - API para destacar/remover destaque de intimação (NOVO)
@@ -192,6 +193,7 @@ promptrefinator2/
 - Sistema de backup automático
 - Validação e integridade de dados
 - Substituição de placeholders por variáveis de ambiente
+- **Áreas processuais (2026):** tabelas `areas` (seed: Cível, Família, Crime, Violência doméstica) e `area_classe` (PK `classe` = string igual à coluna `intimacoes.classe`); função de módulo `_seed_areas_padrao_sqlite(conn)` no create do banco; `get_areas`, `get_mapeamento_classe_para_area`, `get_mapeamento_classe_para_area_id`, `replace_mapeamento_classes_areas`
 
 **Métodos Principais:**
 - `get_all_intimacoes()` - Listar todas as intimações
@@ -267,6 +269,7 @@ promptrefinator2/
 - Interface para execução de análises
 - Seleção de prompts e intimações
 - Configurações de IA (modelo, temperatura)
+- **Área derivada da classe:** na rota `/analise`, cada intimação recebe `area_id` / `area_nome` via mapeamento; linhas com `data-area-id`; modal **Filtrar** com bloco **Área** (inclui opção “Sem área mapeada” para classe sem mapeamento)
 - **NOVO**: Sistema de progresso em tempo real com Server-Sent Events (SSE)
 - **NOVO**: Barra de progresso dinâmica com cancelamento
 - **NOVO**: Cálculo de custo real baseado em tokens e preços configurados
@@ -297,11 +300,12 @@ promptrefinator2/
 - Configuração da API OpenAI
 - Parâmetros padrão de IA
 - Configurações de backup
-- Teste de conexão
+- Teste de conexão (também nos cards do provedor; **botão “Testar Conexão” do toolbar superior oculto** com `d-none`)
 - **NOVO**: Campo de chave da API readonly (carregado de .env)
 - **NOVO**: Instruções para configuração via variável de ambiente
 - **NOVO**: Configuração de análises paralelas para Azure OpenAI
 - **NOVO**: Campos de delay entre lotes para Azure OpenAI
+- **2026**: Card **Áreas e classes** (mapeamento classe → área), colapsável; várias seções colapsadas por padrão (provedor específico, escala de cores, backup e segurança, avançadas, backup SQLite); card **Backup do Banco** na mesma `col-lg-8` após Configurações avançadas (evita vazio quando a sidebar é mais alta)
 
 #### **Histórico (`templates/historico.html`)**
 - Listagem de sessões de análise
@@ -1032,6 +1036,17 @@ O sistema está pronto para uso em produção e pode ser facilmente estendido co
 - ✅ **API de atualização**: Endpoint para atualizar o campo Smart Context
 - ✅ **Integração completa**: Funciona com todos os filtros existentes (defensor, classe, destaque, etc.)
 - ✅ **Persistência**: Valor salvo no banco SQLite (campo `smart_context BOOLEAN DEFAULT 0`)
+
+### **Áreas processuais (mapeamento classe → área) (2026)**
+
+- ✅ **Sem coluna “área” na intimação:** só existe `classe`; a área é deduzida por match **exato** com a tabela `area_classe`.
+- ✅ **Configurações:** tabela por classe (valores de `get_classes_unicas`) + select de área; salvamento via `POST /api/configuracoes/mapeamento-classes-areas`.
+- ✅ **Análise:** filtro por área no modal (e “Sem área mapeada”); `/api/filtros/analise` retorna `areas`.
+- ✅ **Testes:** `tests/test_sqlite_service_areas_e_mapeamento_classe_para_area.py`.
+
+### **Import em lote — contexto mínimo (2026)**
+
+- ✅ Regra documentada na UI (`nova_intimacao.html`): contexto da intimação com **pelo menos 200 caracteres** (trim); validação em `app._import_montar_intimacao`; teste em `tests/test_importacao_em_lote_intimacoes_contexto_texto_minimo_caracteres_verificacao.py`.
 
 ### **Regras do usuário (PRIORIDADE ALTA) e conversão de feedback de triagem (2026)**
 

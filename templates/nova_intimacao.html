@@ -235,6 +235,7 @@
                     <p class="text-muted small mb-2">
                         Envie o mesmo formato exportado pelo seu pipeline: objeto com <code>registros</code> (array) ou um array na raiz.
                         Chaves aceitas incluem <code>contexto da intimação</code>, <code>processo</code>, <code>classificação manual</code> (ex.: <code>ELABORAR_PECA</code> → tipo do sistema), <code>nome do defensor</code>, <code>cor da etiqueta</code> e, opcionalmente, <code>regras_usuario_prioridade_alta</code> (regras do usuário com prioridade alta).
+                        O texto de <strong>contexto da intimação</strong> precisa ter <strong>pelo menos 200 caracteres</strong> (após remover espaços no início e no fim); registros mais curtos são rejeitados na importação.
                         <strong>Defensor</strong> precisa existir e estar ativo em Configurações (não é criado no lote).
                         <strong>Cor</strong> só aceita as opções do formulário: amarelo, verde, azul ou os hex <code>#ffe500</code>, <code>#80ff00</code>, <code>#00ffff</code>.
                         <strong>Classificação manual</strong> é obrigatória em cada registro.
