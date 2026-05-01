@@ -44,6 +44,18 @@ def test_json_triagem_alias_agendar_retorno(tipos):
     assert extrair_classificacao_da_resposta_ia(raw, tipos) == "AGENDAR RETORNO"
 
 
+def test_json_triagem_alias_devolver_a_institucional(tipos):
+    raw = '{"triagem": "DEVOLVER_A_INSTITUCIONAL"}'
+    assert extrair_classificacao_da_resposta_ia(raw, tipos) == "DEVOLVER À INSTITUCIONAL"
+
+
+def test_json_triagem_analisar_curto_mapeia_analisar_processo(tipos):
+    raw = (
+        '{"triagem": "ANALISAR", "descricao": "x", "sugestao": "y"}'
+    )
+    assert extrair_classificacao_da_resposta_ia(raw, tipos) == "ANALISAR PROCESSO"
+
+
 def test_substring_tipo_canonico(tipos):
     assert (
         extrair_classificacao_da_resposta_ia("A intimação é OCULTAR no sistema", tipos)

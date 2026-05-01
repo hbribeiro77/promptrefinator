@@ -2,6 +2,10 @@
 
 {% block title %}Relatórios - Sistema Analisador de Prompts{% endblock %}
 
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">
@@ -28,15 +32,14 @@
     </div>
 </div>
 
-<!-- Filtros -->
-<div class="card mb-4" id="card-filtros">
-    <div class="card-header">
-        <h6 class="card-title mb-0">
-            <i class="bi bi-sliders"></i>
-            Filtros de Período
-        </h6>
-    </div>
-    <div class="card-body">
+<!-- Filtros de período (recolhível; valores continuam no DOM para a comparação por prompt) -->
+<details class="card mb-4 border-secondary-subtle" id="card-filtros">
+<summary class="card-header py-2 d-flex align-items-center gap-2 flex-wrap" style="cursor: pointer;">
+    <i class="bi bi-calendar-range"></i>
+    <span class="fw-semibold small">Mostrar filtros de período</span>
+    <span class="text-muted small">— datas, prompt global, classificação e botão aplicar</span>
+</summary>
+<div class="card-body border-top pt-3">
         <div class="row">
             <div class="col-md-3">
                 <label for="data-inicio" class="form-label">Data Início</label>
@@ -59,7 +62,7 @@
                 <label for="filtro-classificacao" class="form-label">Classificação</label>
                 <select class="form-select" id="filtro-classificacao" name="classificacao">
                     <option value="">Todas as classificações</option>
-                    {% for tipo in tipos_acao %}
+                    {% for tipo in classificacoes %}
                     <option value="{{ tipo }}">{{ tipo }}</option>
                     {% endfor %}
                 </select>
@@ -77,9 +80,64 @@
                 </button>
             </div>
         </div>
+</div>
+</details>
+
+<!-- Comparação de taxa por prompt e dimensão -->
+<div class="card mb-4" id="card-relatorio-comparacao-prompts">
+    <div class="card-header">
+        <h6 class="card-title mb-0">
+            <i class="bi bi-layout-three-columns"></i>
+            Comparação de taxa de acerto por prompt
+        </h6>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-3">
+            Usa os filtros de <strong>data</strong> e <strong>classificação manual</strong> do bloco <strong>Filtros de período</strong> (expandir o cartão, se estiver recolhido).
+            Escolha um ou mais prompts e a dimensão do segmento (classificação manual da intimação, classe processual ou defensor).
+        </p>
+        <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+                <label for="relatorio-prompts-multiselect" class="form-label">Prompts</label>
+                <select class="form-select" id="relatorio-prompts-multiselect" multiple size="6" aria-describedby="relatorio-prompts-help">
+                    {% for p in prompts %}
+                    <option value="{{ p.id }}">{{ p.nome }}</option>
+                    {% endfor %}
+                </select>
+                <div id="relatorio-prompts-help" class="form-text">Segure Ctrl (Windows) ou Cmd (Mac) para selecionar vários. O <strong>primeiro</strong> marcado é a <strong>referência</strong>: cada outro prompt mostra uma coluna <strong>Δ vs ref</strong> (taxa desse prompt menos a taxa da referência) no mesmo segmento.</div>
+                <div id="relatorio-ordem-chips" class="mt-2 d-flex flex-wrap gap-1" aria-live="polite"></div>
+            </div>
+            <div class="col-md-3">
+                <label for="relatorio-dimensao" class="form-label">Dimensão</label>
+                <select class="form-select" id="relatorio-dimensao">
+                    <option value="classificacao_manual">Classificação manual</option>
+                    <option value="classe_processual">Classe processual</option>
+                    <option value="defensor">Defensor</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="relatorio-apenas-casos-comuns" disabled>
+                    <label class="form-check-label" for="relatorio-apenas-casos-comuns">
+                        Somente intimações com análise de <strong>todos</strong> os prompts selecionados
+                    </label>
+                </div>
+                <button type="button" class="btn btn-primary w-100" id="relatorio-btn-atualizar-tabela" onclick="atualizarTabelaComparacaoRelatorio()">
+                    <i class="bi bi-arrow-repeat"></i> Atualizar tabela
+                </button>
+            </div>
+        </div>
+        <div id="relatorio-tabela-comparacao-container" class="mt-3"></div>
     </div>
 </div>
 
+<details id="relatorio-painel-complementar" class="card mb-4 border-secondary-subtle">
+<summary class="card-header py-2 d-flex align-items-center gap-2 flex-wrap" style="cursor: pointer;">
+    <i class="bi bi-layout-text-sidebar-reverse"></i>
+    <span class="fw-semibold small">Mostrar painel completo</span>
+    <span class="text-muted small">— métricas, gráficos, matriz de confusão, resumos e listagem de análises</span>
+</summary>
+<div class="card-body pt-3">
 <div class="row">
     <div class="col-lg-8">
         <!-- Métricas Principais -->
@@ -518,6 +576,8 @@
                         </div>
                     </div>
 </div>
+</div>
+</details>
 
 {% include 'partials/modais_prompt_resposta.html' %}
 
@@ -629,6 +689,13 @@ const dadosGraficos = JSON.parse(document.getElementById('dados-graficos').textC
 console.log('=== DEBUG: Dados dos gráficos carregados ===');
 console.log('dadosGraficos:', dadosGraficos);
 
+/** Ordem em que os prompts foram selecionados (1º = referência para Δ). */
+let relatorioOrdemPromptIds = [];
+/** Último JSON da API de comparação (para reordenar sem novo fetch). */
+let relatorioUltimoDadosComparacao = null;
+/** Estado de ordenação da tabela de comparação. */
+let relatorioSortState = { col: 'default', dir: 'asc' };
+
 // Configuração de cores
 const cores = {
     primaria: '#0d6efd',
@@ -638,6 +705,384 @@ const cores = {
     perigo: '#dc3545',
     secundaria: '#6c757d'
 };
+
+function escapeHtmlRelatorioSeg(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function formatarCelulaAnalisesRelatorio(r) {
+    const n = r.total;
+    const ni = r.total_intimacoes_distintas != null && r.total_intimacoes_distintas !== undefined
+        ? r.total_intimacoes_distintas
+        : n;
+    let titulo = String(n) + ' análise' + (n !== 1 ? 's' : '')
+        + ' em ' + String(ni) + ' intimaç' + (ni !== 1 ? 'ões' : 'ão') + ' distintas';
+    if (r.amostra_pequena) {
+        titulo += '. Atenção: menos de 5 análises neste segmento.';
+    }
+    return '<span title="' + escapeHtmlRelatorioSeg(titulo) + '">' + n
+        + ' <span class="text-muted small">(' + ni + ' int.)</span></span>';
+}
+
+function relatorioIdsSelecionadosOrdenados() {
+    const sel = document.getElementById('relatorio-prompts-multiselect');
+    if (!sel) return [];
+    const selected = new Set();
+    for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].selected) selected.add(sel.options[i].value);
+    }
+    const ordered = relatorioOrdemPromptIds.filter(id => selected.has(id));
+    for (let i = 0; i < sel.options.length; i++) {
+        const v = sel.options[i].value;
+        if (sel.options[i].selected && ordered.indexOf(v) === -1) {
+            ordered.push(v);
+        }
+    }
+    relatorioOrdemPromptIds = ordered;
+    return ordered;
+}
+
+function relatorioAtualizarChipsOrdemPrompts() {
+    const box = document.getElementById('relatorio-ordem-chips');
+    const sel = document.getElementById('relatorio-prompts-multiselect');
+    if (!box || !sel) return;
+    const ord = relatorioIdsSelecionadosOrdenados();
+    if (ord.length === 0) {
+        box.innerHTML = '';
+        return;
+    }
+    let html = '';
+    ord.forEach((id, idx) => {
+        let nome = id;
+        for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value === id) {
+                nome = sel.options[i].text;
+                break;
+            }
+        }
+        const curto = nome.length > 42 ? nome.substring(0, 42) + '…' : nome;
+        const badge = idx === 0 ? 'bg-primary' : 'bg-secondary';
+        const rot = idx === 0 ? 'Referência' : (String(idx + 1) + 'º');
+        html += '<span class="badge ' + badge + ' fw-normal">' + escapeHtmlRelatorioSeg(rot + ': ' + curto) + '</span>';
+    });
+    box.innerHTML = html;
+}
+
+function relatorioMultiselectPromptsChange() {
+    relatorioIdsSelecionadosOrdenados();
+    relatorioAtualizarChipsOrdemPrompts();
+    relatorioToggleCasosComunsCheckbox();
+}
+
+function relatorioToggleCasosComunsCheckbox() {
+    const sel = document.getElementById('relatorio-prompts-multiselect');
+    const cb = document.getElementById('relatorio-apenas-casos-comuns');
+    if (!sel || !cb) return;
+    let n = 0;
+    for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].selected) n++;
+    }
+    cb.disabled = n < 2;
+    if (n < 2) cb.checked = false;
+}
+
+function relatorioSortArrow(st, col) {
+    if (st.col !== col) return '';
+    return st.dir === 'asc' ? ' ▲' : ' ▼';
+}
+
+function relatorioFormatarRotuloSegmentoComCadastro(label, data) {
+    const mapa = (data && data.intimacoes_cadastradas_por_segmento) || {};
+    const n = mapa[label];
+    let html = escapeHtmlRelatorioSeg(label);
+    if (n != null && n !== undefined) {
+        const num = Number(n);
+        if (!Number.isNaN(num)) {
+            html += ' <span class="text-muted small" title="Intimações cadastradas neste segmento (dimensão atual; respeita o filtro de classificação manual do cartão de filtros, se houver)">(' + num + ')</span>';
+        }
+    }
+    return html;
+}
+
+function montarHtmlTabelaComparacaoRelatorio(data, sortState) {
+    sortState = sortState || relatorioSortState;
+    const agr = data.agregados || [];
+    if (!agr.length) {
+        return '<p class="text-muted mb-0">Nenhum prompt retornado.</p>';
+    }
+
+    const mapPorPrompt = agr.map(block => {
+        const m = {};
+        (block.linhas || []).forEach(r => { m[r.label] = r; });
+        return { map: m };
+    });
+
+    const labels = new Set();
+    agr.forEach(b => (b.linhas || []).forEach(r => labels.add(r.label)));
+
+    const mapCad = (data && data.intimacoes_cadastradas_por_segmento) || {};
+
+    const rowsData = [...labels].map(label => {
+        const taxas = [];
+        const totals = [];
+        mapPorPrompt.forEach(({ map }) => {
+            const r = map[label];
+            taxas.push(r ? r.taxa_pct : null);
+            totals.push(r ? r.total : null);
+        });
+        const deltasVsRef = [];
+        for (let i = 1; i < agr.length; i++) {
+            if (taxas[0] != null && taxas[i] != null) {
+                deltasVsRef.push(taxas[i] - taxas[0]);
+            } else {
+                deltasVsRef.push(null);
+            }
+        }
+        let intimCad = null;
+        const rawC = mapCad[label];
+        if (rawC != null && rawC !== '') {
+            const n = Number(rawC);
+            intimCad = Number.isNaN(n) ? null : n;
+        }
+        if (intimCad == null) {
+            let maxNi = 0;
+            mapPorPrompt.forEach(({ map }) => {
+                const r = map[label];
+                if (r && r.total_intimacoes_distintas != null) {
+                    const v = Number(r.total_intimacoes_distintas);
+                    if (!Number.isNaN(v)) maxNi = Math.max(maxNi, v);
+                }
+            });
+            intimCad = maxNi;
+        }
+        return { label, taxas, totals, deltasVsRef, intimCad: intimCad != null ? intimCad : 0 };
+    });
+
+    const sumTot = (x) => x.totals.reduce((s, t) => s + (t || 0), 0);
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+
+    rowsData.sort((a, b) => {
+        if (sortState.col === 'default') {
+            const cmp = String(a.label).localeCompare(String(b.label), 'pt-BR');
+            return sortState.dir === 'desc' ? -cmp : cmp;
+        }
+        if (sortState.col === 'seg') {
+            const na = Number(a.intimCad) || 0;
+            const nb = Number(b.intimCad) || 0;
+            if (na !== nb) {
+                return sortState.dir === 'desc' ? (nb - na) : (na - nb);
+            }
+            return String(a.label).localeCompare(String(b.label), 'pt-BR');
+        }
+        const md = /^delta_(\d+)$/.exec(sortState.col);
+        if (md && agr.length > 1) {
+            const pidx = parseInt(md[1], 10);
+            if (pidx >= 1 && pidx < agr.length) {
+                const j = pidx - 1;
+                const an = a.deltasVsRef[j] == null ? 1 : 0;
+                const bn = b.deltasVsRef[j] == null ? 1 : 0;
+                if (an !== bn) return an - bn;
+                const da = a.deltasVsRef[j];
+                const db = b.deltasVsRef[j];
+                if (da === db) return String(a.label).localeCompare(String(b.label), 'pt-BR');
+                return dir * (db - da);
+            }
+        }
+        const mn = /^p(\d+)_n$/.exec(sortState.col);
+        if (mn) {
+            const idx = parseInt(mn[1], 10);
+            const va = a.totals[idx] != null ? a.totals[idx] : -1;
+            const vb = b.totals[idx] != null ? b.totals[idx] : -1;
+            if (va !== vb) return sortState.dir === 'desc' ? (vb - va) : (va - vb);
+            return String(a.label).localeCompare(String(b.label), 'pt-BR');
+        }
+        const mt = /^p(\d+)_taxa$/.exec(sortState.col);
+        if (mt) {
+            const idx = parseInt(mt[1], 10);
+            const va = a.taxas[idx] != null ? a.taxas[idx] : -1;
+            const vb = b.taxas[idx] != null ? b.taxas[idx] : -1;
+            if (va !== vb) return sortState.dir === 'desc' ? (vb - va) : (va - vb);
+            return String(a.label).localeCompare(String(b.label), 'pt-BR');
+        }
+        const d = sumTot(b) - sumTot(a);
+        if (d !== 0) return d;
+        return String(a.label).localeCompare(String(b.label), 'pt-BR');
+    });
+
+    if (rowsData.length === 0) {
+        return '<p class="text-muted mb-0">Sem análises com campo <code>acertou</code> preenchido neste recorte.</p>';
+    }
+
+    const thSeg = '<th rowspan="2" scope="col" class="align-middle user-select-none" style="cursor:pointer" title="Ordenar por nº de intimações cadastradas no segmento (clique de novo para inverter). Ordem inicial: alfabética." onclick="relatorioOrdenarPor(\'seg\')">Segmento' + relatorioSortArrow(sortState, 'seg') + '</th>';
+
+    let headRow1 = '<tr>' + thSeg;
+    agr.forEach((b, pi) => {
+        const pid = (b.prompt_id != null && String(b.prompt_id).trim()) ? String(b.prompt_id).trim() : '';
+        const nome = escapeHtmlRelatorioSeg(String(b.prompt_nome || b.prompt_id || '').substring(0, 64));
+        const href = pid ? escapeHtmlRelatorioSeg('/prompts/' + encodeURIComponent(pid)) : '';
+        const cabecaPrompt = pid
+            ? '<a href="' + href + '" target="_blank" rel="noopener noreferrer" class="link-dark text-decoration-underline link-offset-1" title="Abrir prompt em nova aba">' + nome + ' <i class="bi bi-box-arrow-up-right small" aria-hidden="true"></i></a>'
+            : nome;
+        const colspan = pi === 0 ? 2 : 3;
+        headRow1 += '<th colspan="' + colspan + '" class="text-center border-start">' + cabecaPrompt + '</th>';
+    });
+    headRow1 += '</tr>';
+
+    let headRow2 = '<tr>';
+    agr.forEach((b, pi) => {
+        headRow2 += '<th class="text-center small user-select-none" style="cursor:pointer" title="Ordenar por número de análises" onclick="relatorioOrdenarPor(\'p' + pi + '_n\')">Análises<br><span class="text-muted fw-normal">(intimações)</span>' + relatorioSortArrow(sortState, 'p' + pi + '_n') + '</th>';
+        headRow2 += '<th class="text-center small user-select-none" style="cursor:pointer" title="Ordenar por taxa %" onclick="relatorioOrdenarPor(\'p' + pi + '_taxa\')">Taxa %' + relatorioSortArrow(sortState, 'p' + pi + '_taxa') + '</th>';
+        if (pi > 0) {
+            headRow2 += '<th class="text-center small user-select-none border-start" style="cursor:pointer" title="Ordenar por Δ em relação à referência (1º)" onclick="relatorioOrdenarPor(\'delta_' + pi + '\')">Δ vs ref' + relatorioSortArrow(sortState, 'delta_' + pi) + '</th>';
+        }
+    });
+    headRow2 += '</tr>';
+
+    let tbody = '';
+    rowsData.forEach(row => {
+        const label = row.label;
+        tbody += '<tr><th scope="row">' + relatorioFormatarRotuloSegmentoComCadastro(label, data) + '</th>';
+        mapPorPrompt.forEach(({ map }, pi) => {
+            const r = map[label];
+            if (!r) {
+                tbody += '<td class="text-center text-muted">—</td><td class="text-center text-muted">—</td>';
+                if (pi > 0) {
+                    tbody += '<td class="text-center text-muted border-start">—</td>';
+                }
+            } else {
+                const tipTaxa = r.amostra_pequena
+                    ? ' title="Amostra pequena (menos de 5 análises neste segmento)"'
+                    : '';
+                tbody += '<td class="text-center">' + formatarCelulaAnalisesRelatorio(r) + '</td>';
+                tbody += '<td class="text-center"' + tipTaxa + '>' + r.taxa_pct.toFixed(1) + '</td>';
+                if (pi > 0) {
+                    const t0 = row.taxas[0];
+                    const ti = row.taxas[pi];
+                    if (t0 != null && ti != null) {
+                        const delta = ti - t0;
+                        let tcls = 'text-center border-start fw-semibold ';
+                        if (delta > 0) {
+                            tcls += 'text-success';
+                        } else if (delta < 0) {
+                            tcls += 'text-danger';
+                        } else {
+                            tcls += 'text-muted';
+                        }
+                        tbody += '<td class="' + tcls + '" title="Diferença de taxa em relação ao prompt de referência (1º). Positivo: este prompt melhor no segmento.">'
+                            + (delta >= 0 ? '+' : '') + delta.toFixed(1) + '</td>';
+                    } else {
+                        tbody += '<td class="text-center text-muted border-start">—</td>';
+                    }
+                }
+            }
+        });
+        tbody += '</tr>';
+    });
+
+    const ordemOriginal = sortState.col === 'default' && sortState.dir === 'asc';
+    const toolbarOrdemSeg =
+        '<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">' +
+        '<span class="text-muted small">' +
+        (sortState.col === 'seg'
+            ? 'Ordenação dos segmentos: por <strong>nº de intimações</strong> cadastradas (entre parênteses no rótulo). Use o botão à direita para voltar à ordem alfabética.'
+            : 'Ordenação dos segmentos: <strong>alfabética</strong> (padrão). Clique em <strong>Segmento</strong> para ordenar por nº de intimações.') +
+        '</span>' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary"' + (ordemOriginal ? ' disabled' : '') +
+        ' onclick="relatorioRestaurarOrdemSegmentos()"><i class="bi bi-sort-alpha-down"></i> Ordem alfabética (original)</button></div>';
+
+    return toolbarOrdemSeg +
+        '<div class="table-responsive"><table id="relatorio-tabela-comparacao" class="table table-sm table-striped table-bordered table-hover align-middle mb-0">' +
+        '<thead class="table-light">' + headRow1 + headRow2 + '</thead><tbody>' + tbody + '</tbody></table></div>';
+}
+
+function relatorioRestaurarOrdemSegmentos() {
+    if (!relatorioUltimoDadosComparacao) return;
+    relatorioSortState = { col: 'default', dir: 'asc' };
+    const container = document.getElementById('relatorio-tabela-comparacao-container');
+    if (container) {
+        container.innerHTML = montarHtmlTabelaComparacaoRelatorio(relatorioUltimoDadosComparacao, relatorioSortState);
+    }
+}
+
+function relatorioOrdenarPor(col) {
+    if (!relatorioUltimoDadosComparacao) return;
+    const data = relatorioUltimoDadosComparacao;
+    const agr = data.agregados || [];
+    if (col === 'delta') {
+        col = 'delta_1';
+    }
+    if (col.startsWith('delta_')) {
+        const pidx = parseInt(col.slice('delta_'.length), 10);
+        if (!Number.isFinite(pidx) || pidx < 1 || pidx >= agr.length) return;
+    }
+
+    if (relatorioSortState.col === col) {
+        relatorioSortState.dir = relatorioSortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        relatorioSortState.col = col;
+        if (col === 'seg') {
+            relatorioSortState.dir = 'desc';
+        } else if (col === 'default') {
+            relatorioSortState.dir = 'asc';
+        } else {
+            relatorioSortState.dir = 'desc';
+        }
+    }
+
+    const container = document.getElementById('relatorio-tabela-comparacao-container');
+    if (container) {
+        container.innerHTML = montarHtmlTabelaComparacaoRelatorio(data, relatorioSortState);
+    }
+}
+
+async function atualizarTabelaComparacaoRelatorio() {
+    const sel = document.getElementById('relatorio-prompts-multiselect');
+    const dim = document.getElementById('relatorio-dimensao');
+    const cb = document.getElementById('relatorio-apenas-casos-comuns');
+    const container = document.getElementById('relatorio-tabela-comparacao-container');
+    const dataInicio = document.getElementById('data-inicio');
+    const dataFim = document.getElementById('data-fim');
+    const classSel = document.getElementById('filtro-classificacao');
+
+    if (!sel || !dim || !container) return;
+
+    const ids = relatorioIdsSelecionadosOrdenados();
+    if (ids.length === 0) {
+        if (typeof showToast === 'function') showToast('Selecione ao menos um prompt.', 'warning');
+        else alert('Selecione ao menos um prompt.');
+        return;
+    }
+
+    relatorioUltimoDadosComparacao = null;
+    relatorioSortState = { col: 'default', dir: 'asc' };
+
+    container.innerHTML = '<div class="text-muted py-3"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+
+    const params = new URLSearchParams();
+    ids.forEach(id => params.append('prompt_ids', id));
+    params.set('dimensao', dim.value);
+    if (dataInicio && dataInicio.value) params.set('data_inicio', dataInicio.value);
+    if (dataFim && dataFim.value) params.set('data_fim', dataFim.value);
+    if (classSel && classSel.value) params.set('classificacao', classSel.value);
+    if (cb && cb.checked) params.set('apenas_casos_comuns', '1');
+
+    try {
+        const res = await fetch('/api/relatorios/taxa-por-dimensao?' + params.toString());
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || ('HTTP ' + res.status));
+        const byId = {};
+        (data.agregados || []).forEach(block => { byId[block.prompt_id] = block; });
+        data.agregados = ids.map(id => byId[id]).filter(Boolean);
+        relatorioUltimoDadosComparacao = data;
+        container.innerHTML = montarHtmlTabelaComparacaoRelatorio(data, relatorioSortState);
+    } catch (e) {
+        relatorioUltimoDadosComparacao = null;
+        container.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtmlRelatorioSeg(String(e.message || e)) + '</div>';
+        if (typeof showToast === 'function') showToast('Erro ao carregar comparação', 'error');
+    }
+}
 
 // Inicializar gráficos
 document.addEventListener('DOMContentLoaded', function() {
@@ -659,6 +1104,29 @@ document.addEventListener('DOMContentLoaded', function() {
     inicializarGraficos();
     gerarMatrizConfusao();
     configurarFiltrosDatas();
+
+    const painelComp = document.getElementById('relatorio-painel-complementar');
+    if (painelComp && typeof Chart !== 'undefined' && Chart.getChart) {
+        painelComp.addEventListener('toggle', function() {
+            if (!painelComp.open) return;
+            requestAnimationFrame(function() {
+                ['grafico-acuracia', 'grafico-classificacoes-manuais', 'grafico-resultados-ia', 'grafico-performance-prompts'].forEach(function(cid) {
+                    var el = document.getElementById(cid);
+                    if (!el) return;
+                    var ch = Chart.getChart(el);
+                    if (ch) {
+                        try { ch.resize(); } catch (e) {}
+                    }
+                });
+            });
+        });
+    }
+
+    const relMul = document.getElementById('relatorio-prompts-multiselect');
+    if (relMul) {
+        relMul.addEventListener('change', relatorioMultiselectPromptsChange);
+        relatorioMultiselectPromptsChange();
+    }
     
     // Carregar e aplicar configuração de colunas automaticamente
     setTimeout(() => {
@@ -1229,9 +1697,17 @@ function atualizarRelatorios() {
     }, 1000);
 }
 
-// Função para configurar filtros
+// Função para configurar filtros (toolbar: abre/fecha o bloco de período)
 function configurarFiltros() {
     const cardFiltros = document.getElementById('card-filtros');
+    if (!cardFiltros) return;
+    if (cardFiltros.tagName === 'DETAILS') {
+        cardFiltros.open = !cardFiltros.open;
+        if (cardFiltros.open) {
+            cardFiltros.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        return;
+    }
     if (cardFiltros.style.display === 'none') {
         cardFiltros.style.display = 'block';
     } else {
@@ -1490,44 +1966,50 @@ let configuracaoColunas = {};
 
 
 // Funções para mostrar prompt e resposta completos nos relatórios
-function mostrarPromptCompletoRelatorios(intimacaoId, promptCompleto) {
-    console.log('=== DEBUG: mostrarPromptCompletoRelatorios chamada ===');
-    console.log('Intimação ID:', intimacaoId);
-    console.log('Prompt completo:', promptCompleto);
-    
+async function carregarConteudosCompletosAnalise(analiseId) {
+    const resp = await fetch(`/api/analises/${encodeURIComponent(analiseId)}/conteudos-completos`);
+    const payload = await resp.json();
+    if (!resp.ok || !payload.success) {
+        throw new Error(payload.error || 'Falha ao carregar conteúdo completo da análise.');
+    }
+    return payload;
+}
+
+async function mostrarPromptCompletoRelatorios(analiseId, intimacaoId) {
     const elementoId = document.getElementById('prompt-intimacao-id');
     const elementoConteudo = document.getElementById('prompt-completo-conteudo');
-    
-    console.log('Elemento ID encontrado:', elementoId);
-    console.log('Elemento conteúdo encontrado:', elementoConteudo);
-    
-    if (elementoId) elementoId.textContent = intimacaoId;
-    if (elementoConteudo) elementoConteudo.textContent = promptCompleto || 'N/A';
-    
+    if (elementoId) elementoId.textContent = intimacaoId || 'N/A';
+    if (elementoConteudo) elementoConteudo.textContent = 'Carregando...';
     const modalElement = document.getElementById('modalPromptCompleto');
-    console.log('Modal element encontrado:', modalElement);
-    
-    if (modalElement) {
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    } else {
-        console.error('Modal não encontrada!');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+    try {
+        const payload = await carregarConteudosCompletosAnalise(analiseId);
+        if (elementoId) elementoId.textContent = payload.intimacao_id || intimacaoId || 'N/A';
+        if (elementoConteudo) elementoConteudo.textContent = payload.prompt_completo || 'N/A';
+    } catch (error) {
+        if (elementoConteudo) elementoConteudo.textContent = 'Erro ao carregar conteúdo.';
+        showToast(error.message || 'Erro ao carregar prompt completo.', 'error');
     }
 }
 
-function mostrarRespostaCompletaRelatorios(intimacaoId, respostaCompleta) {
-    console.log('=== DEBUG: mostrarRespostaCompletaRelatorios chamada ===');
-    console.log('Intimação ID:', intimacaoId);
-    console.log('Resposta completa:', respostaCompleta);
-    
+async function mostrarRespostaCompletaRelatorios(analiseId, intimacaoId) {
     const elementoId = document.getElementById('resposta-intimacao-id');
     const elementoConteudo = document.getElementById('resposta-completa-conteudo');
-    
-    if (elementoId) elementoId.textContent = intimacaoId;
-    if (elementoConteudo) elementoConteudo.textContent = respostaCompleta || 'N/A';
-    
+
+    if (elementoId) elementoId.textContent = intimacaoId || 'N/A';
+    if (elementoConteudo) elementoConteudo.textContent = 'Carregando...';
+
     const modal = new bootstrap.Modal(document.getElementById('modalRespostaCompleta'));
     modal.show();
+    try {
+        const payload = await carregarConteudosCompletosAnalise(analiseId);
+        if (elementoId) elementoId.textContent = payload.intimacao_id || intimacaoId || 'N/A';
+        if (elementoConteudo) elementoConteudo.textContent = payload.resposta_completa || 'N/A';
+    } catch (error) {
+        if (elementoConteudo) elementoConteudo.textContent = 'Erro ao carregar conteúdo.';
+        showToast(error.message || 'Erro ao carregar resposta completa.', 'error');
+    }
 }
 
 // Funções de copiar (usando os IDs compartilhados)

@@ -7,11 +7,22 @@
             <span class="processo-numero-compact">{{ intimacao.processo or 'N/A' }}</span>
         </div>
         {% set _ru = intimacao.regras_usuario_prioridade_alta | default('', true) | trim %}
-        {% if _ru %}
-        <span class="flex-shrink-0 text-warning" title="Regras do usuário (PRIORIDADE ALTA): {{ _ru | e }}"
-              aria-label="Possui regras do usuário com prioridade alta">
-            <i class="bi bi-shield-exclamation fs-5"></i>
-        </span>
+        {% set _obs = intimacao.observacoes | default('', true) | trim %}
+        {% if _ru or _obs %}
+        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            {% if _ru %}
+            <span class="text-warning" title="Regras do usuário (PRIORIDADE ALTA): {{ _ru | e }}"
+                  aria-label="Possui regras do usuário com prioridade alta">
+                <i class="bi bi-shield-exclamation fs-5"></i>
+            </span>
+            {% endif %}
+            {% if _obs %}
+            <span class="text-info" title="Observações (análises): {{ _obs | e }}"
+                  aria-label="Observações para análises (ver tooltip)">
+                <i class="bi bi-journal-text fs-5"></i>
+            </span>
+            {% endif %}
+        </div>
         {% endif %}
     </div>
     <div class="card-intimacao-content-compact">

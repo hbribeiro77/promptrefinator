@@ -90,6 +90,7 @@ class Config:
         'ANALISAR PROCESSO',
         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR',
         'AGENDAR RETORNO',
+        'DEVOLVER À INSTITUCIONAL',
         'URGÊNCIA',
         'INDETERMINADO',
     ]

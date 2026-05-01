@@ -5,6 +5,24 @@
         <div class="card-intimacao-processo">
             <i class="bi bi-hourglass"></i>
             <span class="processo-numero">{{ intimacao.processo or 'N/A' }}</span>
+            {% set _ru = intimacao.regras_usuario_prioridade_alta | default('', true) | trim %}
+            {% set _obs = intimacao.observacoes | default('', true) | trim %}
+            {% if _ru or _obs %}
+            <span class="d-flex align-items-center gap-1 ms-auto flex-shrink-0">
+                {% if _ru %}
+                <span class="text-warning" title="Regras do usuário (PRIORIDADE ALTA): {{ _ru | e }}"
+                      aria-label="Possui regras do usuário com prioridade alta">
+                    <i class="bi bi-shield-exclamation"></i>
+                </span>
+                {% endif %}
+                {% if _obs %}
+                <span class="text-info" title="Observações (análises): {{ _obs | e }}"
+                      aria-label="Observações para análises (ver tooltip)">
+                    <i class="bi bi-journal-text"></i>
+                </span>
+                {% endif %}
+            </span>
+            {% endif %}
             <i class="bi bi-search"></i>
         </div>
     </div>
@@ -277,14 +295,31 @@ function excluirIntimacao(id) {
     }
 }
 
+function escapeAttrCardIntimacao(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 // Função para criar card dinamicamente
 function criarCardIntimacao(intimacao, showActions = true) {
+    const _ru = String(intimacao.regras_usuario_prioridade_alta || '').trim();
+    const _obs = String(intimacao.observacoes || '').trim();
+    const iconBlock = (!_ru && !_obs) ? '' : `
+            <span class="d-flex align-items-center gap-1 ms-auto flex-shrink-0">
+                ${_ru ? `<span class="text-warning" title="Regras do usuário (PRIORIDADE ALTA): ${escapeAttrCardIntimacao(_ru)}"><i class="bi bi-shield-exclamation"></i></span>` : ''}
+                ${_obs ? `<span class="text-info" title="Observações (análises): ${escapeAttrCardIntimacao(_obs)}"><i class="bi bi-journal-text"></i></span>` : ''}
+            </span>`;
     const template = `
         <div class="card-intimacao" data-intimacao-id="${intimacao.id}">
             <div class="card-intimacao-header">
                 <div class="card-intimacao-processo">
                     <i class="bi bi-hourglass"></i>
                     <span class="processo-numero">${intimacao.processo || 'N/A'}</span>
+                    ${iconBlock}
                     <i class="bi bi-search"></i>
                 </div>
             </div>

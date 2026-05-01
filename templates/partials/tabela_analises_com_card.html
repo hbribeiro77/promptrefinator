@@ -64,8 +64,8 @@
                     {% endif %}
                     <span class="badge bg-info" style="cursor: pointer;" 
                           data-intimacao-id="{{ analise.intimacao_id }}"
-                          data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
-                          onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                          data-analise-id="{{ analise.id }}"
+                          onclick="mostrarPromptCompletoRelatorios(this.dataset.analiseId, this.dataset.intimacaoId)"
                           title="{{ tooltip_text | replace('\n', '&#10;') | safe }}"
                           data-bs-toggle="tooltip" 
                           data-bs-placement="top" 
@@ -82,6 +82,7 @@
                         'RENUNCIAR PRAZO': 'secondary',
                         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
                         'AGENDAR RETORNO': 'info',
+                        'DEVOLVER À INSTITUCIONAL': 'info',
                         'INDETERMINADO': 'light'
                     } %}
                     <span class="badge bg-{{ badge_class.get(analise.classificacao_manual, 'secondary') }}">
@@ -161,8 +162,8 @@
                 <td class="col-prompt-completo">
                     <button type="button" class="btn btn-sm btn-outline-info" 
                             data-intimacao-id="{{ analise.intimacao_id }}"
-                            data-prompt-completo="{{ analise.prompt_completo or 'N/A' }}"
-                            onclick="mostrarPromptCompletoRelatorios(this.dataset.intimacaoId, this.dataset.promptCompleto)"
+                            data-analise-id="{{ analise.id }}"
+                            onclick="mostrarPromptCompletoRelatorios(this.dataset.analiseId, this.dataset.intimacaoId)"
                             title="Ver prompt completo">
                         <i class="bi bi-eye"></i>
                     </button>
@@ -170,8 +171,8 @@
                 <td class="col-resposta-ia">
                     <button type="button" class="btn btn-sm btn-outline-success" 
                             data-intimacao-id="{{ analise.intimacao_id }}"
-                            data-resposta-completa="{{ analise.resposta_completa or 'N/A' }}"
-                            onclick="mostrarRespostaCompletaRelatorios(this.dataset.intimacaoId, this.dataset.respostaCompleta)"
+                            data-analise-id="{{ analise.id }}"
+                            onclick="mostrarRespostaCompletaRelatorios(this.dataset.analiseId, this.dataset.intimacaoId)"
                             title="Ver resposta da IA">
                         <i class="bi bi-eye"></i>
                     </button>

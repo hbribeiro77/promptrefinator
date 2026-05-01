@@ -26,11 +26,11 @@
   "compressao_backup": "zip",
   "log_level": "INFO",
   "cache_size": 100,
-  "max_concurrent": 5,
+  "max_concurrent": 20,
   "delay_entre_lotes": 0.5,
   "session_timeout": 60,
   "debug_mode": false,
   "log_requests": false,
   "cache_enabled": false,
-  "litellm_default_model": "gemini/gemini-3.1-flash-lite-preview"
+  "litellm_default_model": "azure_ai/claude-haiku-4-5"
 }

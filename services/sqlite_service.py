@@ -2,9 +2,39 @@ import sqlite3
 import json
 import os
 import uuid
+from collections import defaultdict
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from contextlib import contextmanager
+
+from services.texto_template_novo_prompt_padrao_triagem_json_instrucoes_dpe_rs_semente_banco_sqlite import (
+    DESCRICAO_TEMPLATE_NOVO_PROMPT_PADRAO,
+    NOME_TEMPLATE_NOVO_PROMPT_PADRAO,
+    TEXTO_TEMPLATE_NOVO_PROMPT_PADRAO_TRIAGEM_JSON,
+)
+
+
+def _seed_prompt_templates_padrao_sqlite(conn) -> None:
+    """Se não houver templates, insere o padrão de triagem JSON (Novo prompt)."""
+    row = conn.execute('SELECT COUNT(*) AS c FROM prompt_templates').fetchone()
+    if row and row['c'] > 0:
+        return
+    tid = str(uuid.uuid4())
+    now = datetime.now().isoformat()
+    conn.execute(
+        '''
+        INSERT INTO prompt_templates (id, nome, descricao, conteudo, ordem, data_criacao, data_atualizacao)
+        VALUES (?, ?, ?, ?, 0, ?, ?)
+        ''',
+        (
+            tid,
+            NOME_TEMPLATE_NOVO_PROMPT_PADRAO,
+            DESCRICAO_TEMPLATE_NOVO_PROMPT_PADRAO,
+            TEXTO_TEMPLATE_NOVO_PROMPT_PADRAO_TRIAGEM_JSON,
+            now,
+            now,
+        ),
+    )
 
 
 def _sql_filtro_modo_avaliacao_sessao(modo_avaliacao_filtro: Optional[str]) -> Optional[str]:
@@ -64,6 +94,47 @@ class SQLiteService:
             yield conn
         finally:
             conn.close()
+
+    def _backfill_historico_acuracia_modelo_desde_sessao_e_analises(self, conn) -> None:
+        """Preenche `historico_acuracia.modelo` vazio a partir da sessão ou das análises."""
+        try:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='sessoes_analise'"
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """
+                    UPDATE historico_acuracia
+                    SET modelo = (
+                        SELECT TRIM(s.modelo) FROM sessoes_analise s
+                        WHERE s.session_id = historico_acuracia.session_id
+                          AND s.modelo IS NOT NULL AND TRIM(s.modelo) != ''
+                        LIMIT 1
+                    )
+                    WHERE (historico_acuracia.modelo IS NULL OR TRIM(historico_acuracia.modelo) = '')
+                      AND historico_acuracia.session_id IS NOT NULL
+                    """
+                )
+        except Exception as e:
+            print(f"Aviso: backfill historico_acuracia.modelo (sessão): {e}")
+        try:
+            conn.execute(
+                """
+                UPDATE historico_acuracia
+                SET modelo = (
+                    SELECT TRIM(a.modelo) FROM analises a
+                    WHERE a.session_id = historico_acuracia.session_id
+                      AND a.prompt_id = historico_acuracia.prompt_id
+                      AND a.modelo IS NOT NULL AND TRIM(a.modelo) != ''
+                    ORDER BY a.data_analise DESC
+                    LIMIT 1
+                )
+                WHERE (historico_acuracia.modelo IS NULL OR TRIM(historico_acuracia.modelo) = '')
+                  AND historico_acuracia.session_id IS NOT NULL
+                """
+            )
+        except Exception as e:
+            print(f"Aviso: backfill historico_acuracia.modelo (analises): {e}")
     
     def _ensure_database_exists(self):
         """Garantir que o banco de dados e tabelas existam"""
@@ -137,6 +208,18 @@ class SQLiteService:
                 )
             except sqlite3.OperationalError:
                 pass
+
+            try:
+                conn.execute('ALTER TABLE intimacoes ADD COLUMN observacoes TEXT')
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                conn.execute(
+                    'ALTER TABLE intimacoes ADD COLUMN destacada BOOLEAN DEFAULT 0'
+                )
+            except sqlite3.OperationalError:
+                pass
             
             # Criar tabela de análises
             conn.execute('''
@@ -157,6 +240,7 @@ class SQLiteService:
                     custo_real REAL,
                     prompt_completo TEXT,
                     resposta_completa TEXT,
+                    session_id TEXT,
                     FOREIGN KEY (intimacao_id) REFERENCES intimacoes (id),
                     FOREIGN KEY (prompt_id) REFERENCES prompts (id)
                 )
@@ -168,6 +252,7 @@ class SQLiteService:
                     id TEXT PRIMARY KEY,
                     prompt_id TEXT NOT NULL,
                     numero_intimacoes INTEGER NOT NULL,
+                    modelo TEXT,
                     temperatura REAL NOT NULL,
                     acuracia REAL NOT NULL,
                     data_analise TEXT NOT NULL,
@@ -175,6 +260,33 @@ class SQLiteService:
                     FOREIGN KEY (prompt_id) REFERENCES prompts (id)
                 )
             ''')
+
+            # Sessões de análise (modelo/temp da execução em lote — usado para enriquecer histórico de acurácia)
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS sessoes_analise (
+                    session_id TEXT PRIMARY KEY,
+                    data_inicio TEXT NOT NULL,
+                    data_fim TEXT,
+                    prompt_id TEXT NOT NULL,
+                    prompt_nome TEXT,
+                    modelo TEXT,
+                    temperatura REAL,
+                    max_tokens INTEGER,
+                    timeout INTEGER,
+                    total_intimacoes INTEGER,
+                    intimações_processadas INTEGER DEFAULT 0,
+                    acertos INTEGER DEFAULT 0,
+                    erros INTEGER DEFAULT 0,
+                    tempo_total REAL DEFAULT 0.0,
+                    custo_total REAL DEFAULT 0.0,
+                    tokens_total INTEGER DEFAULT 0,
+                    status TEXT DEFAULT 'em_andamento',
+                    configuracoes TEXT,
+                    FOREIGN KEY (prompt_id) REFERENCES prompts (id)
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_sessoes_data ON sessoes_analise(data_inicio)')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_sessoes_prompt ON sessoes_analise(prompt_id)')
 
             # Tabela de defensores (cadastro administrativo)
             conn.execute('''
@@ -195,6 +307,11 @@ class SQLiteService:
             conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_defensores_nome_lower ON defensores(LOWER(nome))')
 
             try:
+                conn.execute('ALTER TABLE analises ADD COLUMN session_id TEXT')
+            except sqlite3.OperationalError:
+                pass
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_analises_session ON analises(session_id)')
+            try:
                 conn.execute(
                     "ALTER TABLE analises ADD COLUMN modo_avaliacao TEXT DEFAULT 'padrao'"
                 )
@@ -204,6 +321,17 @@ class SQLiteService:
                 conn.execute('ALTER TABLE analises ADD COLUMN tipo_alvo_focado TEXT')
             except sqlite3.OperationalError:
                 pass
+            try:
+                conn.execute('ALTER TABLE historico_acuracia ADD COLUMN session_id TEXT')
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute('ALTER TABLE historico_acuracia ADD COLUMN modelo TEXT')
+            except sqlite3.OperationalError:
+                pass
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_historico_acuracia_condicoes_modelo ON historico_acuracia(prompt_id, numero_intimacoes, temperatura, modelo)')
+
+            self._backfill_historico_acuracia_modelo_desde_sessao_e_analises(conn)
 
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS areas (
@@ -219,7 +347,22 @@ class SQLiteService:
                     FOREIGN KEY (area_id) REFERENCES areas (id) ON DELETE CASCADE
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS prompt_templates (
+                    id TEXT PRIMARY KEY,
+                    nome TEXT NOT NULL,
+                    descricao TEXT,
+                    conteudo TEXT NOT NULL,
+                    ordem INTEGER NOT NULL DEFAULT 0,
+                    data_criacao TEXT NOT NULL,
+                    data_atualizacao TEXT
+                )
+            ''')
+            conn.execute(
+                'CREATE INDEX IF NOT EXISTS idx_prompt_templates_ordem ON prompt_templates(ordem, nome)'
+            )
             _seed_areas_padrao_sqlite(conn)
+            _seed_prompt_templates_padrao_sqlite(conn)
             
             conn.commit()
     
@@ -343,23 +486,278 @@ class SQLiteService:
         return self.save_prompt(prompt_data)
     
     # Métodos para Intimações
+    def _normalizar_campos_bool_intimacao(self, intimacao: Dict[str, Any]) -> None:
+        if 'destacada' in intimacao:
+            intimacao['destacada'] = bool(intimacao['destacada'])
+        if 'smart_context' in intimacao:
+            intimacao['smart_context'] = bool(intimacao['smart_context'])
+
+    def get_analises_agrupadas_por_intimacao_ids(
+        self, intimacao_ids: List[str]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Uma ou poucas queries em lote em vez de N chamadas get_analises_by_intimacao."""
+        if not intimacao_ids:
+            return {}
+        out: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        chunk_size = 400
+        with self.get_connection() as conn:
+            for start in range(0, len(intimacao_ids), chunk_size):
+                chunk = intimacao_ids[start : start + chunk_size]
+                placeholders = ','.join('?' * len(chunk))
+                cursor = conn.execute(
+                    f'''
+                    SELECT a.*, p.regra_negocio, p.nome as prompt_nome
+                    FROM analises a
+                    LEFT JOIN prompts p ON a.prompt_id = p.id
+                    WHERE a.intimacao_id IN ({placeholders})
+                    ORDER BY a.intimacao_id, a.data_analise DESC
+                    ''',
+                    chunk,
+                )
+                for row in cursor.fetchall():
+                    d = dict(row)
+                    out[d['intimacao_id']].append(d)
+        return dict(out)
+
     def get_all_intimacoes(self) -> List[Dict[str, Any]]:
-        """Obter todas as intimações com suas análises"""
+        """Obter todas as intimações com suas análises (2 queries em lote, sem N+1)."""
         with self.get_connection() as conn:
             cursor = conn.execute('SELECT * FROM intimacoes ORDER BY data_criacao DESC')
-            intimacoes = []
+            rows = cursor.fetchall()
+        intimacoes: List[Dict[str, Any]] = []
+        ids: List[str] = []
+        for row in rows:
+            intimacao = dict(row)
+            self._normalizar_campos_bool_intimacao(intimacao)
+            intimacoes.append(intimacao)
+            ids.append(intimacao['id'])
+        agrupadas = self.get_analises_agrupadas_por_intimacao_ids(ids)
+        for intimacao in intimacoes:
+            intimacao['analises'] = agrupadas.get(intimacao['id'], [])
+        return intimacoes
+
+    def listar_intimacoes_resumo_sem_contexto_sem_analises_para_pagina_analise_ia(
+        self,
+    ) -> List[Dict[str, Any]]:
+        """
+        Lista intimações para a página Análise IA sem ler a coluna contexto (substituída por '')
+        e sem consultar análises — reduz memória e peso do HTML.
+        """
+        sql = '''
+            SELECT
+                id,
+                CAST('' AS TEXT) AS contexto,
+                classificacao_manual,
+                informacao_adicional,
+                processo,
+                orgao_julgador,
+                classe,
+                disponibilizacao,
+                intimado,
+                status,
+                prazo,
+                defensor,
+                id_tarefa,
+                cor_etiqueta,
+                smart_context,
+                data_criacao,
+                intimacao_id_externo,
+                regras_usuario_prioridade_alta,
+                observacoes,
+                COALESCE(destacada, 0) AS destacada
+            FROM intimacoes
+            ORDER BY data_criacao DESC
+        '''
+        with self.get_connection() as conn:
+            cursor = conn.execute(sql)
+            out: List[Dict[str, Any]] = []
             for row in cursor.fetchall():
                 intimacao = dict(row)
-                # Converter destacada de int para boolean
-                if 'destacada' in intimacao:
-                    intimacao['destacada'] = bool(intimacao['destacada'])
-                # Converter smart_context de int para boolean
-                if 'smart_context' in intimacao:
-                    intimacao['smart_context'] = bool(intimacao['smart_context'])
-                # Buscar análises desta intimação
-                intimacao['analises'] = self.get_analises_by_intimacao(intimacao['id'])
-                intimacoes.append(intimacao)
-            return intimacoes
+                self._normalizar_campos_bool_intimacao(intimacao)
+                intimacao['analises'] = []
+                out.append(intimacao)
+        return out
+
+    def _montar_where_listagem_intimacoes(
+        self,
+        busca: str,
+        classificacao: str,
+        defensor: str,
+        destacadas: str,
+    ) -> Tuple[str, List[Any]]:
+        clauses: List[str] = []
+        params: List[Any] = []
+        if busca and busca.strip():
+            clauses.append("INSTR(LOWER(COALESCE(i.contexto, '')), LOWER(?)) > 0")
+            params.append(busca.strip())
+        if classificacao:
+            clauses.append('i.classificacao_manual = ?')
+            params.append(classificacao)
+        if defensor:
+            clauses.append('i.defensor = ?')
+            params.append(defensor)
+        if destacadas == 'true':
+            clauses.append('COALESCE(i.destacada, 0) = 1')
+        where_sql = ' AND '.join(clauses) if clauses else '1=1'
+        return where_sql, params
+
+    def _montar_order_listagem_intimacoes(
+        self,
+        ordenacao: str,
+        prompt_especifico: str,
+        temperatura_especifica: str,
+    ) -> Tuple[str, List[Any]]:
+        """Retorna fragmento ORDER BY (sem ORDER BY keyword) e parâmetros extras."""
+        ord_key = (ordenacao or 'data_desc').strip()
+        taxa_parts: List[str] = ['a.intimacao_id = i.id']
+        taxa_params: List[Any] = []
+        pe = (prompt_especifico or '').strip()
+        if pe:
+            taxa_parts.append('a.prompt_id = ?')
+            taxa_params.append(pe)
+        ts = (temperatura_especifica or '').strip()
+        if ts != '':
+            try:
+                tf = float(ts.replace(',', '.'))
+                taxa_parts.append('ABS(COALESCE(a.temperatura, 0) - ?) < 0.001')
+                taxa_params.append(tf)
+            except (TypeError, ValueError):
+                pass
+        taxa_where = ' AND '.join(taxa_parts)
+        taxa_expr = (
+            f'COALESCE(('
+            f'SELECT AVG(CASE WHEN a.acertou THEN 1.0 ELSE 0.0 END) '
+            f'FROM analises a WHERE {taxa_where}'
+            f'), 0.0)'
+        )
+
+        if ord_key == 'data_asc':
+            return 'i.data_criacao ASC, i.id ASC', []
+        if ord_key == 'classificacao':
+            return 'COALESCE(i.classificacao_manual, "") ASC, i.data_criacao DESC', []
+        if ord_key == 'taxa_acerto_desc':
+            return f'{taxa_expr} DESC, i.data_criacao DESC', taxa_params
+        if ord_key == 'taxa_acerto_asc':
+            return f'{taxa_expr} ASC, i.data_criacao DESC', taxa_params
+        # data_desc default
+        return 'i.data_criacao DESC, i.id DESC', []
+
+    def count_intimacoes_listagem(
+        self,
+        busca: str = '',
+        classificacao: str = '',
+        defensor: str = '',
+        destacadas: str = '',
+    ) -> int:
+        where_sql, params = self._montar_where_listagem_intimacoes(
+            busca, classificacao, defensor, destacadas
+        )
+        with self.get_connection() as conn:
+            row = conn.execute(
+                f'SELECT COUNT(*) AS c FROM intimacoes i WHERE {where_sql}',
+                params,
+            ).fetchone()
+            return int(row['c']) if row else 0
+
+    def stats_intimacoes_listagem(
+        self,
+        busca: str = '',
+        classificacao: str = '',
+        defensor: str = '',
+        destacadas: str = '',
+    ) -> Dict[str, Any]:
+        """Totais alinhados aos mesmos filtros da listagem (para cards e stats)."""
+        where_sql, base_params = self._montar_where_listagem_intimacoes(
+            busca, classificacao, defensor, destacadas
+        )
+        out: Dict[str, Any] = {}
+        with self.get_connection() as conn:
+            row = conn.execute(
+                f'SELECT COUNT(*) AS c FROM intimacoes i WHERE {where_sql}',
+                base_params,
+            ).fetchone()
+            total = int(row['c']) if row else 0
+            out['total'] = total
+
+            row = conn.execute(
+                f'''
+                SELECT COUNT(*) AS c FROM intimacoes i
+                WHERE {where_sql}
+                  AND i.classificacao_manual IS NOT NULL
+                  AND TRIM(i.classificacao_manual) != ''
+                ''',
+                base_params,
+            ).fetchone()
+            out['com_classificacao'] = int(row['c']) if row else 0
+
+            row = conn.execute(
+                f'''
+                SELECT COUNT(*) AS c FROM intimacoes i
+                WHERE {where_sql}
+                  AND EXISTS (SELECT 1 FROM analises a WHERE a.intimacao_id = i.id)
+                ''',
+                base_params,
+            ).fetchone()
+            analisadas = int(row['c']) if row else 0
+            out['analisadas'] = analisadas
+            out['pendentes'] = max(0, total - analisadas)
+
+            for key, classe in (
+                ('count_elaborar_peca', 'ELABORAR PEÇA'),
+                ('count_urgencia', 'URGÊNCIA'),
+                ('count_analisar_processo', 'ANALISAR PROCESSO'),
+            ):
+                row = conn.execute(
+                    f'''
+                    SELECT COUNT(*) AS c FROM intimacoes i
+                    WHERE {where_sql} AND i.classificacao_manual = ?
+                    ''',
+                    base_params + [classe],
+                ).fetchone()
+                out[key] = int(row['c']) if row else 0
+        return out
+
+    def list_intimacoes_listagem_pagina(
+        self,
+        busca: str = '',
+        classificacao: str = '',
+        defensor: str = '',
+        destacadas: str = '',
+        ordenacao: str = 'data_desc',
+        prompt_especifico: str = '',
+        temperatura_especifica: str = '',
+        pagina: int = 1,
+        itens_por_pagina: int = 25,
+    ) -> List[Dict[str, Any]]:
+        """
+        Lista uma página de intimações com filtros e ordenação no SQLite.
+        Cada item inclui analises=[] (taxa na UI continua via API / JS).
+        Chame stats_intimacoes_listagem / count_intimacoes_listagem para totais.
+        """
+        where_sql, where_params = self._montar_where_listagem_intimacoes(
+            busca, classificacao, defensor, destacadas
+        )
+        order_sql, order_params = self._montar_order_listagem_intimacoes(
+            ordenacao, prompt_especifico, temperatura_especifica
+        )
+        offset = max(0, (max(1, pagina) - 1) * max(1, itens_por_pagina))
+        limit = max(1, itens_por_pagina)
+
+        sql = (
+            f'SELECT i.* FROM intimacoes i WHERE {where_sql} '
+            f'ORDER BY {order_sql} LIMIT ? OFFSET ?'
+        )
+        qparams = list(where_params) + order_params + [limit, offset]
+
+        with self.get_connection() as conn:
+            cursor = conn.execute(sql, qparams)
+            page: List[Dict[str, Any]] = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                self._normalizar_campos_bool_intimacao(d)
+                d['analises'] = []
+                page.append(d)
+        return page
     
     def get_intimacao_by_id(self, intimacao_id: str) -> Optional[Dict[str, Any]]:
         """Obter intimação por ID"""
@@ -421,8 +819,8 @@ class SQLiteService:
                 (id, contexto, classificacao_manual, informacao_adicional, processo,
                  orgao_julgador, classe, disponibilizacao, intimado, status, prazo,
                  defensor, id_tarefa, cor_etiqueta, smart_context, data_criacao,
-                 intimacao_id_externo, regras_usuario_prioridade_alta)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 intimacao_id_externo, regras_usuario_prioridade_alta, observacoes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 intimacao['id'],
                 intimacao.get('contexto', ''),
@@ -442,6 +840,7 @@ class SQLiteService:
                 intimacao['data_criacao'],
                 (str(ext_raw).strip() if ext_raw is not None and str(ext_raw).strip() != '' else None),
                 intimacao.get('regras_usuario_prioridade_alta') or '',
+                intimacao.get('observacoes') or '',
             ))
             
             # NÃO salvar análises aninhadas aqui - elas são salvas separadamente via adicionar_analise_intimacao()
@@ -503,7 +902,523 @@ class SQLiteService:
                 ORDER BY a.data_analise DESC
             ''', (prompt_id,))
             return [dict(row) for row in cursor.fetchall()]
-    
+
+    def _where_relatorios_analises(
+        self,
+        data_inicio: str = "",
+        data_fim: str = "",
+        prompt_id: str = "",
+        classificacao_manual: str = "",
+    ) -> Tuple[str, List[Any]]:
+        clauses: List[str] = ["1=1"]
+        params: List[Any] = []
+        if data_inicio and str(data_inicio).strip():
+            clauses.append("substr(a.data_analise, 1, 10) >= ?")
+            params.append(str(data_inicio).strip())
+        if data_fim and str(data_fim).strip():
+            clauses.append("substr(a.data_analise, 1, 10) <= ?")
+            params.append(str(data_fim).strip())
+        if prompt_id and str(prompt_id).strip():
+            clauses.append("a.prompt_id = ?")
+            params.append(str(prompt_id).strip())
+        if classificacao_manual and str(classificacao_manual).strip():
+            clauses.append("i.classificacao_manual = ?")
+            params.append(str(classificacao_manual).strip())
+        return " AND ".join(clauses), params
+
+    def contar_analises_relatorios_filtradas(
+        self,
+        data_inicio: str = "",
+        data_fim: str = "",
+        prompt_id: str = "",
+        classificacao_manual: str = "",
+    ) -> int:
+        where_sql, params = self._where_relatorios_analises(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao_manual,
+        )
+        with self.get_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT COUNT(*) AS c
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                WHERE {where_sql}
+                """,
+                params,
+            ).fetchone()
+            return int(row["c"] if row else 0)
+
+    def listar_analises_relatorios_paginadas(
+        self,
+        pagina: int = 1,
+        itens_por_pagina: int = 10,
+        data_inicio: str = "",
+        data_fim: str = "",
+        prompt_id: str = "",
+        classificacao_manual: str = "",
+    ) -> List[Dict[str, Any]]:
+        where_sql, params = self._where_relatorios_analises(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao_manual,
+        )
+        page = max(1, int(pagina or 1))
+        limit = max(1, int(itens_por_pagina or 10))
+        offset = (page - 1) * limit
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                f"""
+                SELECT
+                    a.id,
+                    a.intimacao_id,
+                    a.prompt_id,
+                    COALESCE(a.prompt_nome, p.nome, '') AS prompt_nome,
+                    a.data_analise,
+                    a.resultado_ia,
+                    a.acertou,
+                    a.tempo_processamento,
+                    a.modelo,
+                    a.temperatura,
+                    a.tokens_input,
+                    a.tokens_output,
+                    a.custo_real,
+                    p.regra_negocio,
+                    i.classificacao_manual,
+                    i.informacao_adicional,
+                    i.contexto,
+                    i.processo,
+                    i.orgao_julgador,
+                    i.classe,
+                    i.disponibilizacao,
+                    i.intimado,
+                    i.status,
+                    i.prazo,
+                    i.defensor,
+                    i.regras_usuario_prioridade_alta,
+                    i.observacoes,
+                    COALESCE(i.destacada, 0) AS destacada
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                LEFT JOIN prompts p ON p.id = a.prompt_id
+                WHERE {where_sql}
+                ORDER BY a.data_analise DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def obter_agregados_relatorios_filtrados(
+        self,
+        data_inicio: str = "",
+        data_fim: str = "",
+        prompt_id: str = "",
+        classificacao_manual: str = "",
+    ) -> Dict[str, Any]:
+        where_sql, params = self._where_relatorios_analises(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao_manual,
+        )
+        with self.get_connection() as conn:
+            row_geral = conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) AS total_analises,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) AS acertos,
+                    COALESCE(SUM(COALESCE(a.tempo_processamento, 0.0)), 0.0) AS tempo_total,
+                    COALESCE(SUM(COALESCE(a.custo_real, 0.0)), 0.0) AS custo_total,
+                    SUM(
+                        CASE WHEN substr(a.data_analise, 1, 10) = date('now', 'localtime')
+                        THEN 1 ELSE 0 END
+                    ) AS analises_hoje
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                WHERE {where_sql}
+                """,
+                params,
+            ).fetchone()
+
+            total_analises = int((row_geral["total_analises"] or 0) if row_geral else 0)
+            acertos = int((row_geral["acertos"] or 0) if row_geral else 0)
+            tempo_total = float((row_geral["tempo_total"] or 0.0) if row_geral else 0.0)
+            custo_total = float((row_geral["custo_total"] or 0.0) if row_geral else 0.0)
+            analises_hoje = int((row_geral["analises_hoje"] or 0) if row_geral else 0)
+
+            dist_manual: Dict[str, int] = {}
+            cur_manual = conn.execute(
+                f"""
+                SELECT
+                    COALESCE(NULLIF(TRIM(COALESCE(i.classificacao_manual, '')), ''), 'Não classificado') AS label,
+                    COUNT(*) AS c
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                WHERE {where_sql}
+                GROUP BY 1
+                ORDER BY c DESC
+                """,
+                params,
+            )
+            for r in cur_manual.fetchall():
+                dist_manual[str(r["label"])] = int(r["c"])
+
+            dist_ia: Dict[str, int] = {}
+            cur_ia = conn.execute(
+                f"""
+                SELECT
+                    COALESCE(NULLIF(TRIM(COALESCE(a.resultado_ia, '')), ''), 'Não classificado') AS label,
+                    COUNT(*) AS c
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                WHERE {where_sql}
+                GROUP BY 1
+                ORDER BY c DESC
+                """,
+                params,
+            )
+            for r in cur_ia.fetchall():
+                dist_ia[str(r["label"])] = int(r["c"])
+
+            performance_prompts: Dict[str, Dict[str, Any]] = {}
+            cur_perf = conn.execute(
+                f"""
+                SELECT
+                    COALESCE(NULLIF(TRIM(COALESCE(a.prompt_nome, p.nome, '')), ''), 'Desconhecido') AS prompt_nome,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) AS acertos,
+                    COALESCE(SUM(COALESCE(a.tempo_processamento, 0.0)), 0.0) AS tempo_total
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                LEFT JOIN prompts p ON p.id = a.prompt_id
+                WHERE {where_sql}
+                GROUP BY 1
+                ORDER BY total DESC
+                """,
+                params,
+            )
+            for r in cur_perf.fetchall():
+                nome = str(r["prompt_nome"])
+                total = int(r["total"] or 0)
+                ac = int(r["acertos"] or 0)
+                t_total = float(r["tempo_total"] or 0.0)
+                performance_prompts[nome] = {
+                    "total": total,
+                    "acertos": ac,
+                    "tempo_total": t_total,
+                    "acuracia": round((ac / total) * 100, 1) if total > 0 else 0,
+                    "tempo_medio": round(t_total / total, 3) if total > 0 else 0,
+                }
+
+            meses_ordem = []
+            cur_meses = conn.execute(
+                f"""
+                SELECT
+                    substr(a.data_analise, 1, 7) AS mes_iso,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) AS acertos
+                FROM analises a
+                LEFT JOIN intimacoes i ON i.id = a.intimacao_id
+                WHERE {where_sql}
+                GROUP BY mes_iso
+                ORDER BY mes_iso DESC
+                LIMIT 6
+                """,
+                params,
+            )
+            meses_raw = [dict(r) for r in cur_meses.fetchall()]
+            meses_raw.reverse()
+            acuracia_labels: List[str] = []
+            acuracia_data: List[float] = []
+            for r in meses_raw:
+                mes_iso = str(r.get("mes_iso") or "")
+                if not mes_iso:
+                    continue
+                y, m = mes_iso.split("-")
+                acuracia_labels.append(f"{m}/{y}")
+                total_mes = int(r.get("total") or 0)
+                ac_mes = int(r.get("acertos") or 0)
+                acuracia_data.append(round((ac_mes / total_mes) * 100, 1) if total_mes > 0 else 0)
+                meses_ordem.append(mes_iso)
+
+            return {
+                "total_analises": total_analises,
+                "acertos": acertos,
+                "tempo_total": tempo_total,
+                "custo_total": custo_total,
+                "analises_hoje": analises_hoje,
+                "distribuicao_manual": dist_manual,
+                "distribuicao_ia": dist_ia,
+                "performance_prompts": performance_prompts,
+                "dados_graficos": {
+                    "acuracia_periodo": {"labels": acuracia_labels, "data": acuracia_data},
+                    "classificacoes_manuais": {
+                        "labels": list(dist_manual.keys()),
+                        "data": list(dist_manual.values()),
+                    },
+                    "resultados_ia": {
+                        "labels": list(dist_ia.keys()),
+                        "data": list(dist_ia.values()),
+                    },
+                    "performance_prompts": {
+                        "labels": list(performance_prompts.keys()),
+                        "acuracia": [v["acuracia"] for v in performance_prompts.values()],
+                        "usos": [v["total"] for v in performance_prompts.values()],
+                    },
+                },
+            }
+
+    def get_analise_prompt_resposta_completa_por_id(
+        self,
+        analise_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Busca prompt/resposta completos de uma análise específica para modal on-demand."""
+        if not analise_id:
+            return None
+        with self.get_connection() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    a.id,
+                    a.intimacao_id,
+                    a.prompt_completo,
+                    a.resposta_completa
+                FROM analises a
+                WHERE a.id = ?
+                LIMIT 1
+                """,
+                (analise_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    _REL_DIM_CLASSIFICACAO_MANUAL = "classificacao_manual"
+    _REL_DIM_CLASSE_PROCESSUAL = "classe_processual"
+    _REL_DIM_DEFENSOR = "defensor"
+    _REL_DIM_SQL = {
+        _REL_DIM_CLASSIFICACAO_MANUAL: (
+            "COALESCE(NULLIF(TRIM(COALESCE(i.classificacao_manual, '')), ''), '(Sem classificação manual)')"
+        ),
+        _REL_DIM_CLASSE_PROCESSUAL: (
+            "COALESCE(NULLIF(TRIM(COALESCE(i.classe, '')), ''), '(Sem classe)')"
+        ),
+        _REL_DIM_DEFENSOR: (
+            "COALESCE(NULLIF(TRIM(COALESCE(i.defensor, '')), ''), "
+            "NULLIF(TRIM(COALESCE(i.intimado, '')), ''), '(Sem defensor)')"
+        ),
+    }
+
+    def _relatorio_intimacao_ids_com_analise_por_todos_prompts(
+        self,
+        conn: sqlite3.Connection,
+        prompt_ids: List[str],
+        data_inicio: str,
+        data_fim: str,
+        classificacao_manual_filtro: str,
+    ) -> List[str]:
+        """Intimações que possuem pelo menos uma linha em analises para cada prompt_id no recorte."""
+        if len(prompt_ids) < 2:
+            return []
+        placeholders = ",".join("?" * len(prompt_ids))
+        where = [f"a2.prompt_id IN ({placeholders})"]
+        params: List[Any] = list(prompt_ids)
+        if data_inicio and str(data_inicio).strip():
+            where.append("a2.data_analise >= ?")
+            params.append(str(data_inicio).strip())
+        if data_fim and str(data_fim).strip():
+            where.append("a2.data_analise <= ?")
+            params.append(str(data_fim).strip())
+        if classificacao_manual_filtro and str(classificacao_manual_filtro).strip():
+            where.append("i2.classificacao_manual = ?")
+            params.append(str(classificacao_manual_filtro).strip())
+        where_sql = " AND ".join(where)
+        sql = f"""
+            SELECT a2.intimacao_id
+            FROM analises a2
+            INNER JOIN intimacoes i2 ON i2.id = a2.intimacao_id
+            WHERE {where_sql}
+            GROUP BY a2.intimacao_id
+            HAVING COUNT(DISTINCT a2.prompt_id) = ?
+        """
+        params.append(len(prompt_ids))
+        cursor = conn.execute(sql, params)
+        return [str(row[0]) for row in cursor.fetchall()]
+
+    def contar_intimacoes_cadastradas_agrupadas_por_dimensao_relatorio(
+        self,
+        dimensao: str,
+        classificacao_manual_filtro: str = "",
+    ) -> Dict[str, int]:
+        """
+        Conta intimações cadastradas por rótulo da dimensão (mesmas expressões SQL do relatório).
+        Se classificacao_manual_filtro for informado, considera só intimações com essa classificação manual.
+        """
+        dim_key = (dimensao or "").strip()
+        if dim_key not in self._REL_DIM_SQL:
+            raise ValueError(
+                "dimensao deve ser classificacao_manual, classe_processual ou defensor"
+            )
+        dim_expr = self._REL_DIM_SQL[dim_key]
+        where_parts: List[str] = ["1=1"]
+        params: List[Any] = []
+        if classificacao_manual_filtro and str(classificacao_manual_filtro).strip():
+            where_parts.append("i.classificacao_manual = ?")
+            params.append(str(classificacao_manual_filtro).strip())
+        where_sql = " AND ".join(where_parts)
+        sql = f"""
+            SELECT {dim_expr} AS dim_label, COUNT(*) AS c
+            FROM intimacoes i
+            WHERE {where_sql}
+            GROUP BY {dim_expr}
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(sql, params)
+            return {str(dict(row)["dim_label"]): int(dict(row)["c"]) for row in cursor.fetchall()}
+
+    def listar_agregados_relatorio_taxa_acerto_por_prompt_ids_dimensao_com_filtros(
+        self,
+        prompt_ids: List[str],
+        dimensao: str,
+        data_inicio: str = "",
+        data_fim: str = "",
+        classificacao_manual_filtro: str = "",
+        apenas_intimacoes_com_todos_prompts: bool = False,
+        limite_amostra_pequena: int = 5,
+    ) -> List[Dict[str, Any]]:
+        """
+        Agrega taxa de acerto por dimensão (rótulo da intimação) para cada prompt.
+        Só entram análises com acertou avaliado (NOT NULL), alinhado ao serviço de sessão.
+        Cada linha inclui total (n de análises) e total_intimacoes_distintas (COUNT DISTINCT).
+        """
+        ids = []
+        seen = set()
+        for pid in prompt_ids or []:
+            if pid and str(pid).strip() and pid not in seen:
+                seen.add(pid)
+                ids.append(str(pid).strip())
+        if not ids:
+            return []
+
+        dim_key = (dimensao or "").strip()
+        if dim_key not in self._REL_DIM_SQL:
+            raise ValueError(
+                "dimensao deve ser classificacao_manual, classe_processual ou defensor"
+            )
+
+        dim_expr = self._REL_DIM_SQL[dim_key]
+        apenas = bool(
+            apenas_intimacoes_com_todos_prompts and len(ids) >= 2
+        )
+
+        placeholders = ",".join("?" * len(ids))
+        where_parts = [
+            f"a.prompt_id IN ({placeholders})",
+            "a.acertou IS NOT NULL",
+        ]
+        params: List[Any] = list(ids)
+
+        if data_inicio and str(data_inicio).strip():
+            where_parts.append("a.data_analise >= ?")
+            params.append(str(data_inicio).strip())
+        if data_fim and str(data_fim).strip():
+            where_parts.append("a.data_analise <= ?")
+            params.append(str(data_fim).strip())
+        if classificacao_manual_filtro and str(classificacao_manual_filtro).strip():
+            where_parts.append("i.classificacao_manual = ?")
+            params.append(str(classificacao_manual_filtro).strip())
+
+        with self.get_connection() as conn:
+            if apenas:
+                comuns = self._relatorio_intimacao_ids_com_analise_por_todos_prompts(
+                    conn,
+                    ids,
+                    str(data_inicio).strip() if data_inicio else "",
+                    str(data_fim).strip() if data_fim else "",
+                    str(classificacao_manual_filtro).strip()
+                    if classificacao_manual_filtro
+                    else "",
+                )
+                if not comuns:
+                    out_empty: List[Dict[str, Any]] = []
+                    for pid in ids:
+                        row_n = conn.execute(
+                            "SELECT nome FROM prompts WHERE id = ?", (pid,)
+                        ).fetchone()
+                        nome = row_n[0] if row_n else ""
+                        out_empty.append(
+                            {"prompt_id": pid, "prompt_nome": nome or "", "linhas": []}
+                        )
+                    return out_empty
+                ic_place = ",".join("?" * len(comuns))
+                where_parts.append(f"a.intimacao_id IN ({ic_place})")
+                params.extend(comuns)
+
+            where_sql = " AND ".join(where_parts)
+            sql = f"""
+                SELECT
+                    a.prompt_id,
+                    COALESCE(p.nome, '') AS prompt_nome,
+                    {dim_expr} AS dim_label,
+                    COUNT(*) AS total,
+                    COUNT(DISTINCT a.intimacao_id) AS total_intimacoes_distintas,
+                    SUM(CASE WHEN a.acertou = 1 THEN 1 ELSE 0 END) AS acertos
+                FROM analises a
+                INNER JOIN intimacoes i ON i.id = a.intimacao_id
+                LEFT JOIN prompts p ON p.id = a.prompt_id
+                WHERE {where_sql}
+                GROUP BY a.prompt_id, p.nome, {dim_expr}
+            """
+
+            cursor = conn.execute(sql, params)
+            by_prompt: Dict[str, Dict[str, Any]] = {}
+            for row in cursor.fetchall():
+                d = dict(row)
+                pid = d["prompt_id"]
+                if pid not in by_prompt:
+                    by_prompt[pid] = {
+                        "prompt_id": pid,
+                        "prompt_nome": d.get("prompt_nome") or "",
+                        "linhas": [],
+                    }
+                total = int(d["total"] or 0)
+                ni = int(d["total_intimacoes_distintas"] or 0)
+                acertos = int(d["acertos"] or 0)
+                erros = total - acertos
+                taxa = round(100.0 * acertos / total, 1) if total else 0.0
+                by_prompt[pid]["linhas"].append(
+                    {
+                        "label": d["dim_label"],
+                        "total": total,
+                        "total_intimacoes_distintas": ni,
+                        "acertos": acertos,
+                        "erros": erros,
+                        "taxa_pct": taxa,
+                        "amostra_pequena": 0 < total < limite_amostra_pequena,
+                    }
+                )
+
+            for pid in by_prompt:
+                by_prompt[pid]["linhas"].sort(
+                    key=lambda x: (-x["total"], x["label"])
+                )
+
+            result: List[Dict[str, Any]] = []
+            for pid in ids:
+                if pid in by_prompt:
+                    result.append(by_prompt[pid])
+                else:
+                    row_n = conn.execute(
+                        "SELECT nome FROM prompts WHERE id = ?", (pid,)
+                    ).fetchone()
+                    nome = row_n[0] if row_n else ""
+                    result.append(
+                        {"prompt_id": pid, "prompt_nome": nome or "", "linhas": []}
+                    )
+            return result
+
     def save_analise(self, analise: Dict[str, Any]) -> str:
         """Salvar uma análise"""
         with self.get_connection() as conn:
@@ -606,13 +1521,59 @@ class SQLiteService:
             cursor = conn.execute('SELECT AVG(CASE WHEN acertou THEN 1.0 ELSE 0.0 END) FROM analises')
             acuracia_geral = cursor.fetchone()[0] or 0.0
             
+            acuracia_pct = acuracia_geral * 100
             return {
                 'total_intimacoes': intimacoes_count,
                 'total_prompts': prompts_count,
                 'total_analises': analises_count,
-                'acuracia_geral': acuracia_geral * 100
+                'acuracia_geral': acuracia_pct,
+                'taxa_acuracia_geral': acuracia_pct,
             }
-    
+
+    def get_dashboard_resumo_graficos(self) -> Dict[str, Any]:
+        """
+        Agregações só com SQL para o dashboard — evita carregar todas as intimações (contexto)
+        e todas as análises na memória.
+        """
+        with self.get_connection() as conn:
+            distribuicao: Dict[str, int] = {}
+            cur = conn.execute(
+                '''
+                SELECT cls, COUNT(*) AS cnt
+                FROM (
+                    SELECT CASE
+                        WHEN classificacao_manual IS NULL OR TRIM(classificacao_manual) = ''
+                        THEN 'Não classificada'
+                        ELSE TRIM(classificacao_manual)
+                    END AS cls
+                    FROM intimacoes
+                )
+                GROUP BY cls
+                ORDER BY cnt DESC
+                '''
+            )
+            for row in cur.fetchall():
+                distribuicao[row['cls']] = row['cnt']
+
+            total_analises = conn.execute('SELECT COUNT(*) AS c FROM analises').fetchone()['c']
+            pendente = conn.execute(
+                '''
+                SELECT COUNT(*) AS c FROM intimacoes i
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM analises a WHERE a.intimacao_id = i.id
+                )
+                '''
+            ).fetchone()['c']
+
+            return {
+                'distribuicao_classificacao': distribuicao,
+                'status_analises': {
+                    'Pendente': pendente,
+                    'Concluída': total_analises,
+                    'Erro': 0,
+                },
+            }
+
     # Métodos de configuração (mantém compatibilidade)
     def get_config(self) -> Dict[str, Any]:
         """Obter configurações (ainda usa JSON por simplicidade)"""
@@ -1202,19 +2163,89 @@ class SQLiteService:
             
             return result
     
-    def salvar_historico_acuracia(self, prompt_id: str, numero_intimacoes: int, temperatura: float, 
-                                 acuracia: float, session_id: str = None) -> bool:
-        """Salvar histórico de acurácia de um prompt"""
+    def _modelo_historico_acuracia_a_partir_de_analises(
+        self,
+        conn,
+        prompt_id: str,
+        session_id: Optional[str],
+        modelo_param: str,
+    ) -> str:
+        """
+        Prefere o modelo registrado em `analises` da sessão (fonte do que de fato rodou).
+        Vários modelos distintos na mesma sessão viram rótulo estável ordenado, ex.: "a, b".
+        Se não houver linhas com modelo, usa o parâmetro `modelo_param`.
+        """
+        param = (modelo_param or "").strip()
+        if not session_id or not str(session_id).strip():
+            return param
+        sid = str(session_id).strip()
+        pid = str(prompt_id).strip()
+        cur = conn.execute(
+            """
+            SELECT DISTINCT TRIM(modelo) AS m
+            FROM analises
+            WHERE session_id = ? AND prompt_id = ?
+              AND modelo IS NOT NULL AND TRIM(modelo) != ''
+            """,
+            (sid, pid),
+        )
+        vals = sorted(
+            {
+                str(r[0]).strip()
+                for r in cur.fetchall()
+                if r[0] is not None and str(r[0]).strip()
+            }
+        )
+        if len(vals) == 1:
+            return vals[0]
+        if len(vals) > 1:
+            return ", ".join(vals)
+        try:
+            cur_sess = conn.execute(
+                """
+                SELECT TRIM(modelo) FROM sessoes_analise
+                WHERE session_id = ?
+                  AND modelo IS NOT NULL AND TRIM(modelo) != ''
+                LIMIT 1
+                """,
+                (sid,),
+            )
+            row_sess = cur_sess.fetchone()
+            if row_sess and row_sess[0] and str(row_sess[0]).strip():
+                return str(row_sess[0]).strip()
+        except Exception:
+            pass
+        return param
+
+    def salvar_historico_acuracia(self, prompt_id: str, numero_intimacoes: int, temperatura: float,
+                                 acuracia: float, session_id: str = None, modelo: str = "") -> bool:
+        """Salvar histórico de acurácia de um prompt.
+
+        O campo `modelo` gravado prioriza valores distintos em `analises` da mesma
+        `session_id` e `prompt_id`; se não houver, usa o argumento `modelo`.
+        """
         try:
             with self.get_connection() as conn:
                 historico_id = str(uuid.uuid4())
                 data_analise = datetime.now().isoformat()
-                
+                modelo_final = self._modelo_historico_acuracia_a_partir_de_analises(
+                    conn, prompt_id, session_id, modelo
+                )
+
                 conn.execute('''
                     INSERT INTO historico_acuracia 
-                    (id, prompt_id, numero_intimacoes, temperatura, acuracia, data_analise, session_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (historico_id, prompt_id, numero_intimacoes, temperatura, acuracia, data_analise, session_id))
+                    (id, prompt_id, numero_intimacoes, modelo, temperatura, acuracia, data_analise, session_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    historico_id,
+                    prompt_id,
+                    numero_intimacoes,
+                    modelo_final,
+                    temperatura,
+                    acuracia,
+                    data_analise,
+                    session_id,
+                ))
                 
                 conn.commit()
                 return True
@@ -1228,19 +2259,31 @@ class SQLiteService:
             with self.get_connection() as conn:
                 cursor = conn.execute('''
                     SELECT 
-                        prompt_id,
-                        numero_intimacoes,
-                        temperatura,
+                        h.prompt_id,
+                        h.numero_intimacoes,
+                        COALESCE(
+                            NULLIF(TRIM(h.modelo), ''),
+                            NULLIF(TRIM(s.modelo), ''),
+                            NULLIF(TRIM((
+                                SELECT a.modelo FROM analises a
+                                WHERE a.session_id = h.session_id AND a.prompt_id = h.prompt_id
+                                  AND a.modelo IS NOT NULL AND TRIM(a.modelo) != ''
+                                ORDER BY a.data_analise DESC LIMIT 1
+                            )), ''),
+                            'N/D'
+                        ) AS modelo,
+                        h.temperatura,
                         COUNT(*) as total_analises,
-                        AVG(acuracia) as acuracia_media,
-                        MIN(acuracia) as acuracia_minima,
-                        MAX(acuracia) as acuracia_maxima,
-                        MIN(data_analise) as primeira_analise,
-                        MAX(data_analise) as ultima_analise
-                    FROM historico_acuracia 
-                    WHERE prompt_id = ?
-                    GROUP BY prompt_id, numero_intimacoes, temperatura
-                    ORDER BY numero_intimacoes DESC, temperatura ASC, ultima_analise DESC
+                        AVG(h.acuracia) as acuracia_media,
+                        MIN(h.acuracia) as acuracia_minima,
+                        MAX(h.acuracia) as acuracia_maxima,
+                        MIN(h.data_analise) as primeira_analise,
+                        MAX(h.data_analise) as ultima_analise
+                    FROM historico_acuracia h
+                    LEFT JOIN sessoes_analise s ON s.session_id = h.session_id
+                    WHERE h.prompt_id = ?
+                    GROUP BY 1, 2, 3, 4
+                    ORDER BY h.numero_intimacoes DESC, h.temperatura ASC, modelo ASC, ultima_analise DESC
                 ''', (prompt_id,))
                 
                 result = []
@@ -1248,20 +2291,34 @@ class SQLiteService:
                     result.append({
                         'prompt_id': row[0],
                         'numero_intimacoes': row[1],
-                        'temperatura': row[2],
-                        'total_analises': row[3],
-                        'acuracia_media': round(row[4], 2),
-                        'acuracia_minima': round(row[5], 2),
-                        'acuracia_maxima': round(row[6], 2),
-                        'primeira_analise': row[7],
-                        'ultima_analise': row[8]
+                        'modelo': row[2],
+                        'temperatura': row[3],
+                        'total_analises': row[4],
+                        'acuracia_media': round(row[5], 2),
+                        'acuracia_minima': round(row[6], 2),
+                        'acuracia_maxima': round(row[7], 2),
+                        'primeira_analise': row[8],
+                        'ultima_analise': row[9]
                     })
                 
                 return result
         except Exception as e:
             print(f"Erro ao obter histórico de acurácia: {e}")
             return []
-    
+
+    def get_historico_acuracia_prompt_multi(
+        self, prompt_ids: List[str]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Histórico de acurácia para vários prompts (uma consulta por id; uso em batch HTTP)."""
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        seen = set()
+        for pid in prompt_ids:
+            if not pid or pid in seen:
+                continue
+            seen.add(pid)
+            out[pid] = self.get_historico_acuracia_prompt(pid)
+        return out
+
     def get_acuracia_por_condicoes(self, prompt_id: str, numero_intimacoes: int, temperatura: float) -> Dict[str, Any]:
         """Obter acurácia média para condições específicas"""
         try:
@@ -1508,10 +2565,14 @@ class SQLiteService:
                     i.processo,
                     i.orgao_julgador,
                     i.classificacao_manual,
+                    i.classe,
+                    i.defensor,
                     i.informacao_adicional,
                     i.intimado,
                     i.status as status_intimacao,
                     i.destacada,
+                    i.regras_usuario_prioridade_alta,
+                    i.observacoes,
                     -- Estatísticas do prompt para esta intimação específica
                     (SELECT COUNT(*) FROM analises a2 WHERE a2.prompt_id = a.prompt_id AND a2.intimacao_id = a.intimacao_id) as total_testes_intimacao,
                     (SELECT COUNT(*) FROM analises a3 WHERE a3.prompt_id = a.prompt_id AND a3.intimacao_id = a.intimacao_id AND a3.acertou = 1) as acertos_intimacao,
@@ -1732,3 +2793,80 @@ class SQLiteService:
         except Exception as e:
             print(f"Erro ao calcular custo: {e}")
             return 0.0
+
+    def list_prompt_templates(self) -> List[Dict[str, Any]]:
+        """Lista templates para a página Novo prompt (ordem, depois nome)."""
+        with self.get_connection() as conn:
+            _seed_prompt_templates_padrao_sqlite(conn)
+            conn.commit()
+            cur = conn.execute(
+                '''
+                SELECT id, nome, descricao, conteudo, ordem, data_criacao, data_atualizacao
+                FROM prompt_templates
+                ORDER BY ordem ASC, nome COLLATE NOCASE ASC
+                '''
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+    def get_prompt_template(self, template_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cur = conn.execute(
+                '''
+                SELECT id, nome, descricao, conteudo, ordem, data_criacao, data_atualizacao
+                FROM prompt_templates WHERE id = ?
+                ''',
+                (template_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def save_prompt_template(self, data: Dict[str, Any]) -> str:
+        """Cria ou atualiza template. Exige {CONTEXTO} no corpo."""
+        nome = (data.get('nome') or '').strip()
+        conteudo = (data.get('conteudo') or '').strip()
+        if not nome:
+            raise ValueError('Nome do template é obrigatório.')
+        if not conteudo:
+            raise ValueError('Conteúdo do template é obrigatório.')
+        if '{CONTEXTO}' not in conteudo:
+            raise ValueError('O conteúdo deve conter a variável {CONTEXTO}.')
+        descricao = (data.get('descricao') or '').strip() or None
+        try:
+            ordem = int(data.get('ordem', 0))
+        except (TypeError, ValueError):
+            ordem = 0
+        now = datetime.now().isoformat()
+        tid = (data.get('id') or '').strip()
+        with self.get_connection() as conn:
+            if tid:
+                existing = conn.execute(
+                    'SELECT id FROM prompt_templates WHERE id = ?', (tid,)
+                ).fetchone()
+                if not existing:
+                    raise ValueError('Template não encontrado.')
+                conn.execute(
+                    '''
+                    UPDATE prompt_templates
+                    SET nome = ?, descricao = ?, conteudo = ?, ordem = ?, data_atualizacao = ?
+                    WHERE id = ?
+                    ''',
+                    (nome, descricao, conteudo, ordem, now, tid),
+                )
+                conn.commit()
+                return tid
+            new_id = str(uuid.uuid4())
+            conn.execute(
+                '''
+                INSERT INTO prompt_templates (id, nome, descricao, conteudo, ordem, data_criacao, data_atualizacao)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (new_id, nome, descricao, conteudo, ordem, now, now),
+            )
+            conn.commit()
+            return new_id
+
+    def delete_prompt_template(self, template_id: str) -> bool:
+        with self.get_connection() as conn:
+            cur = conn.execute('DELETE FROM prompt_templates WHERE id = ?', (template_id,))
+            conn.commit()
+            return cur.rowcount > 0

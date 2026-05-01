@@ -3,6 +3,13 @@
  * Componente reutilizável para exibir histórico de acurácia de prompts
  */
 
+function _escapeHtmlPopoverAcuracia(s) {
+    if (s == null || s === undefined) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
 class PopoverAcuracia {
     constructor() {
         this.popovers = new Map();
@@ -58,7 +65,7 @@ class PopoverAcuracia {
         popover.innerHTML = `
             <div class="popover-header">
                 <i class="bi bi-graph-up"></i>
-                Histórico de Acurácia
+                Histórico de acurácia por condições
             </div>
             <div class="popover-body">
                 <div class="text-center py-3">
@@ -168,23 +175,49 @@ class PopoverAcuracia {
         const popover = this.popovers.get(promptId);
         if (!popover) return;
 
-        let html = '';
-        historico.forEach((item, index) => {
+        let rows = '';
+        historico.forEach((item) => {
             const badgeClass = this._getBadgeClass(item.acuracia_media);
-            const dataFormatada = this._formatarData(item.ultima_analise);
-            
-            html += `
-                <div class="popover-item">
-                    <div>
-                        <span class="badge ${badgeClass}">${item.acuracia_media}%</span>
-                        <span class="info ms-2">${item.numero_intimacoes} int. • Temp: ${item.temperatura}</span>
-                    </div>
-                    <div class="info">
-                        ${dataFormatada}
-                    </div>
-                </div>
+            const dataUltima = this._formatarData(item.ultima_analise);
+            const modelo = item.modelo != null && String(item.modelo).trim() !== ''
+                ? String(item.modelo).trim()
+                : 'N/D';
+            const nAnalises = item.total_analises != null ? item.total_analises : 0;
+            rows += `
+                <tr>
+                    <td class="text-center"><span class="badge bg-info">${item.numero_intimacoes}</span></td>
+                    <td><small class="text-muted">${_escapeHtmlPopoverAcuracia(modelo)}</small></td>
+                    <td class="text-center"><span class="badge bg-secondary">${item.temperatura}</span></td>
+                    <td class="text-center"><small class="text-muted">${nAnalises}</small></td>
+                    <td class="text-center"><span class="badge ${badgeClass}">${item.acuracia_media}%</span></td>
+                    <td class="text-center"><small class="text-muted">${item.acuracia_minima}% – ${item.acuracia_maxima}%</small></td>
+                    <td class="text-center"><small class="text-muted">${_escapeHtmlPopoverAcuracia(dataUltima)}</small></td>
+                </tr>
             `;
         });
+
+        const html = `
+            <div class="table-responsive popover-acuracia-table-wrap">
+                <table class="table table-sm table-bordered align-middle mb-0 popover-acuracia-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center small">Int.</th>
+                            <th class="small">Modelo</th>
+                            <th class="text-center small">Temp.</th>
+                            <th class="text-center small">Qtd.</th>
+                            <th class="text-center small">Acurácia</th>
+                            <th class="text-center small">Mín/Máx</th>
+                            <th class="text-center small">Última</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <div class="mt-2 small text-muted px-1">
+                <i class="bi bi-info-circle"></i>
+                Mesmas condições da página do prompt: intimações, modelo, temperatura e agregados por recorte.
+            </div>
+        `;
 
         const popoverBody = popover.querySelector('.popover-body');
         popoverBody.innerHTML = html;
@@ -313,10 +346,10 @@ class PopoverAcuracia {
 window.popoverAcuracia = new PopoverAcuracia();
 
 // Funções globais para compatibilidade
-window.mostrarPopoverAcuracia = function(promptId) {
-    const triggerElement = document.getElementById(`acuracia-${promptId}`);
-    if (triggerElement) {
-        window.popoverAcuracia.mostrar(promptId, triggerElement);
+window.mostrarPopoverAcuracia = function(promptId, triggerElement) {
+    const el = triggerElement || document.getElementById(`acuracia-${promptId}`);
+    if (el) {
+        window.popoverAcuracia.mostrar(promptId, el);
     }
 };
 

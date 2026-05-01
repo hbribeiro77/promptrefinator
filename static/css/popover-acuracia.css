@@ -11,8 +11,8 @@
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     padding: 12px;
-    z-index: 1000;
-    max-width: 400px;
+    z-index: 1080;
+    max-width: 560px;
     font-size: 0.875rem;
     display: none;
     animation: fadeIn 0.2s ease-in-out;
@@ -74,8 +74,22 @@
 
 /* Corpo do popover */
 .popover-acuracia .popover-body {
-    max-height: 300px;
+    max-height: 360px;
     overflow-y: auto;
+}
+
+.popover-acuracia-table-wrap {
+    margin: 0 -2px;
+}
+
+.popover-acuracia-table {
+    font-size: 0.78rem;
+}
+
+.popover-acuracia-table th,
+.popover-acuracia-table td {
+    padding: 0.35rem 0.4rem;
+    vertical-align: middle;
 }
 
 /* Item do histórico */

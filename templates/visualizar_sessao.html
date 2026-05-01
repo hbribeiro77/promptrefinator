@@ -144,6 +144,171 @@
         </div>
     </div>
 
+    <!-- Acurácia por categoria -->
+    <div class="card mb-4" id="card-acuracia-por-categoria">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-pie-chart"></i>
+                Acurácia por categoria
+            </h5>
+            <small class="text-muted">
+                {% if acuracia_por_categoria.vista == 'focado' %}
+                Modo focado: faixas <strong>{{ acuracia_por_categoria.tipo_alvo_focado }}</strong> e <strong>INDETERMINADO</strong>
+                {% else %}
+                Agrupado pela classificação manual; mesma regra de acerto desta sessão
+                {% endif %}
+            </small>
+        </div>
+        <div class="card-body">
+            {% if analises|length == 0 %}
+            <p class="text-muted mb-0">Nenhuma análise nesta sessão.</p>
+            {% elif acuracia_por_categoria.linhas %}
+            <p class="small text-muted mb-3">
+                {% if acuracia_por_categoria.vista == 'focado' %}
+                Duas faixas conforme a regra focada: primeiro o tipo alvo (manual = alvo), depois os demais manuais (esperado INDETERMINADO da IA).
+                {% else %}
+                Ordenado da menor para a maior taxa (categorias em que a IA mais errou aparecem primeiro).
+                {% endif %}
+                <span class="badge bg-light text-dark border">n &lt; 5</span> indica amostra pequena — a porcentagem pode oscilar muito.
+                Em cada linha, use <strong>Detalhe por classe e defensor</strong> (iniciado fechado) para ver acertos e erros por <strong>classe processual</strong> e por <strong>defensor</strong> (ou intimado, se defensor vazio).
+                {% if acuracia_por_categoria.sem_avaliacao %}
+                {{ acuracia_por_categoria.sem_avaliacao }} análise(s) sem campo de acerto avaliado (fora deste quadro).
+                {% endif %}
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>{% if acuracia_por_categoria.vista == 'focado' %}Cenário{% else %}Classificação manual{% endif %}</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Acertos</th>
+                            <th class="text-end">Erros</th>
+                            <th class="text-end">Taxa</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in acuracia_por_categoria.linhas %}
+                        <tr class="{% if row.amostra_pequena %}table-warning{% endif %}">
+                            <td>
+                                <span class="badge {% if acuracia_por_categoria.vista == 'focado' and row.categoria == 'INDETERMINADO' %}bg-info{% else %}bg-secondary{% endif %}">{{ row.categoria }}</span>
+                                {% if row.amostra_pequena %}
+                                <span class="badge bg-light text-dark border ms-1" title="Poucos casos nesta categoria">n &lt; 5</span>
+                                {% endif %}
+                                {% if row.subtitulo %}
+                                <small class="text-muted d-block mt-1">{{ row.subtitulo }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">{{ row.total }}</td>
+                            <td class="text-end text-success">{{ row.acertos }}</td>
+                            <td class="text-end text-danger">{{ row.erros }}</td>
+                            <td class="text-end fw-semibold">
+                                {{ row.taxa_pct }}%
+                                <div class="progress mt-1" style="height: 6px; max-width: 120px; margin-left: auto;">
+                                    <div class="progress-bar bg-success" role="progressbar"
+                                         style="width: {{ row.taxa_pct }}%;"
+                                         aria-valuenow="{{ row.taxa_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% if row.total > 0 %}
+                        <tr class="border-0">
+                            <td colspan="5" class="bg-light border-0 py-2 small">
+                                <button class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 btn-acuracia-detalhe-collapse"
+                                        type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#detalhe-acuracia-cat-{{ loop.index }}"
+                                        aria-expanded="false"
+                                        aria-controls="detalhe-acuracia-cat-{{ loop.index }}">
+                                    <i class="bi bi-chevron-down icone-acuracia-detalhe-collapse" aria-hidden="true"></i>
+                                    Detalhe por classe e defensor
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="border-0">
+                            <td colspan="5" class="border-0 p-0">
+                                <div class="collapse" id="detalhe-acuracia-cat-{{ loop.index }}">
+                                    <div class="bg-light px-3 pb-3 pt-0 small border-bottom">
+                                        <div class="row g-3">
+                                            <div class="col-lg-6">
+                                                <div class="fw-semibold text-muted mb-1">
+                                                    <i class="bi bi-folder2-open"></i> Acertos e erros por classe processual
+                                                </div>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered mb-0 bg-white">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Classe</th>
+                                                                <th class="text-end">Total</th>
+                                                                <th class="text-end text-success">Acertos</th>
+                                                                <th class="text-end text-danger">Erros</th>
+                                                                <th class="text-end">Taxa</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for br in row.por_classe %}
+                                                            <tr>
+                                                                <td>{{ br.label }}</td>
+                                                                <td class="text-end">{{ br.total }}</td>
+                                                                <td class="text-end text-success">{{ br.acertos }}</td>
+                                                                <td class="text-end text-danger">{{ br.erros }}</td>
+                                                                <td class="text-end">{{ br.taxa_pct }}%</td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-6">
+                                                <div class="fw-semibold text-muted mb-1">
+                                                    <i class="bi bi-person-badge"></i> Acertos e erros por defensor / intimado
+                                                </div>
+                                                <div class="table-responsive">
+                                                    <table class="table table-sm table-bordered mb-0 bg-white">
+                                                        <thead class="table-light">
+                                                            <tr>
+                                                                <th>Defensor / intimado</th>
+                                                                <th class="text-end">Total</th>
+                                                                <th class="text-end text-success">Acertos</th>
+                                                                <th class="text-end text-danger">Erros</th>
+                                                                <th class="text-end">Taxa</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for br in row.por_defensor %}
+                                                            <tr>
+                                                                <td>{{ br.label }}</td>
+                                                                <td class="text-end">{{ br.total }}</td>
+                                                                <td class="text-end text-success">{{ br.acertos }}</td>
+                                                                <td class="text-end text-danger">{{ br.erros }}</td>
+                                                                <td class="text-end">{{ br.taxa_pct }}%</td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p class="text-muted mb-0 mt-2" style="font-size: 0.8rem;">
+                                            Quando o campo defensor estiver vazio, usa-se o intimado para agrupar.
+                                        </p>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">
+                Não há linhas com acerto avaliado para montar o quadro por categoria
+                (por exemplo, acurácia desligada na execução ou dados antigos).
+            </p>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Regra de Negócio (colapsável, fechado por padrão) -->
     {% if sessao.configuracoes_parsed and sessao.configuracoes_parsed.regra_negocio %}
     <div class="card mb-4">
@@ -434,7 +599,9 @@
                                     'prazo': analise.prazo or 'N/A',
                                     'intimado': analise.intimado or 'N/A',
                                     'disponibilizacao': analise.disponibilizacao or analise.data_analise_formatada or 'N/A',
-                                    'destacada': analise.destacada or false
+                                    'destacada': analise.destacada or false,
+                                    'regras_usuario_prioridade_alta': analise.regras_usuario_prioridade_alta | default('', true),
+                                    'observacoes': analise.observacoes | default('', true)
                                 } %}
                                 {% include 'partials/card_intimacao_compact.html' %}
                             </td>
@@ -631,6 +798,14 @@ button[data-bs-target="#collapseRegraNegocioSessao"] .collapse-regra-chevron {
     transition: transform 0.2s ease;
 }
 button[data-bs-target="#collapseRegraNegocioSessao"]:not(.collapsed) .collapse-regra-chevron {
+    transform: rotate(180deg);
+}
+
+/* Detalhe acurácia por classe/defensor (collapse) */
+button.btn-acuracia-detalhe-collapse .icone-acuracia-detalhe-collapse {
+    transition: transform 0.2s ease;
+}
+button.btn-acuracia-detalhe-collapse[aria-expanded="true"] .icone-acuracia-detalhe-collapse {
     transform: rotate(180deg);
 }
 </style>

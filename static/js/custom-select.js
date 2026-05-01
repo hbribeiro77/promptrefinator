@@ -104,44 +104,72 @@ class CustomSelect {
         }
         
         const badgeElements = this.dropdown.querySelectorAll('.custom-select-option-badge[data-prompt-id]');
-        
-        badgeElements.forEach(badge => {
-            const promptId = badge.dataset.promptId;
-            if (!promptId) return;
-            
-            fetch(`/api/prompts/${promptId}/historico-acuracia`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log(`🔍 Dados recebidos para prompt ${promptId}:`, data);
-                    if (data.success && data.historico && data.historico.length > 0) {
-                        const acuracia = data.historico[0].acuracia_media;
-                        console.log(`🎯 Acuracia para prompt ${promptId}: ${acuracia}`);
-                        console.log(`🎨 ConfigCoresManager disponível:`, !!window.configCoresManager);
-                        console.log(`🎨 Config carregada:`, window.configCoresManager?.loaded);
-                        console.log(`🎨 Config atual:`, window.configCoresManager?.config);
-                        
-                        if (window.configCoresManager) {
-                            const badgeClass = window.configCoresManager.determinarClasseBadge(acuracia);
-                            console.log(`🎨 Badge class determinada: ${badgeClass}`);
-                            badge.className = `custom-select-option-badge ${badgeClass}`;
-                            badge.textContent = `${acuracia}%`;
-                        } else {
-                            console.warn(`⚠️ ConfigCoresManager não disponível para prompt ${promptId}`);
-                            badge.className = 'custom-select-option-badge badge bg-secondary';
-                            badge.textContent = `${acuracia}%`;
-                        }
-                    } else {
-                        console.log(`❌ Sem histórico para prompt ${promptId}`);
-                        badge.className = 'custom-select-option-badge badge bg-secondary';
-                        badge.textContent = 'N/A';
-                    }
-                })
-                .catch(error => {
-                    console.error(`Erro ao carregar acurácia do prompt ${promptId}:`, error);
-                    badge.className = 'custom-select-option-badge badge-secondary';
-                    badge.textContent = 'N/A';
-                });
-        });
+        const promptIds = Array.from(badgeElements)
+            .map(b => b.dataset.promptId)
+            .filter(Boolean);
+        if (!promptIds.length) {
+            return;
+        }
+
+        const bindPopoverHover = (badge, promptId) => {
+            if (badge.dataset.historicoPopoverBound === '1') return;
+            badge.dataset.historicoPopoverBound = '1';
+            badge.style.cursor = 'help';
+            badge.title = 'Ver histórico de acurácia por condições';
+            badge.addEventListener('mouseenter', (ev) => {
+                ev.stopPropagation();
+                if (typeof window.mostrarPopoverAcuracia === 'function') {
+                    window.mostrarPopoverAcuracia(promptId, badge);
+                }
+            });
+            badge.addEventListener('mouseleave', () => {
+                if (typeof window.esconderPopoverAcuracia === 'function') {
+                    window.esconderPopoverAcuracia(promptId);
+                }
+            });
+        };
+
+        const aplicarBadge = (badge, promptId, historico) => {
+            if (historico && historico.length > 0) {
+                const acuracia = historico[0].acuracia_media;
+                if (window.configCoresManager) {
+                    const badgeClass = window.configCoresManager.determinarClasseBadge(acuracia);
+                    badge.className = `custom-select-option-badge ${badgeClass}`;
+                    badge.textContent = `${acuracia}%`;
+                } else {
+                    badge.className = 'custom-select-option-badge badge bg-secondary';
+                    badge.textContent = `${acuracia}%`;
+                }
+            } else {
+                badge.className = 'custom-select-option-badge badge bg-secondary';
+                badge.textContent = 'N/A';
+            }
+            bindPopoverHover(badge, promptId);
+        };
+
+        try {
+            const response = await fetch('/api/prompts/historico-acuracia-batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt_ids: promptIds }),
+            });
+            const data = await response.json();
+            const porPrompt = (data.success && data.por_prompt) ? data.por_prompt : {};
+            badgeElements.forEach(badge => {
+                const promptId = badge.dataset.promptId;
+                if (!promptId) return;
+                aplicarBadge(badge, promptId, porPrompt[promptId] || []);
+            });
+        } catch (error) {
+            console.error('Erro ao carregar acurácia dos prompts (batch):', error);
+            badgeElements.forEach(badge => {
+                const promptId = badge.dataset.promptId;
+                if (!promptId) return;
+                badge.className = 'custom-select-option-badge badge-secondary';
+                badge.textContent = 'N/A';
+                bindPopoverHover(badge, promptId);
+            });
+        }
     }
     
     addEventListeners() {

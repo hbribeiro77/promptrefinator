@@ -178,12 +178,12 @@
     </div>
 </div>
 
-<!-- Estatísticas rápidas -->
+<!-- Estatísticas rápidas (totais com os mesmos filtros da listagem; não apenas a página atual) -->
 <div class="row mb-4">
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-primary">{{ intimacoes | length }}</h5>
+                <h5 class="card-title text-primary">{{ total_itens }}</h5>
                 <p class="card-text">Total de Intimações</p>
             </div>
         </div>
@@ -191,7 +191,7 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-success">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'ELABORAR PEÇA') | list | length }}</h5>
+                <h5 class="card-title text-success">{{ stats.count_elaborar_peca | default(0) }}</h5>
                 <p class="card-text">Elaborar Peça</p>
             </div>
         </div>
@@ -199,7 +199,7 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-warning">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'URGÊNCIA') | list | length }}</h5>
+                <h5 class="card-title text-warning">{{ stats.count_urgencia | default(0) }}</h5>
                 <p class="card-text">Urgência</p>
             </div>
         </div>
@@ -207,7 +207,7 @@
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
-                <h5 class="card-title text-info">{{ intimacoes | selectattr('classificacao_manual', 'equalto', 'ANALISAR PROCESSO') | list | length }}</h5>
+                <h5 class="card-title text-info">{{ stats.count_analisar_processo | default(0) }}</h5>
                 <p class="card-text">Analisar Processo</p>
             </div>
         </div>

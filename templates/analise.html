@@ -3,6 +3,9 @@
 {% block title %}Análise de Prompts - Sistema Analisador de Prompts{% endblock %}
 
 {% block extra_head %}
+<script>
+window.__servidorAplicouDeepLinkIntimacao = {{ servidor_aplicou_deep_link_intimacao | default(false) | tojson }};
+</script>
 <!-- Marked.js será carregado no final da página -->
 <!-- Taxa de Acerto CSS -->
 <link href="{{ url_for('static', filename='css/taxa-acerto.css') }}" rel="stylesheet">
@@ -317,12 +320,17 @@
                                     <span class="input-group-text py-0 px-2"><i class="bi bi-search"></i></span>
                                     <input type="search" class="form-control" id="filtro-texto-intimacoes"
                                            placeholder="ID, processo…"
+                                           value="{{ filtro_texto_intimacoes_inicial | default('', true) }}"
                                            autocomplete="off" aria-label="Filtrar intimações na tabela">
                                     <button type="button" class="btn btn-outline-secondary btn-sm px-2" id="btn-limpar-filtro-texto-intimacoes" title="Limpar filtro de texto"><i class="bi bi-x-lg"></i></button>
                                 </div>
                                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparSelecaoIntimacoes()">
                                         <i class="bi bi-x-circle"></i>
                                     Limpar
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="selecionarTodasIntimacoesFiltradas()" title="Marca todas as intimações que passam pelo filtro atual (todas as páginas da tabela)">
+                                        <i class="bi bi-check2-all"></i>
+                                        Todas (filtradas)
                                     </button>
                                     <button type="button" class="btn btn-outline-warning btn-sm" onclick="destacarIntimacoesLote()" id="btn-destacar-lote">
                                         <i class="bi bi-star"></i>
@@ -370,12 +378,14 @@
                                             </tr>
                                         </thead>
                                         <tbody>
+                                            {% set _dl_ids = deep_link_intimacao_ids | default([], true) %}
                                             {% for intimacao in intimacoes %}
-                                            <tr class="intimacao-row" data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-area-id="{{ intimacao.area_id or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}" data-regras-usuario="{{ '1' if (intimacao.regras_usuario_prioridade_alta | default('', true) | trim) else '0' }}">
+                                            <tr class="intimacao-row" {% if _dl_ids and intimacao.id not in _dl_ids %}style="display:none"{% endif %} data-intimacao-id="{{ intimacao.id }}" data-defensor="{{ intimacao.defensor or '' }}" data-classe="{{ intimacao.classe or '' }}" data-area-id="{{ intimacao.area_id or '' }}" data-smart-context="{{ '1' if intimacao.smart_context else '0' }}" data-regras-usuario="{{ '1' if (intimacao.regras_usuario_prioridade_alta | default('', true) | trim) else '0' }}" data-observacoes="{{ '1' if (intimacao.observacoes | default('', true) | trim) else '0' }}" data-data-criacao-iso="{{ intimacao.data_criacao or '' }}">
                                                 <td>
                                                     <input type="checkbox" class="intimacao-checkbox" 
                                                            value="{{ intimacao.id }}" 
                                                            data-classificacao="{{ intimacao.classificacao_manual or '' }}"
+                                                           {% if _dl_ids and intimacao.id in _dl_ids %}checked{% endif %}
                                                            onchange="updateIntimacoesSelection()">
                                                 </td>
                                                 <td class="col-checkbox card-cell">
@@ -420,6 +430,7 @@
                                                         'OCULTAR': 'dark',
                                                         'ENCAMINHAR INTIMAÇÃO PARA OUTRO DEFENSOR': 'primary',
                                                         'AGENDAR RETORNO': 'info',
+                                                        'DEVOLVER À INSTITUCIONAL': 'info',
                                                         'INDETERMINADO': 'light'
                                                     } %}
                                                     {% if intimacao.classificacao_manual %}
@@ -460,8 +471,7 @@
                                                     <div class="btn-group btn-group-sm" role="group">
                                                         <button type="button" class="btn btn-outline-primary btn-sm" 
                                                                 data-intimacao-id="{{ intimacao.id }}" 
-                                                                data-contexto="{{ intimacao.contexto|replace('`', '\\`')|replace('\n', '\\n')|replace('\r', '') }}"
-                                                                onclick="visualizarContexto(this.dataset.intimacaoId, this.dataset.contexto)"
+                                                                onclick="visualizarContexto(this.dataset.intimacaoId)"
                                                                 title="Visualizar Contexto">
                                                             <i class="bi bi-eye"></i>
                                                         </button>
@@ -736,188 +746,314 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <p class="text-muted small mb-3">As seções começam recolhidas; clique no título para expandir e ajustar cada critério.</p>
                 <!-- Filtro por Defensor -->
-                <div class="mb-4">
-                    <label class="form-label">
-                        <i class="bi bi-person-badge text-primary"></i>
-                        <strong>Defensor:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todos-defensores" checked>
-                        <label class="form-check-label" for="filtro-todos-defensores">
-                            <strong>Todos os defensores</strong>
-                        </label>
-                    </div>
-                    <hr>
-                    <div id="filtros-defensores">
-                        <div class="text-center py-3">
-                            <i class="bi bi-hourglass-split"></i>
-                            Carregando defensores...
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-defensor" aria-expanded="false" aria-controls="filtro-collapse-defensor">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-person-badge text-primary"></i>
+                            <strong>Defensor</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-defensor" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todos-defensores" checked>
+                                <label class="form-check-label" for="filtro-todos-defensores">
+                                    <strong>Todos os defensores</strong>
+                                </label>
+                            </div>
+                            <hr>
+                            <div id="filtros-defensores">
+                                <div class="text-center py-3">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    Carregando defensores...
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
                 <!-- Filtro por Classificação -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-tags text-success"></i>
-                        <strong>Classificação:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas-classificacoes" checked>
-                        <label class="form-check-label" for="filtro-todas-classificacoes">
-                            <strong>Todas as classificações</strong>
-                        </label>
-                    </div>
-                    <hr>
-                    <div id="filtros-classificacoes">
-                        <div class="text-center py-3">
-                            <i class="bi bi-hourglass-split"></i>
-                            Carregando classificações...
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-classificacao" aria-expanded="false" aria-controls="filtro-collapse-classificacao">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-tags text-success"></i>
+                            <strong>Classificação</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-classificacao" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-classificacoes" checked>
+                                <label class="form-check-label" for="filtro-todas-classificacoes">
+                                    <strong>Todas as classificações</strong>
+                                </label>
+                            </div>
+                            <hr>
+                            <div id="filtros-classificacoes">
+                                <div class="text-center py-3">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    Carregando classificações...
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
                 <!-- Filtro por Classe -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-book text-warning"></i>
-                        <strong>Classe:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas-classes" checked>
-                        <label class="form-check-label" for="filtro-todas-classes">
-                            <strong>Todas as classes</strong>
-                        </label>
-                    </div>
-                    <hr>
-                    <div id="filtros-classes">
-                        <div class="text-center py-3">
-                            <i class="bi bi-hourglass-split"></i>
-                            Carregando classes...
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-classe" aria-expanded="false" aria-controls="filtro-collapse-classe">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-book text-warning"></i>
+                            <strong>Classe</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-classe" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-classes" checked>
+                                <label class="form-check-label" for="filtro-todas-classes">
+                                    <strong>Todas as classes</strong>
+                                </label>
+                            </div>
+                            <hr>
+                            <div id="filtros-classes">
+                                <div class="text-center py-3">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    Carregando classes...
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Filtro por Área (derivada da classe; mapeamento em Configurações) -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-diagram-3 text-info"></i>
-                        <strong>Área:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas-areas" checked>
-                        <label class="form-check-label" for="filtro-todas-areas">
-                            <strong>Todas as áreas</strong>
-                        </label>
-                    </div>
-                    <hr>
-                    <div id="filtros-areas">
-                        <div class="text-center py-3">
-                            <i class="bi bi-hourglass-split"></i>
-                            Carregando áreas...
+                <!-- Filtro por Área -->
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-area" aria-expanded="false" aria-controls="filtro-collapse-area">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-diagram-3 text-info"></i>
+                            <strong>Área</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-area" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-areas" checked>
+                                <label class="form-check-label" for="filtro-todas-areas">
+                                    <strong>Todas as áreas</strong>
+                                </label>
+                            </div>
+                            <hr>
+                            <div id="filtros-areas">
+                                <div class="text-center py-3">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    Carregando áreas...
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
                 <!-- Filtro por Smart Context -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-lightning-charge text-primary"></i>
-                        <strong>Smart Context:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todos-smart-context" checked>
-                        <label class="form-check-label" for="filtro-todos-smart-context">
-                            <strong>Todas as intimações</strong>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-apenas-smart-context">
-                        <label class="form-check-label" for="filtro-apenas-smart-context">
-                            <i class="bi bi-check-circle text-success"></i>
-                            <strong>Apenas com Smart Context</strong>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-sem-smart-context">
-                        <label class="form-check-label" for="filtro-sem-smart-context">
-                            <i class="bi bi-x-circle text-secondary"></i>
-                            <strong>Apenas sem Smart Context</strong>
-                        </label>
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-smart-context" aria-expanded="false" aria-controls="filtro-collapse-smart-context">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-lightning-charge text-primary"></i>
+                            <strong>Smart Context</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-smart-context" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todos-smart-context" checked>
+                                <label class="form-check-label" for="filtro-todos-smart-context">
+                                    <strong>Todas as intimações</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-smart-context">
+                                <label class="form-check-label" for="filtro-apenas-smart-context">
+                                    <i class="bi bi-check-circle text-success"></i>
+                                    <strong>Apenas com Smart Context</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-sem-smart-context">
+                                <label class="form-check-label" for="filtro-sem-smart-context">
+                                    <i class="bi bi-x-circle text-secondary"></i>
+                                    <strong>Apenas sem Smart Context</strong>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Filtro por Regras do Usuário (PRIORIDADE ALTA) -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-shield-exclamation text-warning"></i>
-                        <strong>Regras do usuário (PRIORIDADE ALTA):</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas-regras-usuario" checked>
-                        <label class="form-check-label" for="filtro-todas-regras-usuario">
-                            <strong>Todas as intimações</strong>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-apenas-com-regras-usuario">
-                        <label class="form-check-label" for="filtro-apenas-com-regras-usuario">
+                <!-- Filtro por Regras do Usuário -->
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-regras-usuario" aria-expanded="false" aria-controls="filtro-collapse-regras-usuario">
+                        <span class="d-flex align-items-center gap-2">
                             <i class="bi bi-shield-exclamation text-warning"></i>
-                            <strong>Apenas com regras do usuário</strong>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-apenas-sem-regras-usuario">
-                        <label class="form-check-label" for="filtro-apenas-sem-regras-usuario">
-                            <i class="bi bi-shield text-secondary"></i>
-                            <strong>Apenas sem regras do usuário</strong>
-                        </label>
+                            <strong>Regras do usuário (prioridade alta)</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-regras-usuario" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-regras-usuario" checked>
+                                <label class="form-check-label" for="filtro-todas-regras-usuario">
+                                    <strong>Todas as intimações</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-com-regras-usuario">
+                                <label class="form-check-label" for="filtro-apenas-com-regras-usuario">
+                                    <i class="bi bi-shield-exclamation text-warning"></i>
+                                    <strong>Apenas com regras do usuário</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-sem-regras-usuario">
+                                <label class="form-check-label" for="filtro-apenas-sem-regras-usuario">
+                                    <i class="bi bi-shield text-secondary"></i>
+                                    <strong>Apenas sem regras do usuário</strong>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
+                <!-- Filtro por Observações -->
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-observacoes" aria-expanded="false" aria-controls="filtro-collapse-observacoes">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-journal-text text-secondary"></i>
+                            <strong>Observações</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-observacoes" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-observacoes" checked>
+                                <label class="form-check-label" for="filtro-todas-observacoes">
+                                    <strong>Todas as intimações</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-com-observacoes">
+                                <label class="form-check-label" for="filtro-apenas-com-observacoes">
+                                    <i class="bi bi-journal-text text-primary"></i>
+                                    <strong>Apenas com observação</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-sem-observacoes">
+                                <label class="form-check-label" for="filtro-apenas-sem-observacoes">
+                                    <i class="bi bi-x-circle text-secondary"></i>
+                                    <strong>Apenas sem observação</strong>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <!-- Filtro por Destaque -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-star text-warning"></i>
-                        <strong>Destaque:</strong>
-                    </label>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-todas-intimacoes" checked>
-                        <label class="form-check-label" for="filtro-todas-intimacoes">
-                            <strong>Todas as intimações</strong>
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="filtro-apenas-destacadas">
-                        <label class="form-check-label" for="filtro-apenas-destacadas">
-                            <i class="bi bi-star-fill text-warning"></i>
-                            <strong>Apenas destacadas</strong>
-                        </label>
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-destaque" aria-expanded="false" aria-controls="filtro-collapse-destaque">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-star text-warning"></i>
+                            <strong>Destaque</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-destaque" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-todas-intimacoes" checked>
+                                <label class="form-check-label" for="filtro-todas-intimacoes">
+                                    <strong>Todas as intimações</strong>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="filtro-apenas-destacadas">
+                                <label class="form-check-label" for="filtro-apenas-destacadas">
+                                    <i class="bi bi-star-fill text-warning"></i>
+                                    <strong>Apenas destacadas</strong>
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                
                 <!-- Filtro por Taxa de Acerto -->
-                <div class="mb-3">
-                    <label class="form-label">
-                        <i class="bi bi-graph-up text-primary"></i>
-                        <strong>Taxa de Acerto:</strong>
-                        </label>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label for="taxa-minima" class="form-label">Mínima (%)</label>
-                            <input type="number" class="form-control" id="taxa-minima" min="0" max="100" placeholder="0">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="taxa-maxima" class="form-label">Máxima (%)</label>
-                            <input type="number" class="form-control" id="taxa-maxima" min="0" max="100" placeholder="100">
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-taxa" aria-expanded="false" aria-controls="filtro-collapse-taxa">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-graph-up text-primary"></i>
+                            <strong>Taxa de acerto</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-taxa" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="taxa-minima" class="form-label">Mínima (%)</label>
+                                    <input type="number" class="form-control" id="taxa-minima" min="0" max="100" placeholder="0">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="taxa-maxima" class="form-label">Máxima (%)</label>
+                                    <input type="number" class="form-control" id="taxa-maxima" min="0" max="100" placeholder="100">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltroTaxa()">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    Limpar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div class="mt-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltroTaxa()">
-                            <i class="bi bi-arrow-clockwise"></i>
-                            Limpar
-                        </button>
+                </div>
+                <!-- Filtro por Data de Criação -->
+                <div class="filtro-modal-secao card border shadow-none mb-2">
+                    <button class="btn btn-light w-100 text-start py-2 px-3 d-flex align-items-center justify-content-between collapsed filtro-modal-secao-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filtro-collapse-data-criacao" aria-expanded="false" aria-controls="filtro-collapse-data-criacao">
+                        <span class="d-flex align-items-center gap-2">
+                            <i class="bi bi-calendar-range text-secondary"></i>
+                            <strong>Data de criação</strong>
+                        </span>
+                        <i class="bi bi-chevron-down small filtro-modal-secao-chevron" aria-hidden="true"></i>
+                    </button>
+                    <div id="filtro-collapse-data-criacao" class="collapse">
+                        <div class="card-body border-top pt-3 pb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="filtro-data-criacao-inicio" class="form-label">Data inicial</label>
+                                    <input type="date" class="form-control" id="filtro-data-criacao-inicio">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="filtro-data-criacao-fim" class="form-label">Data final</label>
+                                    <input type="date" class="form-control" id="filtro-data-criacao-fim">
+                                </div>
+                            </div>
+                            <div class="small text-muted mt-2 mb-1">Atalhos</div>
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="atalhoFiltroDataCriacao('hoje')" title="Somente registros criados hoje">
+                                    Hoje
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="atalhoFiltroDataCriacao('7d')" title="Dos últimos 7 dias até hoje (inclusive)">
+                                    Últimos 7 dias
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="atalhoFiltroDataCriacao('mes')" title="Do dia 1 do mês atual até hoje">
+                                    Este mês
+                                </button>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limparFiltroDataCriacao()">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    Limpar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1230,6 +1366,14 @@
 
     .intimacao-row:hover {
         background-color: #f8f9fa;
+    }
+
+    /* Modal Filtrar: seções colapsáveis */
+    #modalFiltro .filtro-modal-secao-btn .filtro-modal-secao-chevron {
+        transition: transform 0.2s ease;
+    }
+    #modalFiltro .filtro-modal-secao-btn:not(.collapsed) .filtro-modal-secao-chevron {
+        transform: rotate(180deg);
     }
     
     /* Garantir que ícones de ordenação fiquem inline */
@@ -1951,20 +2095,6 @@ function toggleSelectAllIntimacoes() {
     updateIntimacoesSelection();
 }
 
-// Função para selecionar todas as intimações
-function selecionarTodasIntimacoes() {
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    checkboxes.forEach(checkbox => checkbox.checked = true);
-    updateIntimacoesSelection();
-}
-
-// Função para limpar seleção de intimações
-function limparSelecaoIntimacoes() {
-    const checkboxes = document.querySelectorAll('.intimacao-checkbox');
-    checkboxes.forEach(checkbox => checkbox.checked = false);
-    updateIntimacoesSelection();
-}
-
 // Função para mostrar loading
 function mostrarLoading() {
     console.log('=== DEBUG: Mostrando loading ===');
@@ -2359,11 +2489,31 @@ function atualizarConfigSummary() {
 
 
 
-// Função para selecionar todas as intimações
+// Função para selecionar todas as intimações (qualquer linha no DOM; uso legado)
 function selecionarTodasIntimacoes() {
     const checkboxes = document.querySelectorAll('.intimacao-checkbox');
     checkboxes.forEach(checkbox => checkbox.checked = true);
     updateIntimacoesSelection();
+}
+
+/** Marca checkboxes de todas as linhas com passouFiltro=1 (filtro modal + busca), em todas as páginas client-side. */
+function selecionarTodasIntimacoesFiltradas() {
+    const rows = document.querySelectorAll('tr.intimacao-row');
+    const filtradas = Array.from(rows).filter(r => r.dataset.passouFiltro === '1');
+    const n = filtradas.length;
+    if (n === 0) {
+        showToast('Nenhuma intimação passa pelo filtro atual.', 'warning');
+        return;
+    }
+    if (n > 200 && !confirm(`Marcar ${n} intimações que passam pelo filtro (todas as páginas)?`)) {
+        return;
+    }
+    filtradas.forEach(row => {
+        const cb = row.querySelector('.intimacao-checkbox');
+        if (cb) cb.checked = true;
+    });
+    updateIntimacoesSelection();
+    showToast(n === 1 ? '1 intimação selecionada.' : n + ' intimações selecionadas.', 'success');
 }
 
 // Função para limpar seleção de intimações
@@ -2475,8 +2625,253 @@ function aplicarConfigColunasIntimacoesSemFecharModal() {
     });
 }
 
+function textoSeguroAttrHtml(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function contarIntimacoesNaTabelaPorTipo(tipo, valor) {
+    const rows = document.querySelectorAll('tr.intimacao-row');
+    let n = 0;
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        let v = '';
+        if (tipo === 'defensor') {
+            v = row.dataset.defensor || '';
+        } else if (tipo === 'classe') {
+            v = row.dataset.classe || '';
+        } else if (tipo === 'area') {
+            v = row.dataset.areaId || '';
+        } else if (tipo === 'classificacao') {
+            const cb = row.querySelector('.intimacao-checkbox');
+            v = cb ? (cb.dataset.classificacao || '') : '';
+        }
+        if (v === valor) {
+            n++;
+        }
+    }
+    return n;
+}
+
+function htmlToolbarOrdenacaoFiltro(selectId) {
+    return (
+        '<div class="d-flex flex-wrap align-items-center gap-2 mb-2">' +
+        '<label class="small text-muted mb-0" for="' + selectId + '">Ordenar</label>' +
+        '<select id="' + selectId + '" class="form-select form-select-sm" style="max-width: 280px" autocomplete="off">' +
+        '<option value="alpha">Alfabética (A–Z)</option>' +
+        '<option value="count_desc">Quantidade (maior primeiro)</option>' +
+        '<option value="count_asc">Quantidade (menor primeiro)</option>' +
+        '</select></div>' +
+        '<div class="filtro-modal-lista-items" id="' + selectId + '-items"></div>'
+    );
+}
+
+function ordenarFormChecksNoContainer(wrap, modo, tipoContagem) {
+    if (!wrap) return;
+    const items = Array.from(wrap.querySelectorAll(':scope > .form-check'));
+    const valorDe = function (el) {
+        const inp = el.querySelector('input[type="checkbox"]');
+        return inp ? inp.value : '';
+    };
+    const countDe = function (el) {
+        return contarIntimacoesNaTabelaPorTipo(tipoContagem, valorDe(el));
+    };
+    items.sort(function (a, b) {
+        const va = valorDe(a);
+        const vb = valorDe(b);
+        if (modo === 'count_desc') {
+            const d = countDe(b) - countDe(a);
+            if (d !== 0) return d;
+        } else if (modo === 'count_asc') {
+            const d = countDe(a) - countDe(b);
+            if (d !== 0) return d;
+        }
+        return va.localeCompare(vb, 'pt-BR', { sensitivity: 'base' });
+    });
+    items.forEach(function (el) {
+        wrap.appendChild(el);
+    });
+}
+
+function ligarOrdenacaoFiltroLista(selectId, tipoContagem) {
+    const sel = document.getElementById(selectId);
+    const wrap = document.getElementById(selectId + '-items');
+    if (!sel || !wrap) return;
+    sel.onchange = function () {
+        ordenarFormChecksNoContainer(wrap, sel.value, tipoContagem);
+    };
+}
+
+function atualizarMasterCheckboxLista(masterId, selectorFilhos) {
+    const master = document.getElementById(masterId);
+    if (!master) return;
+    const total = document.querySelectorAll(selectorFilhos).length;
+    if (total === 0) {
+        master.checked = false;
+        master.indeterminate = false;
+        return;
+    }
+    const marcados = document.querySelectorAll(selectorFilhos + ':checked').length;
+    if (marcados === total) {
+        master.checked = true;
+        master.indeterminate = false;
+    } else if (marcados === 0) {
+        master.checked = false;
+        master.indeterminate = false;
+    } else {
+        master.checked = false;
+        master.indeterminate = true;
+    }
+}
+
+function inicializarListenersFiltroModalEstaticos() {
+    const modal = document.getElementById('modalFiltro');
+    if (!modal || modal.dataset.filtroModalListeners === '1') return;
+    modal.dataset.filtroModalListeners = '1';
+
+    modal.addEventListener('change', function (ev) {
+        const t = ev.target;
+        if (!(t instanceof HTMLInputElement) || t.type !== 'checkbox') return;
+
+        function g(id) {
+            return document.getElementById(id);
+        }
+
+        if (t.id === 'filtro-todos-smart-context') {
+            if (t.checked) {
+                const a = g('filtro-apenas-smart-context');
+                const s = g('filtro-sem-smart-context');
+                if (a) a.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-apenas-smart-context') {
+            if (t.checked) {
+                const o = g('filtro-todos-smart-context');
+                const s = g('filtro-sem-smart-context');
+                if (o) o.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-sem-smart-context') {
+            if (t.checked) {
+                const o = g('filtro-todos-smart-context');
+                const a = g('filtro-apenas-smart-context');
+                if (o) o.checked = false;
+                if (a) a.checked = false;
+            }
+            return;
+        }
+
+        if (t.id === 'filtro-todas-regras-usuario') {
+            if (t.checked) {
+                const a = g('filtro-apenas-com-regras-usuario');
+                const s = g('filtro-apenas-sem-regras-usuario');
+                if (a) a.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-apenas-com-regras-usuario') {
+            if (t.checked) {
+                const o = g('filtro-todas-regras-usuario');
+                const s = g('filtro-apenas-sem-regras-usuario');
+                if (o) o.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-apenas-sem-regras-usuario') {
+            if (t.checked) {
+                const o = g('filtro-todas-regras-usuario');
+                const a = g('filtro-apenas-com-regras-usuario');
+                if (o) o.checked = false;
+                if (a) a.checked = false;
+            }
+            return;
+        }
+
+        if (t.id === 'filtro-todas-observacoes') {
+            if (t.checked) {
+                const a = g('filtro-apenas-com-observacoes');
+                const s = g('filtro-apenas-sem-observacoes');
+                if (a) a.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-apenas-com-observacoes') {
+            if (t.checked) {
+                const o = g('filtro-todas-observacoes');
+                const s = g('filtro-apenas-sem-observacoes');
+                if (o) o.checked = false;
+                if (s) s.checked = false;
+            }
+            return;
+        }
+        if (t.id === 'filtro-apenas-sem-observacoes') {
+            if (t.checked) {
+                const o = g('filtro-todas-observacoes');
+                const a = g('filtro-apenas-com-observacoes');
+                if (o) o.checked = false;
+                if (a) a.checked = false;
+            }
+            return;
+        }
+
+        if (t.id === 'filtro-todos-defensores') {
+            document.querySelectorAll('.filtro-defensor').forEach(function (cb) {
+                cb.checked = t.checked;
+            });
+            return;
+        }
+        if (t.classList.contains('filtro-defensor')) {
+            atualizarMasterCheckboxLista('filtro-todos-defensores', '.filtro-defensor');
+            return;
+        }
+
+        if (t.id === 'filtro-todas-classificacoes') {
+            document.querySelectorAll('.filtro-classificacao').forEach(function (cb) {
+                cb.checked = t.checked;
+            });
+            return;
+        }
+        if (t.classList.contains('filtro-classificacao')) {
+            atualizarMasterCheckboxLista('filtro-todas-classificacoes', '.filtro-classificacao');
+            return;
+        }
+
+        if (t.id === 'filtro-todas-classes') {
+            document.querySelectorAll('.filtro-classe').forEach(function (cb) {
+                cb.checked = t.checked;
+            });
+            return;
+        }
+        if (t.classList.contains('filtro-classe')) {
+            atualizarMasterCheckboxLista('filtro-todas-classes', '.filtro-classe');
+            return;
+        }
+
+        if (t.id === 'filtro-todas-areas') {
+            document.querySelectorAll('.filtro-area').forEach(function (cb) {
+                cb.checked = t.checked;
+            });
+            return;
+        }
+        if (t.classList.contains('filtro-area')) {
+            atualizarMasterCheckboxLista('filtro-todas-areas', '.filtro-area');
+        }
+    });
+}
+
 // Carregar filtros dinamicamente do banco
 function carregarFiltros() {
+    inicializarListenersFiltroModalEstaticos();
     fetch('/api/filtros/analise')
         .then(response => response.json())
         .then(data => {
@@ -2499,93 +2894,57 @@ function carregarFiltros() {
 // Carregar defensores na modal
 function carregarDefensores(defensores) {
     const container = document.getElementById('filtros-defensores');
-    
+    if (!container) return;
+
     if (defensores.length === 0) {
         container.innerHTML = '<div class="text-muted"><em>Nenhum defensor encontrado</em></div>';
         return;
     }
-    
-    container.innerHTML = defensores.map((defensor, index) => `
-        <div class="form-check">
-            <input class="form-check-input filtro-defensor" type="checkbox" id="filtro-defensor-${index}" value="${defensor}" checked>
-            <label class="form-check-label" for="filtro-defensor-${index}">
-                ${defensor}
-            </label>
-        </div>
-    `).join('');
-    
-    // Adicionar event listener para o check "Todos os defensores"
-    const checkTodosDefensores = document.getElementById('filtro-todos-defensores');
-    checkTodosDefensores.addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.filtro-defensor');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
-    
-    // Adicionar event listeners para os checkboxes individuais de defensores
-    const checkboxesDefensores = document.querySelectorAll('.filtro-defensor');
-    checkboxesDefensores.forEach(cb => {
-        cb.addEventListener('change', function() {
-            const todosMarcados = document.querySelectorAll('.filtro-defensor:checked').length === checkboxesDefensores.length;
-            const nenhumMarcado = document.querySelectorAll('.filtro-defensor:checked').length === 0;
-            
-            if (todosMarcados) {
-                checkTodosDefensores.checked = true;
-                checkTodosDefensores.indeterminate = false;
-            } else if (nenhumMarcado) {
-                checkTodosDefensores.checked = false;
-                checkTodosDefensores.indeterminate = false;
-            } else {
-                checkTodosDefensores.checked = false;
-                checkTodosDefensores.indeterminate = true;
-            }
-        });
-    });
+
+    const selectId = 'ordenacao-filtro-defensores';
+    container.innerHTML = htmlToolbarOrdenacaoFiltro(selectId);
+    const itemsWrap = document.getElementById(selectId + '-items');
+    const htmlItems = defensores.map(function (defensor, index) {
+        const vAttr = textoSeguroAttrHtml(defensor);
+        const n = contarIntimacoesNaTabelaPorTipo('defensor', defensor);
+        return (
+            '<div class="form-check">' +
+            '<input class="form-check-input filtro-defensor" type="checkbox" id="filtro-defensor-' + index + '" value="' + vAttr + '" checked>' +
+            '<label class="form-check-label" for="filtro-defensor-' + index + '">' +
+            textoSeguroAttrHtml(defensor) + ' <span class="text-muted">(' + n + ')</span>' +
+            '</label></div>'
+        );
+    }).join('');
+    itemsWrap.innerHTML = htmlItems;
+    ligarOrdenacaoFiltroLista(selectId, 'defensor');
 }
 
 // Carregar classificações na modal
 function carregarClassificacoes(classificacoes) {
     const container = document.getElementById('filtros-classificacoes');
-    
+    if (!container) return;
+
     if (classificacoes.length === 0) {
         container.innerHTML = '<div class="text-muted"><em>Nenhuma classificação encontrada</em></div>';
         return;
     }
-    
-    container.innerHTML = classificacoes.map((classificacao, index) => `
-        <div class="form-check">
-            <input class="form-check-input filtro-classificacao" type="checkbox" id="filtro-classificacao-${index}" value="${classificacao}" checked>
-            <label class="form-check-label" for="filtro-classificacao-${index}">
-                ${classificacao}
-            </label>
-        </div>
-    `).join('');
-    
-    // Adicionar event listener para o check "Todas as classificações"
-    const checkTodasClassificacoes = document.getElementById('filtro-todas-classificacoes');
-    checkTodasClassificacoes.addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.filtro-classificacao');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
-    
-    // Adicionar event listeners para os checkboxes individuais de classificações
-    const checkboxesClassificacoes = document.querySelectorAll('.filtro-classificacao');
-    checkboxesClassificacoes.forEach(cb => {
-        cb.addEventListener('change', function() {
-            const todosMarcados = document.querySelectorAll('.filtro-classificacao:checked').length === checkboxesClassificacoes.length;
-            const nenhumMarcado = document.querySelectorAll('.filtro-classificacao:checked').length === 0;
-            
-            if (todosMarcados) {
-                checkTodasClassificacoes.checked = true;
-                checkTodasClassificacoes.indeterminate = false;
-            } else if (nenhumMarcado) {
-                checkTodasClassificacoes.checked = false;
-                checkTodasClassificacoes.indeterminate = false;
-            } else {
-                checkTodasClassificacoes.checked = false;
-                checkTodasClassificacoes.indeterminate = true;
-            }
-        });
-    });
+
+    const selectId = 'ordenacao-filtro-classificacoes';
+    container.innerHTML = htmlToolbarOrdenacaoFiltro(selectId);
+    const itemsWrap = document.getElementById(selectId + '-items');
+    const htmlItems = classificacoes.map(function (classificacao, index) {
+        const vAttr = textoSeguroAttrHtml(classificacao);
+        const n = contarIntimacoesNaTabelaPorTipo('classificacao', classificacao);
+        return (
+            '<div class="form-check">' +
+            '<input class="form-check-input filtro-classificacao" type="checkbox" id="filtro-classificacao-' + index + '" value="' + vAttr + '" checked>' +
+            '<label class="form-check-label" for="filtro-classificacao-' + index + '">' +
+            textoSeguroAttrHtml(classificacao) + ' <span class="text-muted">(' + n + ')</span>' +
+            '</label></div>'
+        );
+    }).join('');
+    itemsWrap.innerHTML = htmlItems;
+    ligarOrdenacaoFiltroLista(selectId, 'classificacao');
 }
 
 // Carregar áreas na modal (inclui opção "Sem área mapeada" para classes sem mapeamento)
@@ -2593,151 +2952,108 @@ function carregarAreas(areas) {
     const container = document.getElementById('filtros-areas');
     if (!container) return;
     const items = [{ id: '__sem_area__', nome: 'Sem área mapeada' }].concat(
-        (areas || []).map(a => ({ id: a.id, nome: a.nome }))
+        (areas || []).map(function (a) {
+            return { id: a.id, nome: a.nome };
+        })
     );
-    container.innerHTML = items.map((a, index) => `
-        <div class="form-check">
-            <input class="form-check-input filtro-area" type="checkbox" id="filtro-area-${index}" value="${a.id}" checked>
-            <label class="form-check-label" for="filtro-area-${index}">${a.nome}</label>
-        </div>
-    `).join('');
-    const checkTodasAreas = document.getElementById('filtro-todas-areas');
-    if (!checkTodasAreas) return;
-    checkTodasAreas.addEventListener('change', function() {
-        document.querySelectorAll('.filtro-area').forEach(cb => { cb.checked = this.checked; });
-    });
-    const cbs = document.querySelectorAll('.filtro-area');
-    cbs.forEach(cb => {
-        cb.addEventListener('change', function() {
-            const n = cbs.length;
-            const marcados = document.querySelectorAll('.filtro-area:checked').length;
-            if (marcados === n) {
-                checkTodasAreas.checked = true;
-                checkTodasAreas.indeterminate = false;
-            } else if (marcados === 0) {
-                checkTodasAreas.checked = false;
-                checkTodasAreas.indeterminate = false;
-            } else {
-                checkTodasAreas.checked = false;
-                checkTodasAreas.indeterminate = true;
-            }
-        });
-    });
+
+    const selectId = 'ordenacao-filtro-areas';
+    container.innerHTML = htmlToolbarOrdenacaoFiltro(selectId);
+    const itemsWrap = document.getElementById(selectId + '-items');
+    const htmlItems = items.map(function (a, index) {
+        const idAttr = textoSeguroAttrHtml(a.id);
+        const n = contarIntimacoesNaTabelaPorTipo('area', a.id);
+        return (
+            '<div class="form-check">' +
+            '<input class="form-check-input filtro-area" type="checkbox" id="filtro-area-' + index + '" value="' + idAttr + '" checked>' +
+            '<label class="form-check-label" for="filtro-area-' + index + '">' +
+            textoSeguroAttrHtml(a.nome) + ' <span class="text-muted">(' + n + ')</span>' +
+            '</label></div>'
+        );
+    }).join('');
+    itemsWrap.innerHTML = htmlItems;
+    ligarOrdenacaoFiltroLista(selectId, 'area');
 }
 
 // Carregar classes na modal
 function carregarClasses(classes) {
     const container = document.getElementById('filtros-classes');
-    
+    if (!container) return;
+
     if (classes.length === 0) {
         container.innerHTML = '<div class="text-muted"><em>Nenhuma classe encontrada</em></div>';
         return;
     }
-    
-    container.innerHTML = classes.map((classe, index) => `
-        <div class="form-check">
-            <input class="form-check-input filtro-classe" type="checkbox" id="filtro-classe-${index}" value="${classe}" checked>
-            <label class="form-check-label" for="filtro-classe-${index}">
-                ${classe}
-            </label>
-        </div>
-    `).join('');
-    
-    // Adicionar event listeners para Smart Context
-    const checkTodosSmartContext = document.getElementById('filtro-todos-smart-context');
-    const checkApenasSmartContext = document.getElementById('filtro-apenas-smart-context');
-    const checkSemSmartContext = document.getElementById('filtro-sem-smart-context');
-    
-    // Quando "Todas as intimações" é marcado, desmarca os outros
-    if (checkTodosSmartContext) {
-        checkTodosSmartContext.addEventListener('change', function() {
-            if (this.checked) {
-                checkApenasSmartContext.checked = false;
-                checkSemSmartContext.checked = false;
-            }
-        });
-    }
-    
-    // Quando "Apenas com Smart Context" é marcado, desmarca "Todas" e "Sem"
-    if (checkApenasSmartContext) {
-        checkApenasSmartContext.addEventListener('change', function() {
-            if (this.checked) {
-                checkTodosSmartContext.checked = false;
-                checkSemSmartContext.checked = false;
-            }
-        });
-    }
-    
-    // Quando "Apenas sem Smart Context" é marcado, desmarca "Todas" e "Com"
-    if (checkSemSmartContext) {
-        checkSemSmartContext.addEventListener('change', function() {
-            if (this.checked) {
-                checkTodosSmartContext.checked = false;
-                checkApenasSmartContext.checked = false;
-            }
-        });
-    }
-    
-    const checkTodasRegrasUsuario = document.getElementById('filtro-todas-regras-usuario');
-    const checkApenasComRegrasUsuario = document.getElementById('filtro-apenas-com-regras-usuario');
-    const checkApenasSemRegrasUsuario = document.getElementById('filtro-apenas-sem-regras-usuario');
-    if (checkTodasRegrasUsuario) {
-        checkTodasRegrasUsuario.addEventListener('change', function() {
-            if (this.checked) {
-                checkApenasComRegrasUsuario.checked = false;
-                checkApenasSemRegrasUsuario.checked = false;
-            }
-        });
-    }
-    if (checkApenasComRegrasUsuario) {
-        checkApenasComRegrasUsuario.addEventListener('change', function() {
-            if (this.checked) {
-                checkTodasRegrasUsuario.checked = false;
-                checkApenasSemRegrasUsuario.checked = false;
-            }
-        });
-    }
-    if (checkApenasSemRegrasUsuario) {
-        checkApenasSemRegrasUsuario.addEventListener('change', function() {
-            if (this.checked) {
-                checkTodasRegrasUsuario.checked = false;
-                checkApenasComRegrasUsuario.checked = false;
-            }
-        });
-    }
-    
-    // Adicionar event listener para o check "Todas as classes"
-    const checkTodasClasses = document.getElementById('filtro-todas-classes');
-    checkTodasClasses.addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.filtro-classe');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
-    
-    // Adicionar event listeners para os checkboxes individuais de classes
-    const checkboxesClasses = document.querySelectorAll('.filtro-classe');
-    checkboxesClasses.forEach(cb => {
-        cb.addEventListener('change', function() {
-            const todosMarcados = document.querySelectorAll('.filtro-classe:checked').length === checkboxesClasses.length;
-            const nenhumMarcado = document.querySelectorAll('.filtro-classe:checked').length === 0;
-            
-            if (todosMarcados) {
-                checkTodasClasses.checked = true;
-                checkTodasClasses.indeterminate = false;
-            } else if (nenhumMarcado) {
-                checkTodasClasses.checked = false;
-                checkTodasClasses.indeterminate = false;
-            } else {
-                checkTodasClasses.checked = false;
-                checkTodasClasses.indeterminate = true;
-            }
-        });
-    });
+
+    const selectId = 'ordenacao-filtro-classes';
+    container.innerHTML = htmlToolbarOrdenacaoFiltro(selectId);
+    const itemsWrap = document.getElementById(selectId + '-items');
+    const htmlItems = classes.map(function (classe, index) {
+        const vAttr = textoSeguroAttrHtml(classe);
+        const n = contarIntimacoesNaTabelaPorTipo('classe', classe);
+        return (
+            '<div class="form-check">' +
+            '<input class="form-check-input filtro-classe" type="checkbox" id="filtro-classe-' + index + '" value="' + vAttr + '" checked>' +
+            '<label class="form-check-label" for="filtro-classe-' + index + '">' +
+            textoSeguroAttrHtml(classe) + ' <span class="text-muted">(' + n + ')</span>' +
+            '</label></div>'
+        );
+    }).join('');
+    itemsWrap.innerHTML = htmlItems;
+    ligarOrdenacaoFiltroLista(selectId, 'classe');
 }
 
 // Função para limpar filtro de taxa
 function limparFiltroTaxa() {
     document.getElementById('taxa-minima').value = '';
     document.getElementById('taxa-maxima').value = '';
+}
+
+function limparFiltroDataCriacao() {
+    const inicio = document.getElementById('filtro-data-criacao-inicio');
+    const fim = document.getElementById('filtro-data-criacao-fim');
+    if (inicio) inicio.value = '';
+    if (fim) fim.value = '';
+}
+
+/** Data local em YYYY-MM-DD (compatível com input date). */
+function dataLocalYYYYMMDD(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+/** Preenche início/fim do filtro por atalho (sem aplicar sozinho — use "Aplicar filtro"). */
+function atalhoFiltroDataCriacao(tipo) {
+    const inicio = document.getElementById('filtro-data-criacao-inicio');
+    const fim = document.getElementById('filtro-data-criacao-fim');
+    if (!inicio || !fim) return;
+    const hoje = new Date();
+    const hojeStr = dataLocalYYYYMMDD(hoje);
+    if (tipo === 'hoje') {
+        inicio.value = hojeStr;
+        fim.value = hojeStr;
+        return;
+    }
+    if (tipo === '7d') {
+        const ini = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 6);
+        inicio.value = dataLocalYYYYMMDD(ini);
+        fim.value = hojeStr;
+        return;
+    }
+    if (tipo === 'mes') {
+        const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        inicio.value = dataLocalYYYYMMDD(primeiro);
+        fim.value = hojeStr;
+    }
+}
+
+function normalizarDataCriacaoParaComparacao(valor) {
+    const raw = (valor || '').trim();
+    if (!raw) return '';
+    const parteData = raw.split('T')[0].split(' ')[0];
+    return /^\d{4}-\d{2}-\d{2}$/.test(parteData) ? parteData : '';
 }
 
 function obterCriteriosFiltroModal() {
@@ -2763,21 +3079,27 @@ function obterCriteriosFiltroModal() {
     }
     const taxaMinima = parseFloat(document.getElementById('taxa-minima').value) || 0;
     const taxaMaxima = parseFloat(document.getElementById('taxa-maxima').value) || 100;
+    const dataCriacaoInicio = (document.getElementById('filtro-data-criacao-inicio').value || '').trim();
+    const dataCriacaoFim = (document.getElementById('filtro-data-criacao-fim').value || '').trim();
     const todosSmartContext = document.getElementById('filtro-todos-smart-context').checked;
     const apenasSmartContext = document.getElementById('filtro-apenas-smart-context').checked;
     const semSmartContext = document.getElementById('filtro-sem-smart-context').checked;
     const todasRegrasUsuario = document.getElementById('filtro-todas-regras-usuario').checked;
     const apenasComRegrasUsuario = document.getElementById('filtro-apenas-com-regras-usuario').checked;
     const apenasSemRegrasUsuario = document.getElementById('filtro-apenas-sem-regras-usuario').checked;
+    const todasObservacoes = document.getElementById('filtro-todas-observacoes').checked;
+    const apenasComObservacoes = document.getElementById('filtro-apenas-com-observacoes').checked;
+    const apenasSemObservacoes = document.getElementById('filtro-apenas-sem-observacoes').checked;
     const apenasDestacadas = document.getElementById('filtro-apenas-destacadas').checked;
     return {
         todosDefensores, defensoresSelecionados,
         todasClassificacoes, classificacoesSelecionadas,
         todasClasses, classesSelecionadas,
         todasAreas, areasSelecionadas,
-        taxaMinima, taxaMaxima,
+        taxaMinima, taxaMaxima, dataCriacaoInicio, dataCriacaoFim,
         todosSmartContext, apenasSmartContext, semSmartContext,
         todasRegrasUsuario, apenasComRegrasUsuario, apenasSemRegrasUsuario,
+        todasObservacoes, apenasComObservacoes, apenasSemObservacoes,
         apenasDestacadas
     };
 }
@@ -2790,6 +3112,8 @@ function linhaPassaFiltroModal(row, checkbox, c) {
     const temSmartContext = smartContextValue === '1';
     const regrasUsuarioValue = row.dataset.regrasUsuario || '0';
     const temRegrasUsuario = regrasUsuarioValue === '1';
+    const observacoesValue = row.dataset.observacoes || '0';
+    const temObservacoes = observacoesValue === '1';
     const taxaAcertoElement = row.querySelector('.taxa-acerto-cell .badge');
     let taxaAcerto = 0;
     if (taxaAcertoElement) {
@@ -2803,6 +3127,20 @@ function linhaPassaFiltroModal(row, checkbox, c) {
     const chaveArea = areaIdRow ? areaIdRow : '__sem_area__';
     const mostrarArea = c.todasAreas || c.areasSelecionadas.includes(chaveArea);
     const mostrarTaxa = taxaAcerto >= c.taxaMinima && taxaAcerto <= c.taxaMaxima;
+    const dataCriacaoLinha = normalizarDataCriacaoParaComparacao(row.dataset.dataCriacaoIso || '');
+    let mostrarDataCriacao = true;
+    if (c.dataCriacaoInicio || c.dataCriacaoFim) {
+        if (!dataCriacaoLinha) {
+            mostrarDataCriacao = false;
+        } else {
+            if (c.dataCriacaoInicio && dataCriacaoLinha < c.dataCriacaoInicio) {
+                mostrarDataCriacao = false;
+            }
+            if (c.dataCriacaoFim && dataCriacaoLinha > c.dataCriacaoFim) {
+                mostrarDataCriacao = false;
+            }
+        }
+    }
     let mostrarSmartContext = true;
     if (!c.todosSmartContext) {
         if (c.apenasSmartContext && !temSmartContext) {
@@ -2817,6 +3155,14 @@ function linhaPassaFiltroModal(row, checkbox, c) {
             mostrarRegrasUsuario = false;
         } else if (c.apenasSemRegrasUsuario && temRegrasUsuario) {
             mostrarRegrasUsuario = false;
+        }
+    }
+    let mostrarObservacoes = true;
+    if (!c.todasObservacoes) {
+        if (c.apenasComObservacoes && !temObservacoes) {
+            mostrarObservacoes = false;
+        } else if (c.apenasSemObservacoes && temObservacoes) {
+            mostrarObservacoes = false;
         }
     }
     let mostrarDestacada = true;
@@ -2835,7 +3181,7 @@ function linhaPassaFiltroModal(row, checkbox, c) {
             mostrarDestacada = false;
         }
     }
-    return mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarArea && mostrarTaxa && mostrarSmartContext && mostrarRegrasUsuario && mostrarDestacada;
+    return mostrarDefensor && mostrarClassificacao && mostrarClasse && mostrarArea && mostrarTaxa && mostrarDataCriacao && mostrarSmartContext && mostrarRegrasUsuario && mostrarObservacoes && mostrarDestacada;
 }
 
 function linhaCorrespondeFiltroTexto(row, qRaw) {
@@ -2941,13 +3287,23 @@ function irPaginaIntimacoesRelativa(delta) {
     }
 }
 
+/** Deep link ?intimacao_ids= — URL limpa; filtro/checkbox já vêm do servidor quando __servidorAplicouDeepLinkIntimacao. */
 function aplicarIntimacaoIdsDaQueryString() {
     const params = new URLSearchParams(window.location.search);
     const ids = params.getAll('intimacao_ids').map(s => String(s).trim()).filter(Boolean);
-    if (!ids.length) return;
+    if (!ids.length) return false;
+
+    if (window.__servidorAplicouDeepLinkIntimacao === true) {
+        params.delete('intimacao_ids');
+        const qs = params.toString();
+        const newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
+        history.replaceState(null, '', newUrl);
+        updateIntimacoesSelection();
+        return true;
+    }
+
     const input = document.getElementById('filtro-texto-intimacoes');
     if (input) input.value = ids.join(' ');
-    sincronizarVisibilidadeLinhasIntimacoes();
     document.querySelectorAll('tr.intimacao-row').forEach(row => {
         const rid = row.getAttribute('data-intimacao-id');
         if (rid && ids.includes(rid)) {
@@ -2960,10 +3316,17 @@ function aplicarIntimacaoIdsDaQueryString() {
     const qs = params.toString();
     const newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
     history.replaceState(null, '', newUrl);
+    return true;
 }
 
 // Função para aplicar filtro
 function aplicarFiltro() {
+    const dataInicio = (document.getElementById('filtro-data-criacao-inicio').value || '').trim();
+    const dataFim = (document.getElementById('filtro-data-criacao-fim').value || '').trim();
+    if (dataInicio && dataFim && dataInicio > dataFim) {
+        showToast('Período inválido: a data inicial deve ser menor ou igual à data final.', 'warning');
+        return;
+    }
     sincronizarVisibilidadeLinhasIntimacoes();
     const modal = bootstrap.Modal.getInstance(document.getElementById('modalFiltro'));
     modal.hide();
@@ -2987,10 +3350,14 @@ function limparFiltros() {
     document.getElementById('filtro-todas-regras-usuario').checked = true;
     document.getElementById('filtro-apenas-com-regras-usuario').checked = false;
     document.getElementById('filtro-apenas-sem-regras-usuario').checked = false;
+    document.getElementById('filtro-todas-observacoes').checked = true;
+    document.getElementById('filtro-apenas-com-observacoes').checked = false;
+    document.getElementById('filtro-apenas-sem-observacoes').checked = false;
     
     // Limpar filtros de taxa
     document.getElementById('taxa-minima').value = '';
     document.getElementById('taxa-maxima').value = '';
+    limparFiltroDataCriacao();
     
     // Marcar todos os checkboxes individuais (já que "Todos" está marcado)
     document.querySelectorAll('.filtro-defensor').forEach(cb => cb.checked = true);
@@ -3060,9 +3427,6 @@ function atualizarTaxasAcerto(taxasAcerto) {
             criarPopoverReutilizavel(intimacaoId, triggerElement);
         }
     });
-    if (typeof sincronizarVisibilidadeLinhasIntimacoes === 'function') {
-        sincronizarVisibilidadeLinhasIntimacoes();
-    }
 }
 
 
@@ -3751,6 +4115,7 @@ document.addEventListener('DOMContentLoaded', function() {
     atualizarConfigSummary();
     carregarConfiguracaoColunas();
     carregarConfigColunasIntimacoes();
+    inicializarListenersFiltroModalEstaticos();
     atualizarVisibilidadeModoAvaliacaoFocado();
     
     try {
@@ -3767,13 +4132,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     } catch (e) { /* ignore */ }
     
+    aplicarIntimacaoIdsDaQueryString();
     sincronizarVisibilidadeLinhasIntimacoes();
     
     // Inicializar botão de regras de negócio
     atualizarBotaoRegrasNegocio();
     
-    // Carregar taxas de acerto das intimações
-    carregarTaxasAcerto();
+    // Taxas após primeiro paint (deep link fica responsivo mais cedo)
+    const agendarCarregarTaxasAcerto = () => {
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(() => carregarTaxasAcerto(), { timeout: 2500 });
+        } else {
+            setTimeout(() => carregarTaxasAcerto(), 0);
+        }
+    };
+    agendarCarregarTaxasAcerto();
     
     const selPorPagina = document.getElementById('intimacoes-por-pagina');
     if (selPorPagina) {
@@ -3812,7 +4185,6 @@ document.addEventListener('DOMContentLoaded', function() {
             sincronizarVisibilidadeLinhasIntimacoes();
         });
     }
-    aplicarIntimacaoIdsDaQueryString();
     
     // Listener para reposicionar popovers quando a janela for redimensionada
     // Função movida para o componente reutilizável
@@ -3931,26 +4303,42 @@ function atualizarIconesOrdenacaoIntimacoes(colunaAtiva, direcao) {
 }
 
 
-// Função para visualizar contexto da intimação
-function visualizarContexto(intimacaoId, contexto) {
-    console.log('=== Visualizando contexto da intimação:', intimacaoId);
-    console.log('=== Contexto recebido:', contexto);
-    
+// Função para visualizar contexto da intimação (contexto carregado via API — HTML inicial leve)
+async function visualizarContexto(intimacaoId) {
     const modalElement = document.getElementById('modalContextoIntimacao');
     const contextoContent = document.getElementById('modal-contexto-content');
-    
-    // Decodificar o contexto (remover escapes)
-    let contextoDecodificado = contexto || 'Contexto não disponível';
-    
-    // Remover escapes de caracteres especiais
+    if (!modalElement || !contextoContent) {
+        return;
+    }
+
+    contextoContent.innerHTML = '<p class="text-muted mb-0"><i class="bi bi-hourglass-split"></i> Carregando contexto...</p>';
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    modal.show();
+
+    let contextoDecodificado = '';
+    try {
+        const res = await fetch('/api/intimacao/' + encodeURIComponent(intimacaoId));
+        const data = await res.json();
+        if (!res.ok || !data.success || !data.intimacao) {
+            const msg = (data && data.error) ? data.error : ('Erro HTTP ' + res.status);
+            throw new Error(msg);
+        }
+        const raw = data.intimacao.contexto;
+        contextoDecodificado = raw != null && String(raw).trim() !== '' ? String(raw) : 'Contexto não disponível';
+    } catch (err) {
+        console.error('Erro ao carregar contexto:', err);
+        contextoContent.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar o contexto.</p>';
+        window.contextoOriginal = '';
+        return;
+    }
+
+    // Remover escapes residuais (compatível com dados antigos embutidos em atributos)
     contextoDecodificado = contextoDecodificado.replace(/\\n/g, '\n');
     contextoDecodificado = contextoDecodificado.replace(/\\r/g, '\r');
     contextoDecodificado = contextoDecodificado.replace(/\\`/g, '`');
     contextoDecodificado = contextoDecodificado.replace(/\\"/g, '"');
     contextoDecodificado = contextoDecodificado.replace(/\\'/g, "'");
-    
-    console.log('=== Contexto decodificado:', contextoDecodificado);
-    
+
     // Armazenar o contexto original para copiar
     window.contextoOriginal = contextoDecodificado;
     
@@ -4083,10 +4471,6 @@ function visualizarContexto(intimacaoId, contexto) {
         // Fallback para texto simples
         contextoContent.textContent = contextoProcessado;
     }
-    
-    // Mostrar a modal
-    const modal = new bootstrap.Modal(modalElement);
-    modal.show();
 }
 
 // Função para copiar contexto

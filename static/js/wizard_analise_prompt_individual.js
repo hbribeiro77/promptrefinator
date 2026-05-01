@@ -10,10 +10,168 @@
 
 // ===== CONFIGURAÇÕES PADRÃO =====
 
+function escapeHtmlWizard(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
+    const div = document.createElement('div');
+    div.textContent = String(text);
+    return div.innerHTML;
+}
+
+function escapeAttrWizard(text) {
+    if (text === null || text === undefined) {
+        return '';
+    }
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;');
+}
+
+/**
+ * Modelo exibido no tooltip (select do cabeçalho ou padrão do resumo).
+ */
+function modeloDiagnosticoWizardSelecionadoOuPadrao() {
+    const sel = document.getElementById('wizardModeloDiagnosticoSelect');
+    if (sel && sel.value) {
+        return sel.value;
+    }
+    const r = typeof window !== 'undefined' ? window.resumoIaDiagnosticoWizard : null;
+    if (r && r.ok && r.modelo != null) {
+        return String(r.modelo);
+    }
+    return '';
+}
+
+/**
+ * Texto do tooltip com os detalhes da IA do diagnóstico (antes exibidos em alerta na etapa 1).
+ */
+function textoTooltipModeloDiagnosticoWizard() {
+    const r = typeof window !== 'undefined' ? window.resumoIaDiagnosticoWizard : null;
+    if (!r) {
+        return 'Resumo do modelo não disponível. Recarregue a página.';
+    }
+    if (!r.ok) {
+        return r.erro || 'Configuração incompleta em Configurações.';
+    }
+    const t = typeof r.temperatura === 'number' ? r.temperatura : parseFloat(String(r.temperatura), 10);
+    const tempStr = Number.isFinite(t) ? String(t) : String(r.temperatura ?? '');
+    const prov = r.provedor_label || r.provedor || '';
+    const mod = modeloDiagnosticoWizardSelecionadoOuPadrao();
+    const mtCfg = r.max_tokens_config;
+    const mtEf = r.max_tokens_efetivo_diagnostico_wizard;
+    return (
+        `Provedor: ${prov}. `
+        + `Modelo: ${mod}. `
+        + `Temperatura: ${tempStr}. `
+        + `Max. tokens (configuração): ${mtCfg}. `
+        + `Na chamada com este assistente, o limite de saída é pelo menos ${mtEf} tokens (mesma regra do servidor).`
+    );
+}
+
+/**
+ * Fragmento HTML do cabeçalho: select de modelo (mesmo provedor) + ícone (i) para tooltip.
+ * Depende de `window.resumoIaDiagnosticoWizard` (servidor / visualizar_intimacao).
+ */
+function htmlCabecalhoModeloDiagnosticoWizard() {
+    const r = typeof window !== 'undefined' ? window.resumoIaDiagnosticoWizard : null;
+    const iconAttrs =
+        'id="wizardDiagnosticoModeloInfoBtn" class="bi bi-info-circle text-primary ms-1" '
+        + 'role="button" tabindex="0" aria-label="Detalhes do modelo de IA usado no diagnóstico" '
+        + 'style="cursor: help; font-size: 1rem;"';
+    if (!r) {
+        return `
+                        <span class="d-inline-flex align-items-center gap-1 ms-2 flex-wrap">
+                            <span class="badge bg-light text-dark border font-monospace text-truncate" style="max-width: 14rem;">—</span>
+                            <i ${iconAttrs}></i>
+                        </span>`;
+    }
+    if (!r.ok) {
+        return `
+                        <span class="d-inline-flex align-items-center gap-1 ms-2 flex-wrap">
+                            <span class="badge bg-warning text-dark">IA indisponível</span>
+                            <i ${iconAttrs}></i>
+                        </span>`;
+    }
+    const lista = r.modelos_disponiveis_diagnostico;
+    if (Array.isArray(lista) && lista.length > 0) {
+        const padrao = String(r.modelo || '');
+        const optHtml = lista.map((m) => {
+            const ms = String(m);
+            const sel = ms === padrao ? ' selected' : '';
+            return `<option value="${escapeAttrWizard(ms)}"${sel}>${escapeHtmlWizard(ms)}</option>`;
+        }).join('');
+        return `
+                        <span class="d-inline-flex align-items-center gap-1 ms-2 flex-wrap">
+                            <select id="wizardModeloDiagnosticoSelect" class="form-select form-select-sm font-monospace py-0"
+                                style="max-width: 16rem; font-size: 0.8rem;" aria-label="Modelo para o diagnóstico (mesmo provedor)">
+                                ${optHtml}
+                            </select>
+                            <i ${iconAttrs}></i>
+                        </span>`;
+    }
+    const mod = escapeHtmlWizard(r.modelo);
+    return `
+                        <span class="d-inline-flex align-items-center gap-1 ms-2 flex-wrap">
+                            <span class="badge bg-secondary font-monospace text-truncate" style="max-width: 14rem;">${mod}</span>
+                            <i ${iconAttrs}></i>
+                        </span>`;
+}
+
+/**
+ * Inicializa tooltip do ícone (i) no cabeçalho; use após o modal estar visível.
+ */
+function inicializarTooltipCabecalhoModeloDiagnosticoWizard() {
+    const el = document.getElementById('wizardDiagnosticoModeloInfoBtn');
+    if (!el || typeof bootstrap === 'undefined' || !bootstrap.Tooltip) {
+        return;
+    }
+    const existing = bootstrap.Tooltip.getInstance(el);
+    if (existing) {
+        existing.dispose();
+    }
+    const title = textoTooltipModeloDiagnosticoWizard();
+    bootstrap.Tooltip.getOrCreateInstance(el, {
+        title,
+        placement: 'bottom',
+        container: 'body',
+        trigger: 'hover focus',
+    });
+}
+
+/**
+ * Ao mudar o modelo no cabeçalho, atualiza o texto do tooltip.
+ */
+function wizardVincularSelectModeloDiagnosticoTooltip() {
+    const sel = document.getElementById('wizardModeloDiagnosticoSelect');
+    if (!sel || sel.dataset.wizardModeloTooltipBound === '1') {
+        return;
+    }
+    sel.dataset.wizardModeloTooltipBound = '1';
+    sel.addEventListener('change', () => {
+        inicializarTooltipCabecalhoModeloDiagnosticoWizard();
+    });
+}
+
+/**
+ * Inclui `modeloDiagnosticoOverride` na config enviada à API quando há select no cabeçalho.
+ */
+function anexarModeloDiagnosticoOverrideSelecionado(configObj) {
+    const c = { ...configObj };
+    const sel = document.getElementById('wizardModeloDiagnosticoSelect');
+    if (sel && sel.value) {
+        c.modeloDiagnosticoOverride = sel.value;
+    }
+    return c;
+}
+
 const configPromptIndividualDefault = {
     persona: 'Você é um especialista na Defensoria Pública em análise de prompts de IA para classificação jurídica de intimações recebidas pelo poder judiciário.\n\nTAREFA: Analise a eficácia deste prompt específico para classificar a intimação fornecida.\n\nCRÍTICO: Use EXATAMENTE as informações fornecidas. NÃO invente, NÃO altere, NÃO ignore os dados fornecidos.',
     incluirContextoIntimacao: true,
     incluirInformacaoAdicional: true,
+    incluirIdentificacaoPromptDesempenho: true,
+    incluirConteudoPromptCadastrado: false,
+    incluirTriagemFeitaPelaIa: true,
     instrucoesResposta: 'IMPORTANTE: Use APENAS as informações fornecidas no prompt. NUNCA invente ou altere o gabarito fornecido.\n\nResponda em formato JSON com as seguintes chaves:\n- "analise": análise geral (2-3 frases) sobre a eficácia do prompt\n- "pontos_fortes": array com 3-5 pontos fortes do prompt\n- "pontos_fracos": array com 3-5 pontos fracos do prompt\n- "recomendacoes": array com 3-5 recomendações para melhorar o prompt\n\nSeja objetivo, técnico e focado em eficácia para classificação jurídica.'
 };
 
@@ -56,7 +214,10 @@ function salvarConfigAnaliseIndividual() {
         persona: document.getElementById('personaIndividual').value.trim(),
         instrucoesResposta: document.getElementById('instrucoesRespostaIndividual').value.trim(),
         incluirContextoIntimacao: document.getElementById('incluirContextoIndividual').checked,
-        incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked
+        incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked,
+        incluirIdentificacaoPromptDesempenho: document.getElementById('incluirIdentificacaoPromptDesempenhoIndividual').checked,
+        incluirConteudoPromptCadastrado: document.getElementById('incluirConteudoPromptCadastradoIndividual').checked,
+        incluirTriagemFeitaPelaIa: document.getElementById('incluirTriagemFeitaPelaIaIndividual').checked
     };
     
     // Atualizar configuração atual
@@ -84,11 +245,17 @@ function resetarConfigAnaliseIndividual() {
     const instrucoesField = document.getElementById('instrucoesRespostaIndividual');
     const incluirContextoField = document.getElementById('incluirContextoIndividual');
     const incluirGabaritoField = document.getElementById('incluirGabaritoIndividual');
+    const incluirIdentificacaoField = document.getElementById('incluirIdentificacaoPromptDesempenhoIndividual');
+    const incluirConteudoCadastroField = document.getElementById('incluirConteudoPromptCadastradoIndividual');
+    const incluirTriagemField = document.getElementById('incluirTriagemFeitaPelaIaIndividual');
     
     if (personaField) personaField.value = configPromptIndividual.persona;
     if (instrucoesField) instrucoesField.value = configPromptIndividual.instrucoesResposta;
     if (incluirContextoField) incluirContextoField.checked = configPromptIndividual.incluirContextoIntimacao;
     if (incluirGabaritoField) incluirGabaritoField.checked = configPromptIndividual.incluirInformacaoAdicional;
+    if (incluirIdentificacaoField) incluirIdentificacaoField.checked = configPromptIndividual.incluirIdentificacaoPromptDesempenho;
+    if (incluirConteudoCadastroField) incluirConteudoCadastroField.checked = configPromptIndividual.incluirConteudoPromptCadastrado;
+    if (incluirTriagemField) incluirTriagemField.checked = configPromptIndividual.incluirTriagemFeitaPelaIa;
     
     if (typeof showToast !== 'undefined') {
         showToast('Configuração INDIVIDUAL resetada para padrão!', 'info');
@@ -166,9 +333,19 @@ async function analisarPromptIndividual(promptId, promptNome, acertos, total) {
     
     // Adicionar modal ao DOM
     document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
+
+    const modalEl = document.getElementById('modalWizardAnalise');
+    modalEl.addEventListener(
+        'shown.bs.modal',
+        function wizardCabecalhoDiagnosticoTooltipOnShown() {
+            inicializarTooltipCabecalhoModeloDiagnosticoWizard();
+            wizardVincularSelectModeloDiagnosticoTooltip();
+        },
+        { once: true },
+    );
+
     // Mostrar modal
-    const modal = new bootstrap.Modal(document.getElementById('modalWizardAnalise'));
+    const modal = new bootstrap.Modal(modalEl);
     modal.show();
 }
 
@@ -180,12 +357,15 @@ function criarModalWizard(promptNome, taxaAcerto, acertos, total) {
         <div class="modal fade" id="modalWizardAnalise" tabindex="-1" aria-labelledby="modalWizardAnaliseLabel" aria-hidden="true">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="modalWizardAnaliseLabel">
-                            <i class="bi bi-magic"></i>
-                            Wizard de Análise: ${promptNome}
-                            <span class="badge bg-info ms-2">Taxa: ${taxaAcerto}% (${acertos}/${total})</span>
-                        </h5>
+                    <div class="modal-header flex-wrap align-items-center gap-2 py-2">
+                        <div class="d-flex flex-wrap align-items-center gap-2 me-auto pe-2 min-w-0 flex-grow-1">
+                            <h5 class="modal-title mb-0 text-truncate min-w-0" id="modalWizardAnaliseLabel" style="max-width: min(100%, 28rem);">
+                                <i class="bi bi-magic"></i>
+                                Wizard de Análise: ${escapeHtmlWizard(promptNome)}
+                            </h5>
+                            <span class="badge bg-info text-nowrap">Taxa: ${escapeHtmlWizard(String(taxaAcerto))}% (${escapeHtmlWizard(String(acertos))}/${escapeHtmlWizard(String(total))})</span>
+                            ${htmlCabecalhoModeloDiagnosticoWizard()}
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body wizard-body">
@@ -252,8 +432,39 @@ function criarModalWizard(promptNome, taxaAcerto, acertos, total) {
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="row mt-1">
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="incluirIdentificacaoPromptDesempenhoIndividual" 
+                                                    ${configPromptIndividual.incluirIdentificacaoPromptDesempenho ? 'checked' : ''}>
+                                                <label class="form-check-label" for="incluirIdentificacaoPromptDesempenhoIndividual">
+                                                    Incluir identificação do prompt e desempenho
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="incluirTriagemFeitaPelaIaIndividual" 
+                                                    ${configPromptIndividual.incluirTriagemFeitaPelaIa ? 'checked' : ''}>
+                                                <label class="form-check-label" for="incluirTriagemFeitaPelaIaIndividual">
+                                                    Incluir triagem feita pela IA
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row mt-1">
+                                        <div class="col-12">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="incluirConteudoPromptCadastradoIndividual"
+                                                    ${configPromptIndividual.incluirConteudoPromptCadastrado ? 'checked' : ''}>
+                                                <label class="form-check-label" for="incluirConteudoPromptCadastradoIndividual">
+                                                    Incluir texto do campo &quot;Conteúdo do prompt&quot; do cadastro (o que vai para a triagem)
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
                                     
-                                    <div class="mb-3">
+                                    <div class="mb-3 d-none" aria-hidden="true">
                                         <label for="instrucoesRespostaIndividual" class="form-label">
                                             <strong>Instruções de Resposta:</strong>
                                         </label>
@@ -343,6 +554,10 @@ function criarModalWizard(promptNome, taxaAcerto, acertos, total) {
                                 <button type="button" class="btn btn-secondary me-2" onclick="resetarConfigAnaliseIndividual()">
                                     <i class="bi bi-arrow-clockwise"></i>
                                     Resetar
+                                </button>
+                                <button type="button" class="btn btn-outline-info me-2" onclick="mostrarPreviewPromptDiagnosticoWizard()">
+                                    <i class="bi bi-eye"></i>
+                                    Ver Prompt Completo
                                 </button>
                                 <button type="button" class="btn btn-primary" id="btnProximo" onclick="wizardProximo()">
                                     Fazer diagnóstico
@@ -557,6 +772,62 @@ function atualizarBotoesWizard(etapaAtual) {
 // ===== FUNÇÕES DE ANÁLISE =====
 
 /**
+ * Mostra preview do prompt completo do diagnóstico (sem chamar IA).
+ */
+async function mostrarPreviewPromptDiagnosticoWizard() {
+    const { promptId, promptNome, acertos, total } = window.wizardData || {};
+    if (!promptId) {
+        if (typeof showToast !== 'undefined') {
+            showToast('Prompt não identificado para gerar preview', 'error');
+        }
+        return;
+    }
+
+    try {
+        const configAtual = {
+            persona: (document.getElementById('personaIndividual')?.value || '').trim(),
+            instrucoesResposta: (document.getElementById('instrucoesRespostaIndividual')?.value || '').trim(),
+            incluirContextoIntimacao: !!document.getElementById('incluirContextoIndividual')?.checked,
+            incluirInformacaoAdicional: !!document.getElementById('incluirGabaritoIndividual')?.checked,
+            incluirIdentificacaoPromptDesempenho: !!document.getElementById('incluirIdentificacaoPromptDesempenhoIndividual')?.checked,
+            incluirConteudoPromptCadastrado: !!document.getElementById('incluirConteudoPromptCadastradoIndividual')?.checked,
+            incluirTriagemFeitaPelaIa: !!document.getElementById('incluirTriagemFeitaPelaIaIndividual')?.checked
+        };
+
+        const configComModelo = anexarModeloDiagnosticoOverrideSelecionado(configAtual);
+
+        const response = await fetch('/api/analisar-prompt-individual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt_id: promptId,
+                prompt_nome: promptNome,
+                intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
+                config_personalizada: configComModelo,
+                taxa_acerto: window.wizardData.taxaAcerto,
+                acertos: acertos,
+                total_analises: total,
+                dados_analise_original: window.wizardData.dadosAnaliseOriginal,
+                preview_only: true
+            })
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.message || 'Erro ao montar preview do prompt');
+        }
+
+        window.wizardData.promptCompleto = data.prompt_completo || 'Prompt não disponível';
+        mostrarDebugPrompt();
+    } catch (error) {
+        console.error('Erro ao gerar preview do prompt do diagnóstico:', error);
+        if (typeof showToast !== 'undefined') {
+            showToast('Erro ao gerar preview do prompt do diagnóstico', 'error');
+        }
+    }
+}
+
+/**
  * Executa análise com IA (Etapa 2)
  */
 async function executarAnaliseWizard() {
@@ -568,11 +839,16 @@ async function executarAnaliseWizard() {
             persona: document.getElementById('personaIndividual').value.trim(),
             instrucoesResposta: document.getElementById('instrucoesRespostaIndividual').value.trim(),
             incluirContextoIntimacao: document.getElementById('incluirContextoIndividual').checked,
-            incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked
+            incluirInformacaoAdicional: document.getElementById('incluirGabaritoIndividual').checked,
+            incluirIdentificacaoPromptDesempenho: document.getElementById('incluirIdentificacaoPromptDesempenhoIndividual').checked,
+            incluirConteudoPromptCadastrado: document.getElementById('incluirConteudoPromptCadastradoIndividual').checked,
+            incluirTriagemFeitaPelaIa: document.getElementById('incluirTriagemFeitaPelaIaIndividual').checked
         };
         
         // Salvar no localStorage
         localStorage.setItem('configPromptIndividual', JSON.stringify(configPromptIndividual));
+
+        const configComModelo = anexarModeloDiagnosticoOverrideSelecionado(configPromptIndividual);
         
         // Fazer requisição para análise
         const response = await fetch('/api/analisar-prompt-individual', {
@@ -582,7 +858,7 @@ async function executarAnaliseWizard() {
                 prompt_id: promptId,
                 prompt_nome: promptNome,
                 intimacao_id: window.intimacaoData ? window.intimacaoData.id : null,
-                config_personalizada: configPromptIndividual,
+                config_personalizada: configComModelo,
                 taxa_acerto: window.wizardData.taxaAcerto,
                 acertos: acertos,
                 total_analises: total,
@@ -618,6 +894,54 @@ async function executarAnaliseWizard() {
             `;
         }
     }
+}
+
+/**
+ * Botão "copiar" no canto de cada bloco de código (```) do diagnóstico — estilo apps de chat.
+ */
+function wizardAnexarBotoesCopiarNosPresDoDiagnostico(analiseContentEl) {
+    const root = analiseContentEl && analiseContentEl.querySelector('.markdown-content');
+    if (!root) {
+        return;
+    }
+    root.querySelectorAll('pre').forEach((pre) => {
+        if (pre.parentElement && pre.parentElement.classList.contains('wizard-md-pre-wrap')) {
+            return;
+        }
+        const wrap = document.createElement('div');
+        wrap.className = 'wizard-md-pre-wrap position-relative mb-3';
+        pre.parentNode.insertBefore(wrap, pre);
+        wrap.appendChild(pre);
+        const padExtra = '2.75rem';
+        if (!pre.style.paddingRight) {
+            pre.style.paddingRight = padExtra;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-light text-dark position-absolute border shadow-sm';
+        btn.style.top = '0.4rem';
+        btn.style.right = '0.4rem';
+        btn.style.zIndex = '4';
+        btn.style.lineHeight = '1';
+        btn.setAttribute('aria-label', 'Copiar conteúdo deste bloco');
+        btn.title = 'Copiar';
+        btn.innerHTML = '<i class="bi bi-clipboard"></i>';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const t = pre.innerText != null ? pre.innerText : '';
+            navigator.clipboard.writeText(t).then(() => {
+                if (typeof showToast !== 'undefined') {
+                    showToast('Bloco copiado para a área de transferência.', 'success');
+                }
+            }).catch((err) => {
+                console.error('Erro ao copiar bloco do diagnóstico:', err);
+                if (typeof showToast !== 'undefined') {
+                    showToast('Não foi possível copiar este bloco.', 'error');
+                }
+            });
+        });
+        wrap.appendChild(btn);
+    });
 }
 
 /**
@@ -662,6 +986,8 @@ function mostrarResultadoAnaliseWizard(resultado) {
             </button>
         </div>
     `;
+
+    wizardAnexarBotoesCopiarNosPresDoDiagnostico(analiseContent);
     
     // Garantir que o padding seja aplicado após inserir o conteúdo
     analiseContent.style.paddingBottom = '8rem';
@@ -1274,25 +1600,35 @@ function construirTabelaResultadosCombinados(resultados, regrasCombinadas, teste
  * Copia resultado da análise individual
  */
 function copiarResultadoAnaliseIndividual() {
-    const resultadoElement = document.getElementById('resultado-analise-individual');
-    if (resultadoElement) {
-        // Copiar texto puro (sem HTML)
-        const texto = resultadoElement.textContent || resultadoElement.innerText;
-        navigator.clipboard.writeText(texto).then(function() {
-            if (typeof showToast !== 'undefined') {
-                showToast('Resultado copiado para a área de transferência!', 'success');
-            }
-        }).catch(function(err) {
-            console.error('Erro ao copiar resultado: ', err);
-            if (typeof showToast !== 'undefined') {
-                showToast('Erro ao copiar resultado.', 'error');
-            }
-        });
+    let texto = '';
+    const wizardMd = document.querySelector('#analiseContent .markdown-content');
+    if (wizardMd) {
+        texto = wizardMd.textContent || wizardMd.innerText || '';
     } else {
+        const resultadoElement = document.getElementById('resultado-analise-individual');
+        if (resultadoElement) {
+            texto = resultadoElement.textContent || resultadoElement.innerText || '';
+        }
+    }
+    if (!String(texto).trim() && typeof window !== 'undefined' && window.wizardData && window.wizardData.resultadoAnalise) {
+        texto = String(window.wizardData.resultadoAnalise);
+    }
+    if (!String(texto).trim()) {
         if (typeof showToast !== 'undefined') {
             showToast('Nenhum resultado encontrado para copiar.', 'warning');
         }
+        return;
     }
+    navigator.clipboard.writeText(String(texto)).then(function() {
+        if (typeof showToast !== 'undefined') {
+            showToast('Resultado copiado para a área de transferência!', 'success');
+        }
+    }).catch(function(err) {
+        console.error('Erro ao copiar resultado: ', err);
+        if (typeof showToast !== 'undefined') {
+            showToast('Erro ao copiar resultado.', 'error');
+        }
+    });
 }
 
 /**
@@ -1454,9 +1790,21 @@ function calcularTempoEstimadoCombinado() {
 function mostrarDebugPrompt() {
     if (window.wizardData && window.wizardData.promptCompleto) {
         const modalContent = document.getElementById('modal-debug-prompt-content');
+        const debugModalEl = document.getElementById('modalDebugPrompt');
+        const wizardModalEl = document.getElementById('modalWizardAnalise');
         if (modalContent) {
             modalContent.textContent = window.wizardData.promptCompleto;
-            const modal = new bootstrap.Modal(document.getElementById('modalDebugPrompt'));
+            if (wizardModalEl && wizardModalEl.classList.contains('show')) {
+                wizardModalEl.style.visibility = 'hidden';
+            }
+            const modal = new bootstrap.Modal(debugModalEl);
+            if (debugModalEl) {
+                debugModalEl.addEventListener('hidden.bs.modal', () => {
+                    if (wizardModalEl) {
+                        wizardModalEl.style.visibility = '';
+                    }
+                }, { once: true });
+            }
             modal.show();
         }
     } else {

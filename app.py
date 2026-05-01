@@ -23,6 +23,18 @@ from services.calcular_acerto_classificacao_analise_intimacao_service import (
     MODO_PADRAO,
     calcular_acerto_classificacao,
 )
+from services.calcular_estatisticas_acuracia_por_categoria_classificacao_manual_sessao_analises_service import (
+    calcular_estatisticas_acuracia_modo_focado_faixa_alvo_e_indeterminado,
+    calcular_estatisticas_acuracia_por_categoria_classificacao_manual,
+)
+from services.resolver_parametros_ia_analise_prompt_individual_diagnostico_wizard_service import (
+    aplicar_modelo_diagnostico_wizard_override,
+    max_tokens_efetivo_analise_individual_com_config_personalizada,
+    resolver_parametros_ia_analise_prompt_individual,
+)
+from services.classificacao_ia_extracao_resposta_texto_para_tipo_canonico_service import (
+    ALIASES_TRIAGEM_IA_PARA_CANONICO,
+)
 
 # Carregar variáveis de ambiente do arquivo .env
 from dotenv import load_dotenv
@@ -82,6 +94,7 @@ def verificar_cancelamento(session_id):
     if session_id in analises_em_andamento:
         return analises_em_andamento[session_id]['cancelado']
     return False
+
 
 def atualizar_progresso_analise(session_id, atual):
     """Atualiza o progresso de uma análise"""
@@ -193,6 +206,13 @@ def _import_normalize_classificacao(val, obrigatorio: bool = True) -> str:
     cand = ' '.join(s.replace('_', ' ').split())
     if cand.casefold() == 'analisar':
         cand = 'ANALISAR PROCESSO'
+    alias_key_underscore = '_'.join(cand.split()).upper()
+    if alias_key_underscore in ALIASES_TRIAGEM_IA_PARA_CANONICO:
+        cand = ALIASES_TRIAGEM_IA_PARA_CANONICO[alias_key_underscore]
+    else:
+        cand_upper_spaced = cand.upper()
+        if cand_upper_spaced in ALIASES_TRIAGEM_IA_PARA_CANONICO:
+            cand = ALIASES_TRIAGEM_IA_PARA_CANONICO[cand_upper_spaced]
     for t in Config.TIPOS_ACAO:
         if t.casefold() == cand.casefold():
             return t
@@ -335,6 +355,15 @@ def _import_montar_intimacao(reg: dict) -> dict:
         else (str(regras_u).strip() or None)
     )
 
+    obs_u = _import_get_field(
+        reg,
+        'observacoes',
+        'observação',
+        'observacao',
+        'observações',
+    )
+    observacoes = None if obs_u is None else (str(obs_u).strip() or None)
+
     defensor = _import_resolver_defensor_select(
         _import_get_field(reg, 'defensor', 'nome do defensor', 'nome_do_defensor')
     )
@@ -367,6 +396,7 @@ def _import_montar_intimacao(reg: dict) -> dict:
         'classificacao_manual': classificacao,
         'informacoes_adicionais': informacoes,
         'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+        'observacoes': observacoes,
         'processo': _s(proc),
         'orgao_julgador': _s(org),
         'classe': _s(classe),
@@ -501,42 +531,30 @@ def dashboard():
     """Página principal - Dashboard"""
     try:
         stats = data_service.get_statistics()
-        
-        # Dados para gráficos
-        classificacoes_manuais = {}
-        status_analises = {'Pendente': 0, 'Concluída': 0, 'Erro': 0}
-        
-        intimacoes = data_service.get_all_intimacoes()
-        for intimacao in intimacoes:
-            # Contar classificações manuais
-            classificacao = intimacao.get('classificacao_manual', 'Não classificada')
-            classificacoes_manuais[classificacao] = classificacoes_manuais.get(classificacao, 0) + 1
-            
-            # Contar status das análises
-            if intimacao.get('analises'):
-                status_analises['Concluída'] += len(intimacao['analises'])
-            else:
-                status_analises['Pendente'] += 1
-        
+        stats.update(data_service.get_dashboard_resumo_graficos())
+
         return render_template('dashboard.html', 
                              stats=stats,
                              total_intimacoes=stats.get('total_intimacoes', 0),
                              total_analises=stats.get('total_analises', 0),
-                             taxa_acuracia=stats.get('taxa_acuracia_geral', 0),
+                             taxa_acuracia=stats.get('taxa_acuracia_geral', stats.get('acuracia_geral', 0)),
                              prompts_ativos=stats.get('total_prompts', 0),
-                             classificacoes_manuais=classificacoes_manuais,
-                             status_analises=status_analises,
                              tipos_acao=Config.TIPOS_ACAO)
     except Exception as e:
         flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
         return render_template('dashboard.html', 
-                             stats={'total_intimacoes': 0, 'total_analises': 0, 'taxa_acuracia': 0, 'prompts_ativos': 0},
+                             stats={
+                                 'total_intimacoes': 0,
+                                 'total_analises': 0,
+                                 'taxa_acuracia_geral': 0,
+                                 'acuracia_geral': 0,
+                                 'total_prompts': 0,
+                                 'distribuicao_classificacao': {},
+                             },
                              total_intimacoes=0,
                              total_analises=0,
                              taxa_acuracia=0,
                              prompts_ativos=0,
-                             classificacoes_manuais={},
-                             status_analises={'Pendente': 0, 'Concluída': 0, 'Erro': 0},
                              tipos_acao=Config.TIPOS_ACAO)
 
 def calcular_taxa_acerto_intimacao(intimacao):
@@ -593,11 +611,6 @@ def calcular_taxa_acerto_intimacao_filtrada(intimacao, prompt_especifico=None, t
 def listar_intimacoes():
     """Página de listagem de intimações"""
     try:
-        print("=== DEBUG: BOTÃO VER LISTA CLICADO ===")
-        print(f"URL: {request.url}")
-        print(f"Args: {dict(request.args)}")
-        
-        # Parâmetros de filtro e paginação
         pagina = int(request.args.get('pagina', 1))
         busca = request.args.get('busca', '')
         classificacao = request.args.get('classificacao', '')
@@ -606,92 +619,37 @@ def listar_intimacoes():
         itens_por_pagina_usuario = request.args.get('itens_por_pagina', '')
         prompt_especifico = request.args.get('prompt_especifico', '')
         temperatura_especifica = request.args.get('temperatura_especifica', '')
-        
-        print(f"DEBUG: Parâmetros - Página: {pagina}, Busca: '{busca}', Classificação: '{classificacao}', Ordenação: '{ordenacao}', Itens por página: '{itens_por_pagina_usuario}'")
+        destacadas = request.args.get('destacadas', '')
         
         config = data_service.get_config()
-        # Usar o valor selecionado pelo usuário ou o padrão da configuração
         if itens_por_pagina_usuario and itens_por_pagina_usuario.isdigit():
             itens_por_pagina = int(itens_por_pagina_usuario)
         else:
             itens_por_pagina = config.get('itens_por_pagina', 25)
-        print(f"DEBUG: Itens por página: {itens_por_pagina}")
+
+        stats = data_service.stats_intimacoes_listagem(
+            busca=busca,
+            classificacao=classificacao,
+            defensor=defensor,
+            destacadas=destacadas,
+        )
+        total_itens = stats['total']
+        ipp = max(1, itens_por_pagina)
+        total_paginas = max(1, (total_itens + ipp - 1) // ipp)
+        pagina = max(1, min(pagina, total_paginas))
+
+        intimacoes_pagina = data_service.list_intimacoes_listagem_pagina(
+            busca=busca,
+            classificacao=classificacao,
+            defensor=defensor,
+            destacadas=destacadas,
+            ordenacao=ordenacao,
+            prompt_especifico=prompt_especifico,
+            temperatura_especifica=temperatura_especifica,
+            pagina=pagina,
+            itens_por_pagina=itens_por_pagina,
+        )
         
-        print("DEBUG: Carregando todas as intimações...")
-        intimacoes = data_service.get_all_intimacoes()
-        
-        # Validação defensiva
-        if intimacoes is None:
-            intimacoes = []
-        
-        print(f"DEBUG: Total de intimações carregadas: {len(intimacoes)}")
-        for i, intimacao in enumerate(intimacoes):
-            if intimacao is None:
-                print(f"  {i+1}. ERRO: Intimação None encontrada")
-                continue
-            contexto = intimacao.get('contexto', '')
-            if contexto is None:
-                contexto = ''
-            print(f"  {i+1}. ID: {intimacao.get('id')} | Contexto: {contexto[:50]}...")
-        
-        # Filtrar intimações None
-        intimacoes = [i for i in intimacoes if i is not None]
-        
-        # Aplicar filtros
-        if busca:
-            intimacoes = [i for i in intimacoes if busca.lower() in (i.get('contexto', '') or '').lower()]
-            print(f"DEBUG: Após filtro de busca: {len(intimacoes)}")
-        
-        if classificacao:
-            intimacoes = [i for i in intimacoes if i.get('classificacao_manual') == classificacao]
-            print(f"DEBUG: Após filtro de classificação: {len(intimacoes)}")
-        
-        if defensor:
-            intimacoes = [i for i in intimacoes if i.get('defensor') == defensor]
-            print(f"DEBUG: Após filtro de defensor: {len(intimacoes)}")
-        
-        # Filtro de intimações destacadas
-        destacadas = request.args.get('destacadas', '')
-        if destacadas == 'true':
-            intimacoes = [i for i in intimacoes if i.get('destacada', False)]
-            print(f"DEBUG: Após filtro de destacadas: {len(intimacoes)}")
-        
-        # Aplicar ordenação
-        if ordenacao == 'data_desc':
-            intimacoes.sort(key=lambda x: x.get('data_criacao', ''), reverse=True)
-        elif ordenacao == 'data_asc':
-            intimacoes.sort(key=lambda x: x.get('data_criacao', ''))
-        elif ordenacao == 'classificacao':
-            intimacoes.sort(key=lambda x: x.get('classificacao_manual', ''))
-        elif ordenacao == 'taxa_acerto_desc':
-            # Ordenar por taxa de acerto (descendente - maior para menor)
-            intimacoes.sort(key=lambda x: calcular_taxa_acerto_intimacao_filtrada(x, prompt_especifico, temperatura_especifica), reverse=True)
-        elif ordenacao == 'taxa_acerto_asc':
-            # Ordenar por taxa de acerto (ascendente - menor para maior)
-            intimacoes.sort(key=lambda x: calcular_taxa_acerto_intimacao_filtrada(x, prompt_especifico, temperatura_especifica))
-        
-        # Paginação
-        total_itens = len(intimacoes)
-        inicio = (pagina - 1) * itens_por_pagina
-        fim = inicio + itens_por_pagina
-        intimacoes_pagina = intimacoes[inicio:fim]
-        
-        print(f"DEBUG: Paginação - Total: {total_itens}, Página: {pagina}, Início: {inicio}, Fim: {fim}")
-        print(f"DEBUG: Intimações na página atual: {len(intimacoes_pagina)}")
-        for i, intimacao in enumerate(intimacoes_pagina):
-            print(f"  Página {i+1}: ID: {intimacao.get('id')} | Contexto: {intimacao.get('contexto')[:30]}...")
-        
-        total_paginas = (total_itens + itens_por_pagina - 1) // itens_por_pagina
-        
-        # Estatísticas rápidas
-        stats = {
-            'total': total_itens,
-            'com_classificacao': len([i for i in intimacoes if i.get('classificacao_manual')]),
-            'analisadas': len([i for i in intimacoes if i.get('analises')]),
-            'pendentes': len([i for i in intimacoes if not i.get('analises')])
-        }
-        
-        # Buscar prompts disponíveis para o filtro
         prompts_disponiveis = data_service.get_all_prompts()
         
         return render_template('intimacoes.html',
@@ -705,7 +663,14 @@ def listar_intimacoes():
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=obter_defensores_disponiveis(),
                              prompts_disponiveis=prompts_disponiveis,
-                             filtros={'busca': busca, 'classificacao': classificacao, 'defensor': request.args.get('defensor', ''), 'ordenacao': ordenacao, 'prompt_especifico': prompt_especifico, 'temperatura_especifica': temperatura_especifica})
+                             filtros={
+                                 'busca': busca,
+                                 'classificacao': classificacao,
+                                 'defensor': request.args.get('defensor', ''),
+                                 'ordenacao': ordenacao,
+                                 'prompt_especifico': prompt_especifico,
+                                 'temperatura_especifica': temperatura_especifica,
+                             })
     except Exception as e:
         flash(f'Erro ao carregar intimações: {str(e)}', 'error')
         return render_template('intimacoes.html',
@@ -713,13 +678,28 @@ def listar_intimacoes():
                              pagina_atual=1,
                              total_paginas=1,
                              total_itens=0,
-                             stats={'total': 0, 'com_classificacao': 0, 'analisadas': 0, 'pendentes': 0},
+                             stats={
+                                 'total': 0,
+                                 'com_classificacao': 0,
+                                 'analisadas': 0,
+                                 'pendentes': 0,
+                                 'count_elaborar_peca': 0,
+                                 'count_urgencia': 0,
+                                 'count_analisar_processo': 0,
+                             },
                              config={},
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=obter_defensores_disponiveis(),
                              prompts_disponiveis=[],
-                             filtros={'busca': '', 'classificacao': '', 'defensor': '', 'ordenacao': 'data_desc', 'prompt_especifico': ''})
+                             filtros={
+                                 'busca': '',
+                                 'classificacao': '',
+                                 'defensor': '',
+                                 'ordenacao': 'data_desc',
+                                 'prompt_especifico': '',
+                                 'temperatura_especifica': '',
+                             })
 
 @app.route('/intimacoes/nova', methods=['GET', 'POST'])
 def nova_intimacao():
@@ -735,6 +715,7 @@ def nova_intimacao():
             regras_usuario_prioridade_alta = request.form.get(
                 'regras_usuario_prioridade_alta', ''
             ).strip()
+            observacoes = request.form.get('observacoes', '').strip()
             processo = request.form.get('processo', '').strip()
             orgao_julgador = request.form.get('orgao_julgador', '').strip()
             classe = request.form.get('classe', '').strip()
@@ -773,6 +754,7 @@ def nova_intimacao():
                                            'classificacao_manual': classificacao_manual,
                                            'informacoes_adicionais': informacoes_adicionais,
                                            'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+                                           'observacoes': observacoes,
                                            'processo': processo,
                                            'orgao_julgador': orgao_julgador,
                                            'classe': classe,
@@ -795,6 +777,7 @@ def nova_intimacao():
                                            'classificacao_manual': classificacao_manual,
                                            'informacoes_adicionais': informacoes_adicionais,
                                            'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+                                           'observacoes': observacoes,
                                            'processo': processo,
                                            'orgao_julgador': orgao_julgador,
                                            'classe': classe,
@@ -819,6 +802,7 @@ def nova_intimacao():
                                            'classificacao_manual': classificacao_manual,
                                            'informacoes_adicionais': informacoes_adicionais,
                                            'regras_usuario_prioridade_alta': regras_usuario_prioridade_alta,
+                                           'observacoes': observacoes,
                                            'processo': processo,
                                            'orgao_julgador': orgao_julgador,
                                            'classe': classe,
@@ -839,6 +823,7 @@ def nova_intimacao():
                 'regras_usuario_prioridade_alta': (
                     regras_usuario_prioridade_alta if regras_usuario_prioridade_alta else None
                 ),
+                'observacoes': observacoes if observacoes else None,
                 'processo': processo if processo else None,
                 'orgao_julgador': orgao_julgador if orgao_julgador else None,
                 'classe': classe if classe else None,
@@ -880,6 +865,7 @@ def nova_intimacao():
                                        'regras_usuario_prioridade_alta': request.form.get(
                                            'regras_usuario_prioridade_alta', ''
                                        ),
+                                       'observacoes': request.form.get('observacoes', ''),
                                        'processo': request.form.get('processo', ''),
                                        'orgao_julgador': request.form.get('orgao_julgador', ''),
                                        'classe': request.form.get('classe', ''),
@@ -934,12 +920,28 @@ def visualizar_intimacao(id):
         
         # Carregar configurações para o link do portal
         config = data_service.get_config()
-        
+        resumo_ia_diagnostico_wizard = resolver_parametros_ia_analise_prompt_individual(
+            config,
+            ai_manager_service.get_current_provider(),
+        )
+        if isinstance(resumo_ia_diagnostico_wizard, dict):
+            try:
+                resumo_ia_diagnostico_wizard = {
+                    **resumo_ia_diagnostico_wizard,
+                    "modelos_disponiveis_diagnostico": ai_manager_service.get_available_models() or [],
+                }
+            except Exception:
+                resumo_ia_diagnostico_wizard = {
+                    **resumo_ia_diagnostico_wizard,
+                    "modelos_disponiveis_diagnostico": [],
+                }
+
         return render_template('visualizar_intimacao.html',
                              intimacao=intimacao,
                              analises=analises,
                              stats=stats,
                              config=config,
+                             resumo_ia_diagnostico_wizard=resumo_ia_diagnostico_wizard,
                              classificacoes=Config.TIPOS_ACAO,
                              tipos_acao=Config.TIPOS_ACAO,
                              defensores=obter_defensores_disponiveis())
@@ -1072,6 +1074,12 @@ def listar_prompts():
 @app.route('/prompts/novo', methods=['GET', 'POST'])
 def novo_prompt():
     """Página para criar novo prompt"""
+    def _templates_novo_prompt():
+        try:
+            return data_service.list_prompt_templates()
+        except Exception:
+            return []
+
     if request.method == 'POST':
         try:
             nome = request.form.get('nome', '').strip()
@@ -1083,7 +1091,8 @@ def novo_prompt():
                 flash('Nome e conteúdo do prompt são obrigatórios.', 'error')
                 return render_template('novo_prompt.html',
                                      classificacoes=Config.TIPOS_ACAO,
-                                     dados={'nome': nome, 'descricao': descricao, 'conteudo': conteudo})
+                                     prompt_templates=_templates_novo_prompt(),
+                                     dados={'nome': nome, 'descricao': descricao, 'regra_negocio': regra_negocio, 'conteudo': conteudo})
             
             # Validar se o prompt contém a variável {CONTEXTO}
             if '{CONTEXTO}' not in conteudo:
@@ -1112,8 +1121,10 @@ def novo_prompt():
             flash(f'Erro ao criar prompt: {str(e)}', 'error')
             return render_template('novo_prompt.html',
                                  classificacoes=Config.TIPOS_ACAO,
-                                 dados={'nome': request.form.get('nome', ''), 
+                                 prompt_templates=_templates_novo_prompt(),
+                                 dados={'nome': request.form.get('nome', ''),
                                        'descricao': request.form.get('descricao', ''),
+                                       'regra_negocio': request.form.get('regra_negocio', ''),
                                        'conteudo': request.form.get('conteudo', '')})
     
     # Aceitar dados via query parameters (para pré-preenchimento)
@@ -1133,6 +1144,7 @@ def novo_prompt():
     
     return render_template('novo_prompt.html',
                          classificacoes=Config.TIPOS_ACAO,
+                         prompt_templates=_templates_novo_prompt(),
                          dados=dados)
 
 @app.route('/prompts/<id>')
@@ -1182,8 +1194,23 @@ def analise():
     """Página para testar prompts com intimações"""
     try:
         prompts = data_service.get_prompts_ativos()
-        intimacoes = data_service.get_all_intimacoes()
+        intimacoes = data_service.listar_intimacoes_resumo_sem_contexto_sem_analises_para_pagina_analise_ia()
         config = data_service.get_config()
+
+        _dl_parse = []
+        _dl_seen = set()
+        for _x in request.args.getlist('intimacao_ids'):
+            if _x is None:
+                continue
+            _s = str(_x).strip()
+            if not _s or _s in _dl_seen:
+                continue
+            _dl_seen.add(_s)
+            _dl_parse.append(_s)
+        _ids_carregados = {str(i.get('id')) for i in (intimacoes or []) if i.get('id')}
+        deep_link_intimacao_ids = [u for u in _dl_parse if u in _ids_carregados]
+        filtro_texto_intimacoes_inicial = ' '.join(deep_link_intimacao_ids)
+        servidor_aplicou_deep_link_intimacao = bool(deep_link_intimacao_ids)
         
         # Validar dados antes de processar
         if prompts is None:
@@ -1232,8 +1259,6 @@ def analise():
         
         if max_tokens_padrao is None:
             max_tokens_padrao = 500
-        
-        print(f"=== DEBUG: Configurações carregadas - Modelo: {modelo_padrao}, Temp: {temperatura_padrao}, Tokens: {max_tokens_padrao} ===")
 
         classe_area = data_service.get_mapeamento_classe_para_area()
         for intimacao in intimacoes:
@@ -1252,7 +1277,10 @@ def analise():
                              modelo_padrao=modelo_padrao,
                              temperatura_padrao=temperatura_padrao,
                              max_tokens_padrao=max_tokens_padrao,
-                             provedor_atual=provedor_atual)
+                             provedor_atual=provedor_atual,
+                             deep_link_intimacao_ids=deep_link_intimacao_ids,
+                             filtro_texto_intimacoes_inicial=filtro_texto_intimacoes_inicial,
+                             servidor_aplicou_deep_link_intimacao=servidor_aplicou_deep_link_intimacao)
     except Exception as e:
         flash(f'Erro ao carregar página de análise: {str(e)}', 'error')
         tipos_acao_foco = [t for t in Config.TIPOS_ACAO if t != 'INDETERMINADO']
@@ -1265,7 +1293,10 @@ def analise():
                              provedor_atual='openai',
                              modelo_padrao='gpt-4',
                              temperatura_padrao=0.7,
-                             max_tokens_padrao=500)
+                             max_tokens_padrao=500,
+                             deep_link_intimacao_ids=[],
+                             filtro_texto_intimacoes_inicial='',
+                             servidor_aplicou_deep_link_intimacao=False)
 
 @app.route('/historico')
 def historico_analises():
@@ -1298,8 +1329,24 @@ def visualizar_sessao_analise(session_id):
         
         # Obter análises da sessão
         analises = data_service.get_analises_por_sessao(session_id)
-        
-        return render_template('visualizar_sessao.html', sessao=sessao, analises=analises)
+        cfg = sessao.get("configuracoes_parsed") or {}
+        modo_av = (cfg.get("modo_avaliacao") or "padrao").strip().lower()
+        alvo = (cfg.get("tipo_alvo_focado") or "").strip()
+        if modo_av == "focado" and alvo:
+            acuracia_por_categoria = calcular_estatisticas_acuracia_modo_focado_faixa_alvo_e_indeterminado(
+                analises, alvo
+            )
+        else:
+            acuracia_por_categoria = calcular_estatisticas_acuracia_por_categoria_classificacao_manual(
+                analises
+            )
+
+        return render_template(
+            'visualizar_sessao.html',
+            sessao=sessao,
+            analises=analises,
+            acuracia_por_categoria=acuracia_por_categoria,
+        )
     except Exception as e:
         flash(f'Erro ao carregar sessão: {str(e)}', 'error')
         return redirect(url_for('historico_analises'))
@@ -2031,6 +2078,7 @@ Contexto da Intimação:
             data_service.salvar_historico_acuracia(
                 prompt_id=prompt_id,
                 numero_intimacoes=numero_intimacoes,
+                modelo=modelo,
                 temperatura=temperatura,
                 acuracia=acuracia,
                 session_id=session_id
@@ -2078,116 +2126,34 @@ def relatorios():
         prompt_id = request.args.get('prompt_id', '')
         classificacao = request.args.get('classificacao', '')
         
-        # Obter dados
-        intimacoes = data_service.get_all_intimacoes()
         prompts = data_service.get_all_prompts()
-        
-        # Coletar todas as análises diretamente da tabela (evita duplicação)
-        todas_analises_raw = data_service.get_all_analises()
-        todas_analises = []
-        
-        # Criar mapa de intimações para lookup rápido
-        intimacoes_map = {intimacao['id']: intimacao for intimacao in intimacoes}
-        
-        for analise in todas_analises_raw:
-            # Buscar intimação correspondente
-            intimacao = intimacoes_map.get(analise.get('intimacao_id'))
-            if intimacao:
-                analise['contexto'] = intimacao['contexto']
-                analise['classificacao_manual'] = intimacao.get('classificacao_manual')
-                analise['informacao_adicional'] = intimacao.get('informacao_adicional')
-                # Incluir o objeto intimação completo para o card
-                analise['intimacao'] = intimacao
-            else:
-                # Análise sem intimação (histórico antigo)
-                analise['contexto'] = analise.get('contexto', 'N/A')
-                analise['classificacao_manual'] = analise.get('classificacao_manual', 'N/A')
-                analise['informacao_adicional'] = 'N/A'
-                analise['intimacao'] = None
-            
-            # Garantir que os campos de prompt e resposta completos estejam presentes
-            analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
-            analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
-            
-            # Calcular custo real baseado nos tokens
-            tokens_input = analise.get('tokens_input', 0)
-            tokens_output = analise.get('tokens_output', 0)
-            modelo = analise.get('modelo', 'gpt-3.5-turbo')
-            
-            # Obter provider atual ou usar o salvo na análise
-            provider = analise.get('provider', ai_manager_service.get_current_provider())
-            analise['provider'] = provider
-            
-            if tokens_input > 0 or tokens_output > 0:
-                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
-                analise['custo_real'] = custo_real
-            else:
-                analise['custo_real'] = 0.0
-            
-            todas_analises.append(analise)
-        
-        # Aplicar filtros
-        analises_filtradas = todas_analises
-        
-        if data_inicio:
-            analises_filtradas = [a for a in analises_filtradas if a.get('data_analise', '') >= data_inicio]
-        
-        if data_fim:
-            analises_filtradas = [a for a in analises_filtradas if a.get('data_analise', '') <= data_fim]
-        
-        if prompt_id:
-            analises_filtradas = [a for a in analises_filtradas if a.get('prompt_id') == prompt_id]
-        
-        if classificacao:
-            analises_filtradas = [a for a in analises_filtradas if a.get('classificacao_manual') == classificacao]
-        
-        # Calcular métricas principais
-        total_intimacoes = len(intimacoes)
-        total_analises = len(analises_filtradas)
-        total_prompts = len(prompts)
-        
-        acertos = len([a for a in analises_filtradas if a.get('acertou') == True])
-        acuracia_geral = round(acertos / total_analises * 100, 1) if total_analises > 0 else 0
-        
-        # Distribuição de classificações
-        dist_manual = {}
-        dist_ia = {}
-        
-        for analise in analises_filtradas:
-            # Classificação manual
-            class_manual = analise.get('classificacao_manual', 'Não classificado')
-            dist_manual[class_manual] = dist_manual.get(class_manual, 0) + 1
-            
-            # Classificação da IA
-            class_ia = analise.get('resultado_ia', 'Não classificado')
-            dist_ia[class_ia] = dist_ia.get(class_ia, 0) + 1
-        
-        # Performance por prompt
-        performance_prompts = {}
-        for analise in analises_filtradas:
-            prompt_nome = analise.get('prompt_nome', 'Desconhecido')
-            if prompt_nome not in performance_prompts:
-                performance_prompts[prompt_nome] = {'total': 0, 'acertos': 0, 'tempo_total': 0}
-            
-            performance_prompts[prompt_nome]['total'] += 1
-            if analise.get('acertou') == True:
-                performance_prompts[prompt_nome]['acertos'] += 1
-            performance_prompts[prompt_nome]['tempo_total'] += analise.get('tempo_processamento', 0)
-        
-        # Calcular acurácia por prompt
-        for prompt_nome in performance_prompts:
-            data = performance_prompts[prompt_nome]
-            data['acuracia'] = round(data['acertos'] / data['total'] * 100, 1) if data['total'] > 0 else 0
-            data['tempo_medio'] = round(data['tempo_total'] / data['total'], 3) if data['total'] > 0 else 0
-        
-        # Top 5 prompts por acurácia
-        top_prompts = sorted(performance_prompts.items(), key=lambda x: x[1]['acuracia'], reverse=True)[:5]
+        totals = data_service.get_statistics()
+        agregados = data_service.obter_agregados_relatorios_filtrados(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao,
+        )
+
+        total_intimacoes = int(totals.get('total_intimacoes', 0))
+        total_prompts = int(totals.get('total_prompts', 0))
+        total_analises = int(agregados.get('total_analises', 0))
+        acertos = int(agregados.get('acertos', 0))
+        acuracia_geral = round((acertos / total_analises) * 100, 1) if total_analises > 0 else 0
+        dist_manual = agregados.get('distribuicao_manual', {})
+        dist_ia = agregados.get('distribuicao_ia', {})
+        performance_prompts = agregados.get('performance_prompts', {})
+        top_prompts = sorted(
+            performance_prompts.items(),
+            key=lambda x: x[1].get('acuracia', 0),
+            reverse=True
+        )[:5]
         
         # Paginação das análises
         pagina = int(request.args.get('pagina', 1))
         itens_por_pagina = int(request.args.get('itens_por_pagina', 10))
         
-        total_analises_filtradas = len(analises_filtradas)
+        total_analises_filtradas = total_analises
         inicio = (pagina - 1) * itens_por_pagina
         fim = inicio + itens_por_pagina
         
@@ -2196,7 +2162,35 @@ def relatorios():
             # Se a página solicitada não existe, redirecionar para página 1
             return redirect(url_for('relatorios', **{k: v for k, v in request.args.items() if k != 'pagina'}))
         
-        analises_paginadas = analises_filtradas[inicio:fim]
+        analises_paginadas_sql = data_service.listar_analises_relatorios_paginadas(
+            pagina=pagina,
+            itens_por_pagina=itens_por_pagina,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao,
+        )
+        analises_paginadas = []
+        provider_atual = ai_manager_service.get_current_provider()
+        for a in analises_paginadas_sql:
+            item = dict(a)
+            item['provider'] = provider_atual
+            item['prompt_completo'] = None
+            item['resposta_completa'] = None
+            item['informacao_adicional'] = item.get('informacao_adicional') or ''
+            item['intimacao'] = {
+                'id': item.get('intimacao_id'),
+                'processo': item.get('processo'),
+                'orgao_julgador': item.get('orgao_julgador'),
+                'status': item.get('status'),
+                'prazo': item.get('prazo'),
+                'intimado': item.get('intimado'),
+                'disponibilizacao': item.get('disponibilizacao'),
+                'destacada': bool(item.get('destacada')),
+                'regras_usuario_prioridade_alta': item.get('regras_usuario_prioridade_alta') or '',
+                'observacoes': item.get('observacoes') or '',
+            }
+            analises_paginadas.append(item)
         
         # Calcular informações de paginação
         total_paginas = max(1, (total_analises_filtradas + itens_por_pagina - 1) // itens_por_pagina)
@@ -2209,35 +2203,21 @@ def relatorios():
             'fim': min(fim, total_analises_filtradas)
         }
         
-        # Gerar dados para gráficos
-        dados_graficos = gerar_dados_graficos(analises_filtradas, performance_prompts)
-        print(f"=== DEBUG: Dados dos gráficos gerados ===")
-        print(f"Análises filtradas: {len(analises_filtradas)}")
-        if analises_filtradas:
-            print(f"=== DEBUG: Primeira análise - modelo: {analises_filtradas[0].get('modelo')}, temperatura: {analises_filtradas[0].get('temperatura')} ===")
-            # Debug para verificar dados de prompt e resposta
-            primeira_analise = analises_filtradas[0]
-            print(f"=== DEBUG: Primeira análise - prompt_completo length: {len(str(primeira_analise.get('prompt_completo', '')))}")
-            print(f"=== DEBUG: Primeira análise - resposta_completa length: {len(str(primeira_analise.get('resposta_completa', '')))}")
-        print(f"Dados gráficos: {dados_graficos}")
-        # Debug para verificar se há caracteres especiais
-        import json
-        try:
-            json_str = json.dumps(dados_graficos, ensure_ascii=False)
-            print(f"JSON válido gerado com sucesso, tamanho: {len(json_str)}")
-        except Exception as e:
-            print(f"ERRO ao gerar JSON: {e}")
-        
-        # Estatísticas rápidas
-        tempo_total = sum([a.get('tempo_processamento', 0) for a in analises_filtradas])
-        custo_total = sum([a.get('custo_real', 0.0) for a in analises_filtradas])
+        dados_graficos = agregados.get('dados_graficos', {
+            'acuracia_periodo': {'labels': [], 'data': []},
+            'classificacoes_manuais': {'labels': [], 'data': []},
+            'resultados_ia': {'labels': [], 'data': []},
+            'performance_prompts': {'labels': [], 'acuracia': [], 'usos': []}
+        })
+        tempo_total = float(agregados.get('tempo_total', 0.0))
+        custo_total = float(agregados.get('custo_total', 0.0))
         
         stats = {
             'acertos': acertos,
             'erros': total_analises - acertos,
             'tempo_medio': round(tempo_total / total_analises, 3) if total_analises > 0 else 0,
             'custo_total': round(custo_total, 4),
-            'analises_hoje': len([a for a in analises_filtradas if a.get('data_analise', '').startswith(datetime.now().strftime('%Y-%m-%d'))]),
+            'analises_hoje': int(agregados.get('analises_hoje', 0)),
             'prompt_mais_usado': max(performance_prompts.items(), key=lambda x: x[1]['total'])[0] if performance_prompts else 'Nenhum',
             'melhor_acuracia': max(performance_prompts.items(), key=lambda x: x[1]['acuracia'])[1]['acuracia'] if performance_prompts else 0
         }
@@ -2280,6 +2260,60 @@ def relatorios():
                               paginacao={'pagina_atual': 1, 'total_paginas': 1, 'itens_por_pagina': 10, 'total_itens': 0, 'inicio': 0, 'fim': 0},
                               dados_graficos={'acuracia_periodo': {'labels': [], 'data': []}, 'classificacoes_manuais': {'labels': [], 'data': []}, 'resultados_ia': {'labels': [], 'data': []}, 'performance_prompts': {'labels': [], 'acuracia': [], 'usos': []}})
 
+@app.route('/api/relatorios/taxa-por-dimensao')
+def api_relatorios_taxa_por_dimensao():
+    """JSON: taxa de acerto agregada por dimensão (classificação, classe, defensor) para um ou mais prompts."""
+    try:
+        raw = request.args.get('prompt_ids', '')
+        ids_list = request.args.getlist('prompt_ids')
+        if not ids_list and raw:
+            ids_list = [x.strip() for x in raw.split(',') if x.strip()]
+        ids_list = [x.strip() for x in ids_list if x.strip()]
+
+        if not ids_list:
+            return jsonify({
+                'success': False,
+                'error': 'Informe ao menos um prompt (prompt_ids).',
+            }), 400
+
+        dimensao = (request.args.get('dimensao') or 'classificacao_manual').strip()
+        data_inicio = request.args.get('data_inicio', '') or ''
+        data_fim = request.args.get('data_fim', '') or ''
+        classificacao = request.args.get('classificacao', '') or ''
+        apenas = str(request.args.get('apenas_casos_comuns', '0')).lower() in (
+            '1', 'true', 'yes', 'on', 'sim',
+        )
+
+        agregados = data_service.listar_agregados_relatorio_taxa_acerto_por_prompt_ids_dimensao_com_filtros(
+            prompt_ids=ids_list,
+            dimensao=dimensao,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            classificacao_manual_filtro=classificacao,
+            apenas_intimacoes_com_todos_prompts=apenas,
+        )
+        intimacoes_por_segmento = data_service.contar_intimacoes_cadastradas_agrupadas_por_dimensao_relatorio(
+            dimensao,
+            classificacao_manual_filtro=classificacao,
+        )
+        return jsonify({
+            'success': True,
+            'dimensao': dimensao,
+            'filtros': {
+                'data_inicio': data_inicio,
+                'data_fim': data_fim,
+                'classificacao_manual': classificacao,
+                'apenas_casos_comuns': apenas,
+            },
+            'prompt_ids': ids_list,
+            'agregados': agregados,
+            'intimacoes_cadastradas_por_segmento': intimacoes_por_segmento,
+        })
+    except ValueError as ve:
+        return jsonify({'success': False, 'error': str(ve)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/relatorios/pagina/<int:pagina>')
 def api_relatorios_pagina(pagina):
     """API para carregar dados de uma página específica via AJAX"""
@@ -2291,70 +2325,12 @@ def api_relatorios_pagina(pagina):
         classificacao = request.args.get('classificacao', '')
         itens_por_pagina = int(request.args.get('itens_por_pagina', 10))
         
-        # Obter dados
-        intimacoes = data_service.get_all_intimacoes()
-        
-        # Coletar todas as análises diretamente da tabela (evita duplicação)
-        todas_analises_raw = data_service.get_all_analises()
-        todas_analises = []
-        
-        # Criar mapa de intimações para lookup rápido
-        intimacoes_map = {intimacao['id']: intimacao for intimacao in intimacoes}
-        
-        for analise in todas_analises_raw:
-            # Buscar intimação correspondente
-            intimacao = intimacoes_map.get(analise.get('intimacao_id'))
-            if intimacao:
-                analise['contexto'] = intimacao['contexto']
-                analise['classificacao_manual'] = intimacao.get('classificacao_manual')
-                analise['informacao_adicional'] = intimacao.get('informacao_adicional')
-                # Incluir o objeto intimação completo para o card
-                analise['intimacao'] = intimacao
-            else:
-                # Análise sem intimação (histórico antigo)
-                analise['contexto'] = analise.get('contexto', 'N/A')
-                analise['classificacao_manual'] = analise.get('classificacao_manual', 'N/A')
-                analise['informacao_adicional'] = 'N/A'
-                analise['intimacao'] = None
-            
-            # Garantir que os campos de prompt e resposta completos estejam presentes
-            analise['prompt_completo'] = analise.get('prompt_completo', 'N/A')
-            analise['resposta_completa'] = analise.get('resposta_completa', 'N/A')
-            
-            # Calcular custo real baseado nos tokens
-            tokens_input = analise.get('tokens_input', 0)
-            tokens_output = analise.get('tokens_output', 0)
-            modelo = analise.get('modelo', 'gpt-3.5-turbo')
-            
-            # Obter provider atual ou usar o salvo na análise
-            provider = analise.get('provider', ai_manager_service.get_current_provider())
-            analise['provider'] = provider
-            
-            if tokens_input > 0 or tokens_output > 0:
-                custo_real = cost_service.calculate_real_cost(tokens_input, tokens_output, modelo, provider)
-                analise['custo_real'] = custo_real
-            else:
-                analise['custo_real'] = 0.0
-            
-            todas_analises.append(analise)
-        
-        # Aplicar filtros
-        analises_filtradas = todas_analises
-        
-        if data_inicio:
-            analises_filtradas = [a for a in analises_filtradas if a.get('data_analise', '') >= data_inicio]
-        
-        if data_fim:
-            analises_filtradas = [a for a in analises_filtradas if a.get('data_analise', '') <= data_fim]
-        
-        if prompt_id:
-            analises_filtradas = [a for a in analises_filtradas if a.get('prompt_id') == prompt_id]
-        
-        if classificacao:
-            analises_filtradas = [a for a in analises_filtradas if a.get('classificacao_manual') == classificacao]
-        
-        # Paginação
-        total_analises_filtradas = len(analises_filtradas)
+        total_analises_filtradas = data_service.contar_analises_relatorios_filtradas(
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao,
+        )
         inicio = (pagina - 1) * itens_por_pagina
         fim = inicio + itens_por_pagina
         
@@ -2362,7 +2338,35 @@ def api_relatorios_pagina(pagina):
         if inicio >= total_analises_filtradas and total_analises_filtradas > 0:
             return jsonify({'error': 'Página não encontrada'}), 404
         
-        analises_paginadas = analises_filtradas[inicio:fim]
+        analises_sql = data_service.listar_analises_relatorios_paginadas(
+            pagina=pagina,
+            itens_por_pagina=itens_por_pagina,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            prompt_id=prompt_id,
+            classificacao_manual=classificacao,
+        )
+        analises_paginadas = []
+        provider_atual = ai_manager_service.get_current_provider()
+        for a in analises_sql:
+            item = dict(a)
+            item['provider'] = provider_atual
+            item['prompt_completo'] = None
+            item['resposta_completa'] = None
+            item['informacao_adicional'] = item.get('informacao_adicional') or ''
+            item['intimacao'] = {
+                'id': item.get('intimacao_id'),
+                'processo': item.get('processo'),
+                'orgao_julgador': item.get('orgao_julgador'),
+                'status': item.get('status'),
+                'prazo': item.get('prazo'),
+                'intimado': item.get('intimado'),
+                'disponibilizacao': item.get('disponibilizacao'),
+                'destacada': bool(item.get('destacada')),
+                'regras_usuario_prioridade_alta': item.get('regras_usuario_prioridade_alta') or '',
+                'observacoes': item.get('observacoes') or '',
+            }
+            analises_paginadas.append(item)
         
         # Calcular informações de paginação
         total_paginas = max(1, (total_analises_filtradas + itens_por_pagina - 1) // itens_por_pagina)
@@ -2388,6 +2392,24 @@ def api_relatorios_pagina(pagina):
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analises/<analise_id>/conteudos-completos')
+def api_analise_conteudos_completos(analise_id):
+    """Retorna prompt/resposta completos sob demanda para reduzir payload da tabela."""
+    try:
+        registro = data_service.get_analise_prompt_resposta_completa_por_id(analise_id)
+        if not registro:
+            return jsonify({'success': False, 'error': 'Análise não encontrada'}), 404
+        return jsonify({
+            'success': True,
+            'analise_id': registro.get('id'),
+            'intimacao_id': registro.get('intimacao_id'),
+            'prompt_completo': registro.get('prompt_completo') or 'N/A',
+            'resposta_completa': registro.get('resposta_completa') or 'N/A',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/componentes-demo')
 def componentes_demo():
@@ -2990,6 +3012,67 @@ def excluir_defensor_api(defensor_id):
         return jsonify({'success': True})
     except ValueError as e:
         return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/prompt-templates', methods=['GET'])
+def api_prompt_templates_list():
+    """Lista templates de conteúdo para a página Novo prompt."""
+    try:
+        templates = data_service.list_prompt_templates()
+        return jsonify({'success': True, 'templates': templates})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/prompt-templates/<template_id>', methods=['GET'])
+def api_prompt_templates_get(template_id):
+    try:
+        template = data_service.get_prompt_template(template_id)
+        if not template:
+            return jsonify({'success': False, 'message': 'Template não encontrado.'}), 404
+        return jsonify({'success': True, 'template': template})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/prompt-templates', methods=['POST'])
+def api_prompt_templates_create():
+    try:
+        payload = request.get_json(silent=True) or {}
+        tid = data_service.save_prompt_template({
+            'nome': payload.get('nome'),
+            'descricao': payload.get('descricao'),
+            'conteudo': payload.get('conteudo'),
+            'ordem': payload.get('ordem', 0),
+        })
+        return jsonify({'success': True, 'id': tid})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/prompt-templates/<template_id>', methods=['PUT'])
+def api_prompt_templates_update(template_id):
+    try:
+        payload = request.get_json(silent=True) or {}
+        payload['id'] = template_id
+        tid = data_service.save_prompt_template(payload)
+        return jsonify({'success': True, 'id': tid})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/prompt-templates/<template_id>', methods=['DELETE'])
+def api_prompt_templates_delete(template_id):
+    try:
+        if not data_service.delete_prompt_template(template_id):
+            return jsonify({'success': False, 'message': 'Template não encontrado.'}), 404
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -4346,6 +4429,43 @@ def obter_historico_acuracia_prompt(prompt_id: str):
             'message': f'Erro interno: {str(e)}'
         }), 500
 
+
+@app.route('/api/prompts/historico-acuracia-batch', methods=['POST'])
+def obter_historico_acuracia_prompt_batch():
+    """Uma requisição com histórico de vários prompts (substitui N GETs em paralelo na UI)."""
+    try:
+        body = request.get_json(silent=True) or {}
+        raw_ids = body.get('prompt_ids')
+        if not isinstance(raw_ids, list):
+            return jsonify({
+                'success': False,
+                'message': 'prompt_ids deve ser uma lista',
+            }), 400
+        ids_unicos = []
+        vistos = set()
+        for x in raw_ids:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if not s or s in vistos:
+                continue
+            vistos.add(s)
+            ids_unicos.append(s)
+            if len(ids_unicos) >= 200:
+                break
+        por_prompt = data_service.get_historico_acuracia_prompt_multi(ids_unicos)
+        return jsonify({
+            'success': True,
+            'por_prompt': por_prompt,
+        })
+    except Exception as e:
+        print(f"Erro ao obter histórico de acurácia em lote: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro interno: {str(e)}',
+        }), 500
+
+
 @app.route('/api/prompts/<prompt_id>/acuracia-condicoes/<int:numero_intimacoes>/<float:temperatura>')
 def obter_acuracia_por_condicoes(prompt_id: str, numero_intimacoes: int, temperatura: float):
     """API para obter acurácia média para condições específicas"""
@@ -4615,8 +4735,16 @@ def copiar_prompt(id):
             'tags': prompt.get('tags', [])
         }
         
-        # Redirecionar para página de criação com dados preenchidos
-        return render_template('novo_prompt.html', dados=dados_copia)
+        try:
+            prompt_templates = data_service.list_prompt_templates()
+        except Exception:
+            prompt_templates = []
+        return render_template(
+            'novo_prompt.html',
+            dados=dados_copia,
+            classificacoes=Config.TIPOS_ACAO,
+            prompt_templates=prompt_templates,
+        )
         
     except Exception as e:
         flash(f'Erro ao copiar prompt: {str(e)}', 'error')
@@ -4759,6 +4887,7 @@ def analisar_prompt_individual():
         prompt_nome = data.get('prompt_nome', 'Prompt')
         intimacao_id = data.get('intimacao_id')
         config_personalizada = data.get('config_personalizada')
+        preview_only = bool(data.get('preview_only'))
         taxa_acerto_frontend = data.get('taxa_acerto')
         acertos = data.get('acertos')
         total_analises = data.get('total_analises')
@@ -4793,6 +4922,18 @@ def analisar_prompt_individual():
                 )
             incluir_contexto = config_personalizada.get('incluirContextoIntimacao', True)
             incluir_gabarito = config_personalizada.get('incluirInformacaoAdicional', True)
+            incluir_identificacao_prompt_desempenho = config_personalizada.get(
+                'incluirIdentificacaoPromptDesempenho',
+                True,
+            )
+            incluir_triagem_feita_pela_ia = config_personalizada.get(
+                'incluirTriagemFeitaPelaIa',
+                True,
+            )
+            incluir_conteudo_prompt_cadastrado = config_personalizada.get(
+                'incluirConteudoPromptCadastrado',
+                False,
+            )
 
             contexto_intimacao = ''
             if intimacao_data and incluir_contexto:
@@ -4807,7 +4948,6 @@ def analisar_prompt_individual():
 
 CONTEÚDO DA INTIMAÇÃO:
 {intimacao_data.get('contexto', 'N/A')}
-
 """
 
             informacao_adicional = ''
@@ -4820,58 +4960,76 @@ INFORMAÇÕES ADICIONAIS:
 
 """
 
-            # Nome do prompt, taxa e triagem pela IA: vêm do JSON do wizard + fallback no banco
-            linhas_meta = [
-                "=== IDENTIFICAÇÃO DO PROMPT E DESEMPENHO ===",
-                f"Nome do prompt: {prompt_nome}",
-            ]
-            partes_taxa = []
-            if taxa_acerto_frontend not in (None, "", "N/A"):
-                partes_taxa.append(f"Taxa exibida na interface: {taxa_acerto_frontend}%")
-            if acertos is not None and total_analises is not None:
-                partes_taxa.append(
-                    f"Acertos / total de análises (nesta intimação): {acertos}/{total_analises}"
-                )
-            if not partes_taxa and intimacao_id:
-                try:
-                    prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
-                    for p in prompts_acerto:
-                        if p["prompt_id"] == prompt_id:
-                            partes_taxa.append(
-                                f"Taxa no banco (por intimação): {p['taxa_acerto']}%"
-                            )
-                            break
-                except Exception as e:
-                    print(f"Erro ao buscar taxa de acerto (wizard): {e}")
-            linhas_meta.append(
-                "Resumo de acerto: " + (" | ".join(partes_taxa) if partes_taxa else "Não disponível")
-            )
-            if dados_analise_original:
+            linhas_meta = []
+            if incluir_identificacao_prompt_desempenho:
                 linhas_meta.extend(
                     [
-                        "",
-                        "=== TRIAGEM FEITA PELA IA (ANÁLISE ORIGINAL GRAVADA PARA ESTE PROMPT) ===",
-                        f"Classificação retornada pela IA: {dados_analise_original.get('resultado_ia', 'N/A')}",
-                        "",
-                        "Resposta completa da IA:",
-                        str(dados_analise_original.get("resposta_completa", "N/A")),
-                        "",
-                        "Informação adicional fornecida pela IA:",
-                        str(dados_analise_original.get("informacao_adicional", "N/A")),
-                        "",
-                        "Sugestão da IA:",
-                        str(dados_analise_original.get("sugestao", "N/A")),
+                        "=== IDENTIFICAÇÃO DO PROMPT E DESEMPENHO ===",
+                        f"Nome do prompt: {prompt_nome}",
                     ]
                 )
-            else:
+                partes_taxa = []
+                if taxa_acerto_frontend not in (None, "", "N/A"):
+                    partes_taxa.append(f"Taxa exibida na interface: {taxa_acerto_frontend}%")
+                if acertos is not None and total_analises is not None:
+                    partes_taxa.append(
+                        f"Acertos / total de análises (nesta intimação): {acertos}/{total_analises}"
+                    )
+                if not partes_taxa and intimacao_id:
+                    try:
+                        prompts_acerto = data_service.get_prompts_acerto_por_intimacao(intimacao_id)
+                        for p in prompts_acerto:
+                            if p["prompt_id"] == prompt_id:
+                                partes_taxa.append(
+                                    f"Taxa no banco (por intimação): {p['taxa_acerto']}%"
+                                )
+                                break
+                    except Exception as e:
+                        print(f"Erro ao buscar taxa de acerto (wizard): {e}")
+                linhas_meta.append(
+                    "Resumo de acerto: " + (" | ".join(partes_taxa) if partes_taxa else "Não disponível")
+                )
+
+            if incluir_conteudo_prompt_cadastrado:
+                if linhas_meta:
+                    linhas_meta.append("")
+                texto_conteudo_cadastro = (prompt.get('conteudo') or '').strip()
+                if not texto_conteudo_cadastro:
+                    texto_conteudo_cadastro = '(conteúdo do prompt vazio no cadastro)'
                 linhas_meta.extend(
                     [
-                        "",
-                        "=== TRIAGEM FEITA PELA IA ===",
-                        "Não há registro de análise anterior deste prompt para esta intimação "
-                        "(ou os dados não foram carregados).",
+                        '=== CONTEÚDO DO PROMPT (CADASTRO) ===',
+                        texto_conteudo_cadastro,
                     ]
                 )
+
+            if incluir_triagem_feita_pela_ia:
+                if linhas_meta:
+                    linhas_meta.append("")
+                if dados_analise_original:
+                    linhas_meta.extend(
+                        [
+                            "=== TRIAGEM FEITA PELA IA (ANÁLISE ORIGINAL GRAVADA PARA ESTE PROMPT) ===",
+                            f"Classificação retornada pela IA: {dados_analise_original.get('resultado_ia', 'N/A')}",
+                            "",
+                            "Resposta completa da IA:",
+                            str(dados_analise_original.get("resposta_completa", "N/A")),
+                            "",
+                            "Informação adicional fornecida pela IA:",
+                            str(dados_analise_original.get("informacao_adicional", "N/A")),
+                            "",
+                            "Sugestão da IA:",
+                            str(dados_analise_original.get("sugestao", "N/A")),
+                        ]
+                    )
+                else:
+                    linhas_meta.extend(
+                        [
+                            "=== TRIAGEM FEITA PELA IA ===",
+                            "Não há registro de análise anterior deste prompt para esta intimação "
+                            "(ou os dados não foram carregados).",
+                        ]
+                    )
             bloco_prompt_triagem = "\n".join(linhas_meta)
 
             regras_negocio = prompt.get('regra_negocio', 'Regras de negócio não disponíveis')
@@ -4880,7 +5038,8 @@ INFORMAÇÕES ADICIONAIS:
                 partes.append(contexto_intimacao.strip())
             if informacao_adicional.strip():
                 partes.append(informacao_adicional.strip())
-            partes.append(bloco_prompt_triagem.strip())
+            if bloco_prompt_triagem.strip():
+                partes.append(bloco_prompt_triagem.strip())
             partes.append(f"=== PROMPT A ANALISAR (REGRAS DE NEGÓCIO) ===\n{regras_negocio}")
             prompt_analise = "\n\n".join(partes)
         else:
@@ -4964,6 +5123,12 @@ Responda em formato JSON com as seguintes chaves:
 
 Seja objetivo, técnico e focado em eficácia para classificação jurídica.
 """
+
+        if preview_only:
+            return jsonify({
+                'success': True,
+                'prompt_completo': prompt_analise,
+            })
         
         # Usar o serviço de IA para análise
         ai_service = AIManagerService()
@@ -4975,56 +5140,37 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
                 'message': 'Nenhum provedor de IA configurado'
             }), 500
         
-        # Usar configurações baseadas no provider atual
         provider_atual = ai_service.get_current_provider()
         config = data_service.get_config() or {}
-        
-        # Buscar configurações específicas do provider
-        if provider_atual == 'azure':
-            modelo_analise = Config.normalize_azure_deployment(
-                (config.get('azure_deployment') or '').strip() or Config.AZURE_OPENAI_DEFAULT_DEPLOYMENT
+
+        resolved = resolver_parametros_ia_analise_prompt_individual(config, provider_atual)
+        if not resolved.get("ok"):
+            return jsonify({
+                'success': False,
+                'message': resolved.get("erro") or "Configuração de IA inválida",
+            }), 400
+
+        modelo_analise = resolved["modelo"]
+        modelos_ui = []
+        try:
+            modelos_ui = ai_service.get_available_models() or []
+        except Exception:
+            modelos_ui = []
+        if config_personalizada and isinstance(config_personalizada, dict):
+            modelo_analise = aplicar_modelo_diagnostico_wizard_override(
+                str(resolved.get("provedor") or provider_atual or ""),
+                modelo_analise,
+                config_personalizada.get("modeloDiagnosticoOverride"),
+                modelos_ui,
             )
-            temperatura_analise = config.get('azure_temperatura')
-            max_tokens_analise = config.get('azure_max_tokens')
-        elif provider_atual == 'openai':
-            modelo_analise = config.get('modelo_padrao')
-            temperatura_analise = config.get('temperatura_padrao')
-            max_tokens_analise = config.get('max_tokens_padrao')
-        elif provider_atual == 'litellm':
-            modelo_analise = Config.normalize_litellm_model(
-                (config.get('litellm_default_model') or '').strip() or Config.LITELLM_DEFAULT_MODEL
-            )
-            temperatura_analise = config.get('temperatura_padrao')
-            max_tokens_analise = config.get('max_tokens_padrao')
-        else:
-            return jsonify({
-                'success': False,
-                'message': f'Provider {provider_atual} não suportado'
-            }), 400
-        
-        # Validar configurações
-        if not modelo_analise:
-            return jsonify({
-                'success': False,
-                'message': f'Modelo não configurado para o provider {provider_atual}'
-            }), 400
-        
-        if temperatura_analise is None:
-            return jsonify({
-                'success': False,
-                'message': f'Temperatura não configurada para o provider {provider_atual}'
-            }), 400
-            
-        if max_tokens_analise is None:
-            return jsonify({
-                'success': False,
-                'message': f'Max tokens não configurado para o provider {provider_atual}'
-            }), 400
-        
-        # Wizard usa prompt muito longo; max_tokens baixo da config pode zerar a saída útil.
-        mt = int(max_tokens_analise)
-        if config_personalizada and config_personalizada != {}:
-            mt = max(mt, 4096)
+
+        temperatura_analise = resolved["temperatura"]
+        max_tokens_analise = resolved["max_tokens_config"]
+
+        mt = max_tokens_efetivo_analise_individual_com_config_personalizada(
+            max_tokens_analise,
+            config_personalizada,
+        )
 
         parametros_analise = {
             'model': modelo_analise,
@@ -5044,7 +5190,8 @@ Seja objetivo, técnico e focado em eficácia para classificação jurídica.
         return jsonify({
             'success': True,
             'resultado': resposta_texto,
-            'prompt_completo': prompt_analise
+            'prompt_completo': prompt_analise,
+            'modelo_diagnostico_usado': modelo_analise,
         })
         
     except Exception as e:
